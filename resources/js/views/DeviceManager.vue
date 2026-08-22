@@ -96,6 +96,17 @@
           </div>
         </div>
 
+        <!-- Primary Live Feed Preview Button -->
+        <button 
+          @click="openPreview(device)"
+          class="w-full py-2 px-3 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 hover:text-indigo-200 text-xs font-semibold rounded-xl border border-indigo-500/30 flex items-center justify-center space-x-2 transition-all shadow-sm cursor-pointer"
+        >
+          <svg class="w-4 h-4 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+          </svg>
+          <span>🎥 Live Camera Preview</span>
+        </button>
+
         <!-- Secondary Actions -->
         <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-2 border-t border-slate-800/80">
           <button 
@@ -255,12 +266,20 @@
         </form>
       </div>
     </div>
+
+    <!-- Live WebSocket Feed Preview Modal -->
+    <CameraLivePreviewModal
+      :is-open="previewModal.show"
+      :device="previewModal.device"
+      @close="previewModal.show = false"
+    />
   </div>
 </template>
 
 <script setup>
 import { ref, onMounted } from 'vue';
 import { useCameraStore } from '../stores/cameraStore';
+import CameraLivePreviewModal from '../components/CameraLivePreviewModal.vue';
 import notify from '../utils/notify';
 import axios from 'axios';
 
@@ -271,6 +290,7 @@ const pushingMqtt = ref(false);
 
 const deviceModal = ref({ show: false, isEdit: false, id: null });
 const mqttModal = ref({ show: false, device: null });
+const previewModal = ref({ show: false, device: null });
 
 const deviceForm = ref({
   device_id: '',
@@ -306,6 +326,10 @@ function formatHeartbeat(dateStr) {
   if (diffSec < 60) return `${diffSec}s ago`;
   if (diffSec < 3600) return `${Math.floor(diffSec / 60)}m ago`;
   return d.toLocaleTimeString();
+}
+
+function openPreview(device) {
+  previewModal.value = { show: true, device };
 }
 
 function openCreateModal() {
