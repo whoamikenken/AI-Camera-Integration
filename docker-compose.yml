@@ -1,0 +1,195 @@
+services:
+  # 1. Main PHP-FPM Application Service
+  app:
+    build:
+      context: .
+      dockerfile: docker/php/Dockerfile
+    container_name: camera_hub_app
+    restart: unless-stopped
+    working_dir: /var/www
+    volumes:
+      - ./:/var/www
+      - ./docker/php/local.ini:/usr/local/etc/php/conf.d/local.ini:ro
+    environment:
+      - APP_ENV=${APP_ENV:-local}
+      - APP_DEBUG=${APP_DEBUG:-true}
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_DATABASE=${DB_DATABASE:-camera_hub}
+      - DB_USERNAME=${DB_USERNAME:-postgres}
+      - DB_PASSWORD=${DB_PASSWORD:-secret}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - MQTT_HOST=mqtt
+      - MQTT_PORT=1883
+    networks:
+      - camera_hub_net
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # 2. Nginx Web Server
+  nginx:
+    image: nginx:1.25-alpine
+    container_name: camera_hub_nginx
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-8000}:80"
+    volumes:
+      - ./:/var/www
+      - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+    networks:
+      - camera_hub_net
+    depends_on:
+      - app
+
+  # 3. PostgreSQL 16 Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: camera_hub_postgres
+    restart: unless-stopped
+    ports:
+      - "${FORWARD_DB_PORT:-5432}:5432"
+    environment:
+      POSTGRES_DB: ${DB_DATABASE:-camera_hub}
+      POSTGRES_USER: ${DB_USERNAME:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-secret}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - camera_hub_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-postgres} -d ${DB_DATABASE:-camera_hub}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # 4. Redis 7 Cache & Queue Store
+  redis:
+    image: redis:7-alpine
+    container_name: camera_hub_redis
+    restart: unless-stopped
+    ports:
+      - "${FORWARD_REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - camera_hub_net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # 5. MQTT Broker (Eclipse Mosquitto)
+  mqtt:
+    image: eclipse-mosquitto:2.0
+    container_name: camera_hub_mqtt
+    restart: unless-stopped
+    ports:
+      - "${FORWARD_MQTT_PORT:-1883}:1883"
+      - "${FORWARD_MQTT_WS_PORT:-9001}:9001"
+    volumes:
+      - ./docker/mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - mosquitto_data:/mosquitto/data
+      - mosquitto_log:/mosquitto/log
+    networks:
+      - camera_hub_net
+
+  # 6. LAN Edge Sync Worker (camera-sync Redis Queue)
+  queue-worker:
+    build:
+      context: .
+      dockerfile: docker/php/Dockerfile
+    container_name: camera_hub_queue_worker
+    restart: unless-stopped
+    working_dir: /var/www
+    volumes:
+      - ./:/var/www
+      - ./docker/php/local.ini:/usr/local/etc/php/conf.d/local.ini:ro
+    command: php artisan queue:work redis --queue=camera-sync,default --sleep=3 --tries=3 --max-time=3600
+    networks:
+      - camera_hub_net
+    depends_on:
+      app:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # 7. Cloud MQTT Telemetry Ingestion Daemon
+  mqtt-daemon:
+    build:
+      context: .
+      dockerfile: docker/php/Dockerfile
+    container_name: camera_hub_mqtt_daemon
+    restart: unless-stopped
+    working_dir: /var/www
+    volumes:
+      - ./:/var/www
+      - ./docker/php/local.ini:/usr/local/etc/php/conf.d/local.ini:ro
+    command: php artisan mqtt:listen
+    networks:
+      - camera_hub_net
+    depends_on:
+      app:
+        condition: service_started
+      mqtt:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # 8. Laravel Reverb WebSocket Server
+  reverb:
+    build:
+      context: .
+      dockerfile: docker/php/Dockerfile
+    container_name: camera_hub_reverb
+    restart: unless-stopped
+    working_dir: /var/www
+    volumes:
+      - ./:/var/www
+      - ./docker/php/local.ini:/usr/local/etc/php/conf.d/local.ini:ro
+    ports:
+      - "${REVERB_SERVER_PORT:-8080}:8080"
+    command: php artisan reverb:start --host=0.0.0.0 --port=8080
+    networks:
+      - camera_hub_net
+    depends_on:
+      app:
+        condition: service_started
+      redis:
+        condition: service_healthy
+
+  # 9. Node.js Vite Frontend Dev Server
+  node:
+    image: node:20-alpine
+    container_name: camera_hub_node
+    restart: unless-stopped
+    working_dir: /var/www
+    volumes:
+      - ./:/var/www
+    ports:
+      - "${VITE_PORT:-5173}:5173"
+    command: npm run dev -- --host 0.0.0.0
+    networks:
+      - camera_hub_net
+
+networks:
+  camera_hub_net:
+    driver: bridge
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  mosquitto_data:
+    driver: local
+  mosquitto_log:
+    driver: local
