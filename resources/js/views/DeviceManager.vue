@@ -279,6 +279,7 @@
 <script setup>
 import { ref, onMounted } from 'vue';
 import { useCameraStore } from '../stores/cameraStore';
+import { formatTime } from '../utils/date';
 import CameraLivePreviewModal from '../components/CameraLivePreviewModal.vue';
 import notify from '../utils/notify';
 import axios from 'axios';
@@ -325,7 +326,7 @@ function formatHeartbeat(dateStr) {
   const diffSec = Math.floor((Date.now() - d.getTime()) / 1000);
   if (diffSec < 60) return `${diffSec}s ago`;
   if (diffSec < 3600) return `${Math.floor(diffSec / 60)}m ago`;
-  return d.toLocaleTimeString();
+  return formatTime(d);
 }
 
 function openPreview(device) {

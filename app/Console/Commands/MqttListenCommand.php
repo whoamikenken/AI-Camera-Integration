@@ -129,7 +129,7 @@ class MqttListenCommand extends Command
         $scenePicUrl = $storageService->storeBase64Image($rawScene, 'scenes');
 
         $timeStr = $info['time'] ?? $info['CreateTime'] ?? null;
-        $capturedAt = $timeStr ? Carbon::parse($timeStr) : now();
+        $capturedAt = $timeStr ? Carbon::parse($timeStr, config('app.timezone', 'Asia/Manila')) : now();
 
         $log = AccessLog::create([
             'device_id' => $deviceId,
@@ -186,7 +186,7 @@ class MqttListenCommand extends Command
         $scenePicUrl = $storageService->storeBase64Image($rawScene, 'scenes');
 
         $timeStr = $info['time'] ?? $info['CreateTime'] ?? null;
-        $capturedAt = $timeStr ? Carbon::parse($timeStr) : now();
+        $capturedAt = $timeStr ? Carbon::parse($timeStr, config('app.timezone', 'Asia/Manila')) : now();
 
         $snap = StrangerSnap::create([
             'device_id' => $deviceId,

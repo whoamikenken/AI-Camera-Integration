@@ -137,6 +137,7 @@
 <script setup>
 import { ref, onMounted } from 'vue';
 import { useCameraStore } from '../stores/cameraStore';
+import { formatDateTime } from '../utils/date';
 import axios from 'axios';
 
 const store = useCameraStore();
@@ -198,11 +199,6 @@ function changePage(page) {
   if (page >= 1 && page <= pagination.value.last_page) {
     fetchLogs(page);
   }
-}
-
-function formatDateTime(str) {
-  if (!str) return '--';
-  return new Date(str).toLocaleString();
 }
 
 function getStatusText(status) {

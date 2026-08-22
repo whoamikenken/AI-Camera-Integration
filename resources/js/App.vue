@@ -114,6 +114,7 @@
       <!-- Active Tab Component View -->
       <div class="flex-1">
         <LiveTelemetry v-if="currentTab === 'live'" />
+        <StrangerSnapsMonitor v-else-if="currentTab === 'strangers'" />
         <PersonnelManager v-else-if="currentTab === 'personnel'" />
         <DeviceManager v-else-if="currentTab === 'devices'" />
         <AccessLogsHistory v-else-if="currentTab === 'logs'" />
@@ -136,6 +137,7 @@ import { ref, onMounted, onUnmounted } from 'vue';
 import { useCameraStore } from './stores/cameraStore';
 import echo from './echo';
 import LiveTelemetry from './views/LiveTelemetry.vue';
+import StrangerSnapsMonitor from './views/StrangerSnapsMonitor.vue';
 import PersonnelManager from './views/PersonnelManager.vue';
 import DeviceManager from './views/DeviceManager.vue';
 import AccessLogsHistory from './views/AccessLogsHistory.vue';
@@ -146,6 +148,7 @@ const currentTab = ref('live');
 
 const tabs = [
   { id: 'live', label: 'Live Telemetry', icon: '📹' },
+  { id: 'strangers', label: 'Stranger Snaps', icon: '🎭' },
   { id: 'personnel', label: 'Personnel & Face Library', icon: '👥' },
   { id: 'devices', label: 'Camera Devices', icon: '📡' },
   { id: 'logs', label: 'Access Audit Logs', icon: '📋' },

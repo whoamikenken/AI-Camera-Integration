@@ -81,6 +81,7 @@
 
 <script setup>
 import { ref, onMounted } from 'vue';
+import { formatDateTime } from '../utils/date';
 import notify from '../utils/notify';
 import axios from 'axios';
 
@@ -128,11 +129,6 @@ function getStatusBadgeClass(status) {
     case 'PROCESSING': return 'bg-sky-500/10 text-sky-400 border border-sky-500/20';
     default: return 'bg-slate-800 text-slate-400 border border-slate-700';
   }
-}
-
-function formatDateTime(str) {
-  if (!str) return '--';
-  return new Date(str).toLocaleString();
 }
 
 onMounted(() => {
