@@ -15,15 +15,15 @@ class CameraHttpService
     /**
      * Send an action POST request to the camera device.
      */
-    protected function postAction(Device $device, string $operator, array $info): array
+    protected function postAction(Device $device, string $operator, array $info, array $extraRootFields = []): array
     {
         $url = "http://{$device->ip_address}:{$device->port}/action/{$operator}";
-        $payload = [
+        $payload = array_merge([
             'operator' => $operator,
             'info' => array_merge([
                 'DeviceID' => $device->device_id,
             ], $info),
-        ];
+        ], $extraRootFields);
 
         try {
             /** @var Response $response */
@@ -62,14 +62,32 @@ class CameraHttpService
      */
     public function addOrUpdatePerson(Device $device, Personnel $person): array
     {
+        $info = $this->buildPersonnelInfo($person);
+        $extra = [];
+
+        // picinfo and picURI belong at the root level of the payload (sibling to info)
+        if (!empty($person->photo_base64)) {
+            $extra['picinfo'] = $person->photo_base64;
+        } elseif (!empty($person->photo_path)) {
+            $extra['picURI'] = asset('storage/' . $person->photo_path);
+        }
+
+        return $this->postAction($device, 'EditPersonNew', $info, $extra);
+    }
+
+    /**
+     * Formulate the info payload array for a personnel record.
+     */
+    public function buildPersonnelInfo(Personnel $person): array
+    {
         $info = [
             'IdType' => 0,
-            'CustomizeID' => $person->customize_id,
-            'PersonType' => $person->person_type,
+            'CustomizeID' => (int) $person->customize_id,
+            'PersonType' => (int) $person->person_type,
             'Name' => $person->name,
-            'Gender' => $person->gender,
-            'tempValid' => $person->temp_valid,
-            'effectNumber' => $person->effect_number ?? 1,
+            'Gender' => (int) $person->gender,
+            'tempValid' => (int) $person->temp_valid,
+            'effectNumber' => (int) ($person->effect_number ?? 1),
         ];
 
         if ($person->id_card) {
@@ -91,14 +109,7 @@ class CameraHttpService
             $info['validEnd'] = $person->valid_end->format('Y-m-d H:i:s');
         }
 
-        // Send photo as base64 or public URI
-        if (!empty($person->photo_base64)) {
-            $info['picinfo'] = $person->photo_base64;
-        } elseif (!empty($person->photo_path)) {
-            $info['picURI'] = asset('storage/' . $person->photo_path);
-        }
-
-        return $this->postAction($device, 'EditPersonNew', $info);
+        return $info;
     }
 
     /**
