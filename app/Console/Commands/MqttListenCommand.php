@@ -129,7 +129,7 @@ class MqttListenCommand extends Command
         $scenePicUrl = $storageService->storeBase64Image($rawScene, 'scenes');
 
         $timeStr = $info['time'] ?? $info['CreateTime'] ?? null;
-        $capturedAt = $timeStr ? Carbon::parse($timeStr, config('app.timezone', 'Asia/Manila')) : now();
+        $capturedAt = $this->parseCameraTimestamp($timeStr);
 
         $log = AccessLog::create([
             'device_id' => $deviceId,
@@ -186,7 +186,7 @@ class MqttListenCommand extends Command
         $scenePicUrl = $storageService->storeBase64Image($rawScene, 'scenes');
 
         $timeStr = $info['time'] ?? $info['CreateTime'] ?? null;
-        $capturedAt = $timeStr ? Carbon::parse($timeStr, config('app.timezone', 'Asia/Manila')) : now();
+        $capturedAt = $this->parseCameraTimestamp($timeStr);
 
         $snap = StrangerSnap::create([
             'device_id' => $deviceId,
@@ -260,6 +260,23 @@ class MqttListenCommand extends Command
                 ],
             ]);
             $mqtt->publish("mqtt/face/basic", $ackPayload, 0);
+        }
+    }
+
+    protected function parseCameraTimestamp(?string $timeStr): Carbon
+    {
+        if (!$timeStr) {
+            return now();
+        }
+
+        try {
+            if (str_contains($timeStr, 'Z') || preg_match('/[+-]\d{2}:?\d{2}$/', $timeStr)) {
+                return Carbon::parse($timeStr);
+            }
+
+            return Carbon::parse($timeStr, config('app.timezone', 'Asia/Manila'));
+        } catch (\Throwable $e) {
+            return now();
         }
     }
 }

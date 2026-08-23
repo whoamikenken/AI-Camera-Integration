@@ -1,6 +1,26 @@
 import { defineStore } from 'pinia';
 import axios from 'axios';
 
+function normalizePayload(e) {
+    if (!e) return null;
+    let data = e;
+    if (typeof data === 'string') {
+        try {
+            data = JSON.parse(data);
+        } catch (err) {
+            return null;
+        }
+    }
+    if (data && typeof data.data === 'string') {
+        try {
+            data = JSON.parse(data.data);
+        } catch (err) {}
+    } else if (data && data.data && typeof data.data === 'object' && !Array.isArray(data.data)) {
+        data = data.data;
+    }
+    return data;
+}
+
 export const useCameraStore = defineStore('camera', {
     state: () => ({
         liveLogs: [],
@@ -60,30 +80,52 @@ export const useCameraStore = defineStore('camera', {
             }
         },
 
-        addLiveLog(log) {
-            this.liveLogs.unshift(log);
-            if (this.liveLogs.length > 50) {
-                this.liveLogs.pop();
+        addLiveLog(rawLog) {
+            const log = normalizePayload(rawLog);
+            if (!log) return;
+
+            const index = this.liveLogs.findIndex(
+                l => (l.id && String(l.id) === String(log.id)) ||
+                     (l.captured_at && log.captured_at && l.captured_at === log.captured_at && String(l.device_id) === String(log.device_id))
+            );
+
+            if (index !== -1) {
+                this.liveLogs[index] = { ...this.liveLogs[index], ...log };
+                this.liveLogs = [...this.liveLogs];
+            } else {
+                this.liveLogs = [log, ...this.liveLogs];
+                if (this.liveLogs.length > 50) {
+                    this.liveLogs.pop();
+                }
             }
 
             if (this.stats.telemetry) {
                 this.stats.telemetry.total_scans_today++;
-                if (log.verify_status === 1) {
+                if (Number(log.verify_status) === 1) {
                     this.stats.telemetry.allowed_today++;
                 } else {
                     this.stats.telemetry.rejected_today++;
                 }
             }
 
-            if (this.soundEnabled && log.verify_status === 2) {
+            if (this.soundEnabled && Number(log.verify_status) === 2) {
                 this.playAlertSound();
             }
         },
 
-        addStrangerSnap(snap) {
-            this.strangerSnaps.unshift(snap);
-            if (this.strangerSnaps.length > 30) {
-                this.strangerSnaps.pop();
+        addStrangerSnap(rawSnap) {
+            const snap = normalizePayload(rawSnap);
+            if (!snap) return;
+
+            const exists = this.strangerSnaps.some(
+                s => (s.id && String(s.id) === String(snap.id)) ||
+                     (s.captured_at && snap.captured_at && s.captured_at === snap.captured_at && String(s.device_id) === String(snap.device_id))
+            );
+            if (!exists) {
+                this.strangerSnaps.unshift(snap);
+                if (this.strangerSnaps.length > 30) {
+                    this.strangerSnaps.pop();
+                }
             }
 
             if (this.stats.telemetry) {
@@ -91,8 +133,11 @@ export const useCameraStore = defineStore('camera', {
             }
         },
 
-        updateDeviceStatus(deviceData) {
-            const index = this.devices.findIndex(d => d.device_id === deviceData.device_id);
+        updateDeviceStatus(rawDeviceData) {
+            const deviceData = normalizePayload(rawDeviceData);
+            if (!deviceData || !deviceData.device_id) return;
+
+            const index = this.devices.findIndex(d => String(d.device_id) === String(deviceData.device_id));
             if (index !== -1) {
                 this.devices[index] = { ...this.devices[index], ...deviceData };
             } else {

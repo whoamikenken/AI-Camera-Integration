@@ -162,19 +162,16 @@ onMounted(() => {
 
   // Subscribe to Laravel Reverb WebSocket channels
   echo.channel('access-logs')
-    .listen('.AccessLogReceived', (e) => {
-      store.addLiveLog(e);
-    });
+    .listen('.AccessLogReceived', (e) => store.addLiveLog(e))
+    .listen('AccessLogReceived', (e) => store.addLiveLog(e));
 
   echo.channel('stranger-snaps')
-    .listen('.StrangerSnapReceived', (e) => {
-      store.addStrangerSnap(e);
-    });
+    .listen('.StrangerSnapReceived', (e) => store.addStrangerSnap(e))
+    .listen('StrangerSnapReceived', (e) => store.addStrangerSnap(e));
 
   echo.channel('device-status')
-    .listen('.DeviceStatusUpdated', (e) => {
-      store.updateDeviceStatus(e);
-    });
+    .listen('.DeviceStatusUpdated', (e) => store.updateDeviceStatus(e))
+    .listen('DeviceStatusUpdated', (e) => store.updateDeviceStatus(e));
 
   // Track Echo connection state
   if (echo.connector?.pusher?.connection) {
