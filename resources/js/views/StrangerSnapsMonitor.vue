@@ -308,7 +308,7 @@
 
     <!-- Image Inspection Modal -->
     <div v-if="modal.show" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" @click.self="modal.show = false">
-      <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-3xl w-full p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+      <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-3xl w-full p-6 space-y-4 max-h-[90vh] overflow-y-auto shadow-2xl">
         <div class="flex items-center justify-between border-b border-slate-800 pb-3">
           <div>
             <h3 class="text-base font-semibold text-slate-100 flex items-center gap-2">
@@ -320,13 +320,36 @@
           <button @click="modal.show = false" class="text-slate-400 hover:text-white text-xl font-bold">&times;</button>
         </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="grid grid-cols-1">
           <div v-if="modal.snapUrl" class="space-y-2">
             <div class="text-xs font-semibold text-slate-400 flex items-center justify-between">
-              <span>Biometric Face Crop</span>
-              <a :href="modal.snapUrl" target="_blank" download class="text-[11px] text-indigo-400 hover:underline">Download</a>
+              <span class="flex items-center gap-1.5">
+                <span>Biometric Face Crop</span>
+                <span class="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20">Ready to Enroll</span>
+              </span>
+              <div class="flex items-center gap-2">
+                <button 
+                  @click="openEnrollModalFromSnap" 
+                  class="text-[11px] text-indigo-400 hover:text-indigo-300 font-medium flex items-center gap-1 transition-colors"
+                  title="Add this stranger as personnel"
+                >
+                  <span>➕ Add as Personnel</span>
+                </button>
+                <span class="text-slate-600">&bull;</span>
+                <a :href="modal.snapUrl" target="_blank" download class="text-[11px] text-slate-400 hover:text-slate-200 hover:underline">Download</a>
+              </div>
             </div>
-            <img :src="modal.snapUrl" class="rounded-xl border border-slate-700 w-full max-h-80 object-contain bg-black" />
+            <div class="relative group rounded-xl overflow-hidden border border-slate-700 bg-black">
+              <img :src="modal.snapUrl" class="rounded-xl w-full max-h-80 object-contain mx-auto" />
+              <div class="absolute inset-0 bg-indigo-950/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                <button 
+                  @click="openEnrollModalFromSnap"
+                  class="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-lg shadow-lg flex items-center gap-1.5 transition-transform group-hover:scale-105"
+                >
+                  <span>👤 Enroll this Face</span>
+                </button>
+              </div>
+            </div>
           </div>
           <div v-if="modal.sceneUrl" class="space-y-2">
             <div class="text-xs font-semibold text-slate-400 flex items-center justify-between">
@@ -341,11 +364,193 @@
           <strong>Alarm Action:</strong> {{ modal.alarmAction }}
         </div>
 
-        <div class="flex justify-end pt-2">
-          <button @click="modal.show = false" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium rounded-lg">
+        <div class="flex items-center justify-between pt-3 border-t border-slate-800">
+          <button 
+            v-if="modal.snapUrl"
+            @click="openEnrollModalFromSnap" 
+            class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-lg shadow-lg shadow-indigo-600/30 transition-all flex items-center gap-2"
+          >
+            <span>👤 Add as Personnel</span>
+          </button>
+          <div v-else></div>
+
+          <button @click="modal.show = false" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium rounded-lg transition-colors">
             Close
           </button>
         </div>
+      </div>
+    </div>
+
+    <!-- Enroll Stranger as Personnel Modal -->
+    <div v-if="enrollModal.show" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm" @click.self="enrollModal.show = false">
+      <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-2xl w-full p-6 space-y-4 max-h-[90vh] overflow-y-auto shadow-2xl">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+          <div>
+            <h3 class="text-base font-semibold text-slate-100 flex items-center gap-2">
+              <span>👤 Enroll Stranger as Personnel</span>
+              <span class="text-xs px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-400 border border-indigo-500/30">Biometric Enrollment</span>
+            </h3>
+            <p class="text-xs text-slate-400 mt-0.5">
+              Convert stranger detection snapshot into an authorized personnel record and sync to edge cameras
+            </p>
+          </div>
+          <button @click="enrollModal.show = false" class="text-slate-400 hover:text-white text-xl font-bold">&times;</button>
+        </div>
+
+        <form @submit.prevent="saveStrangerAsPersonnel" class="space-y-4">
+          <!-- Face Photo Preview & Info -->
+          <div class="bg-slate-800/40 border border-slate-800 rounded-xl p-4 space-y-3">
+            <div class="text-xs font-semibold text-slate-300 flex items-center justify-between">
+              <span>Biometric Face Template</span>
+              <span class="text-[11px] text-amber-400 font-mono">
+                Source: {{ modal.cameraName }} &bull; {{ formatTime(modal.capturedAt) }}
+              </span>
+            </div>
+
+            <div class="flex flex-col sm:flex-row items-center gap-4">
+              <div class="w-24 h-24 rounded-xl bg-slate-950 border border-indigo-500/40 overflow-hidden flex items-center justify-center shrink-0 relative shadow-inner">
+                <img v-if="enrollModal.previewPhoto" :src="enrollModal.previewPhoto" class="w-full h-full object-cover" />
+                <span v-else class="text-3xl text-slate-600">👤</span>
+              </div>
+              <div class="flex-1 space-y-1.5 text-left w-full">
+                <div class="flex items-center gap-2 flex-wrap">
+                  <span class="text-xs text-slate-200 font-medium">Face crop from camera detection</span>
+                  <button 
+                    v-if="enrollModal.previewPhoto !== modal.snapUrl" 
+                    type="button" 
+                    @click="resetToSnapPhoto" 
+                    class="text-[11px] text-amber-400 hover:underline"
+                  >
+                    Reset to snapshot face
+                  </button>
+                </div>
+                <input 
+                  type="file" 
+                  accept="image/*" 
+                  @change="onEnrollFileSelected" 
+                  class="text-xs text-slate-400 file:mr-3 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-500 cursor-pointer" 
+                />
+                <p class="text-[10px] text-slate-500">The stranger face crop will be synchronized as the biometric face credential for edge cameras.</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <!-- Full Name -->
+            <div>
+              <label class="block text-xs font-medium text-slate-300 mb-1">Full Name *</label>
+              <input 
+                v-model="enrollForm.name" 
+                required 
+                type="text" 
+                placeholder="e.g., Jane Doe / Visitor 01"
+                class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-100 placeholder-slate-500 focus:ring-1 focus:ring-indigo-500" 
+              />
+            </div>
+
+            <!-- Category (Whitelist / Blacklist) -->
+            <div>
+              <label class="block text-xs font-medium text-slate-300 mb-1">Access Category *</label>
+              <select v-model="enrollForm.person_type" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-100">
+                <option :value="0">Whitelist (Allowed Access)</option>
+                <option :value="1">Blacklist (Denied / Trigger Alarm)</option>
+              </select>
+            </div>
+
+            <!-- ID Card -->
+            <div>
+              <label class="block text-xs font-medium text-slate-300 mb-1">National ID / Badge Number</label>
+              <input 
+                v-model="enrollForm.id_card" 
+                type="text" 
+                placeholder="e.g., ID-90823"
+                class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-100 placeholder-slate-500" 
+              />
+            </div>
+
+            <!-- Phone Number -->
+            <div>
+              <label class="block text-xs font-medium text-slate-300 mb-1">Phone Number</label>
+              <input 
+                v-model="enrollForm.tel_num" 
+                type="text" 
+                placeholder="e.g., +1 234 567 890"
+                class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-100 placeholder-slate-500" 
+              />
+            </div>
+
+            <!-- Gender & Birthday -->
+            <div>
+              <label class="block text-xs font-medium text-slate-300 mb-1">Gender</label>
+              <select v-model="enrollForm.gender" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-100">
+                <option :value="0">Male</option>
+                <option :value="1">Female</option>
+              </select>
+            </div>
+
+            <div>
+              <label class="block text-xs font-medium text-slate-300 mb-1">Birthday</label>
+              <input 
+                v-model="enrollForm.birthday" 
+                type="date" 
+                class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-100" 
+              />
+            </div>
+          </div>
+
+          <!-- Schedule & Validity -->
+          <div class="bg-slate-800/40 border border-slate-800 rounded-xl p-4 space-y-3">
+            <div class="flex items-center justify-between">
+              <label class="text-xs font-semibold text-slate-300">Access Schedule & Validity</label>
+              <div class="flex items-center gap-4 text-xs">
+                <label class="flex items-center gap-1.5 cursor-pointer">
+                  <input type="radio" :value="0" v-model="enrollForm.temp_valid" class="text-indigo-600" />
+                  <span class="text-slate-200">Permanent</span>
+                </label>
+                <label class="flex items-center gap-1.5 cursor-pointer">
+                  <input type="radio" :value="1" v-model="enrollForm.temp_valid" class="text-indigo-600" />
+                  <span class="text-slate-200">Temporary Period</span>
+                </label>
+              </div>
+            </div>
+
+            <div v-if="enrollForm.temp_valid === 1" class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+              <div>
+                <label class="block text-[11px] text-slate-400 mb-1">Valid Start Time</label>
+                <input 
+                  v-model="enrollForm.valid_begin" 
+                  type="datetime-local" 
+                  class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-100" 
+                />
+              </div>
+              <div>
+                <label class="block text-[11px] text-slate-400 mb-1">Valid End Time</label>
+                <input 
+                  v-model="enrollForm.valid_end" 
+                  type="datetime-local" 
+                  class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-100" 
+                />
+              </div>
+            </div>
+          </div>
+
+          <div class="flex items-center justify-between pt-3 border-t border-slate-800">
+            <button 
+              type="button" 
+              @click="enrollModal.show = false" 
+              class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium rounded-lg transition-colors"
+            >
+              Cancel
+            </button>
+            <button 
+              type="submit" 
+              :disabled="enrollSaving" 
+              class="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-lg shadow-lg shadow-indigo-600/30 transition-all flex items-center gap-2 disabled:opacity-50"
+            >
+              <span>{{ enrollSaving ? 'Enrolling & Syncing...' : '💾 Enroll & Sync to Cameras' }}</span>
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   </div>
@@ -355,6 +560,7 @@
 import { ref, computed, onMounted } from 'vue';
 import { useCameraStore } from '../stores/cameraStore';
 import { formatTime, formatDateTime } from '../utils/date';
+import notify from '../utils/notify';
 import axios from 'axios';
 
 const store = useCameraStore();
@@ -382,6 +588,29 @@ const modal = ref({
   cameraName: '',
   capturedAt: null,
   alarmAction: '',
+  deviceId: '',
+});
+
+const enrollModal = ref({
+  show: false,
+  previewPhoto: null,
+  selectedFile: null,
+});
+
+const enrollSaving = ref(false);
+
+const enrollForm = ref({
+  name: '',
+  person_type: 0,
+  gender: 0,
+  id_card: '',
+  tel_num: '',
+  address: '',
+  birthday: '',
+  temp_valid: 0,
+  valid_begin: '',
+  valid_end: '',
+  effect_number: 10000,
 });
 
 const isFiltered = computed(() => {
@@ -433,7 +662,7 @@ function goToPage(page) {
   }
 }
 
-function openImageModal(snapUrl, sceneUrl, cameraName, capturedAt, alarmAction) {
+function openImageModal(snapUrl, sceneUrl, cameraName, capturedAt, alarmAction, deviceId) {
   modal.value = {
     show: true,
     snapUrl,
@@ -441,7 +670,86 @@ function openImageModal(snapUrl, sceneUrl, cameraName, capturedAt, alarmAction) 
     cameraName: cameraName || 'Camera Device',
     capturedAt,
     alarmAction: alarmAction || '',
+    deviceId: deviceId || '',
   };
+}
+
+function openEnrollModalFromSnap() {
+  enrollModal.value = {
+    show: true,
+    previewPhoto: modal.value.snapUrl,
+    selectedFile: null,
+  };
+  enrollForm.value = {
+    name: '',
+    person_type: 0,
+    gender: 0,
+    id_card: '',
+    tel_num: '',
+    address: '',
+    birthday: '',
+    temp_valid: 0,
+    valid_begin: '',
+    valid_end: '',
+    effect_number: 10000,
+  };
+}
+
+function resetToSnapPhoto() {
+  enrollModal.value.previewPhoto = modal.value.snapUrl;
+  enrollModal.value.selectedFile = null;
+}
+
+function onEnrollFileSelected(e) {
+  const file = e.target.files[0];
+  if (file) {
+    enrollModal.value.selectedFile = file;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      enrollModal.value.previewPhoto = event.target.result;
+    };
+    reader.readAsDataURL(file);
+  }
+}
+
+async function saveStrangerAsPersonnel() {
+  if (!enrollForm.value.name.trim()) {
+    notify.warning('Validation Error', 'Please enter a full name for the personnel record');
+    return;
+  }
+
+  enrollSaving.value = true;
+  try {
+    const data = new FormData();
+    Object.keys(enrollForm.value).forEach(key => {
+      if (enrollForm.value[key] !== null && enrollForm.value[key] !== undefined && enrollForm.value[key] !== '') {
+        data.append(key, enrollForm.value[key]);
+      }
+    });
+
+    if (enrollModal.value.selectedFile) {
+      data.append('photo', enrollModal.value.selectedFile);
+    } else if (enrollModal.value.previewPhoto) {
+      if (enrollModal.value.previewPhoto.startsWith('data:image')) {
+        data.append('photo_base64', enrollModal.value.previewPhoto);
+      } else {
+        data.append('photo_url', enrollModal.value.previewPhoto);
+      }
+    }
+
+    const res = await axios.post('/api/personnel', data, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
+
+    enrollModal.value.show = false;
+    modal.value.show = false;
+
+    notify.toast(`Enrolled ${res.data.name} (#${res.data.customize_id}) successfully`, 'success');
+  } catch (err) {
+    notify.error('Enrollment Failed', err.response?.data?.message || 'Failed to enroll stranger as personnel');
+  } finally {
+    enrollSaving.value = false;
+  }
 }
 
 onMounted(() => {

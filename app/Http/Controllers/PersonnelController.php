@@ -58,18 +58,32 @@ class PersonnelController extends Controller
             'effect_number' => 'nullable|integer',
             'photo' => 'nullable|image|max:10240', // 10MB max upload
             'photo_base64' => 'nullable|string',
+            'photo_url' => 'nullable|string',
+            'photo_path' => 'nullable|string',
         ]);
 
         if ($request->hasFile('photo')) {
             $stored = $this->storageService->storeUploadedImage($request->file('photo'));
             $validated['photo_path'] = $stored['path'];
             $validated['photo_base64'] = $stored['base64'];
-        } elseif (!empty($validated['photo_base64'])) {
-            $storedUrl = $this->storageService->storeBase64Image($validated['photo_base64'], 'personnel');
-            $validated['photo_path'] = $storedUrl ? str_replace('/storage/', '', parse_url($storedUrl, PHP_URL_PATH)) : null;
+        } elseif (!empty($validated['photo_base64']) && str_starts_with($validated['photo_base64'], 'data:image')) {
+            $stored = $this->storageService->storeFromBase64($validated['photo_base64'], 'personnel');
+            if ($stored) {
+                $validated['photo_path'] = $stored['path'];
+                $validated['photo_base64'] = $stored['base64'];
+            }
+        } elseif (!empty($validated['photo_url']) || !empty($validated['photo_path'])) {
+            $source = $validated['photo_url'] ?? $validated['photo_path'];
+            $stored = $this->storageService->storeFromUrlOrPath($source, 'personnel');
+            if ($stored) {
+                $validated['photo_path'] = $stored['path'];
+                $validated['photo_base64'] = $stored['base64'];
+            } else {
+                $validated['photo_path'] = str_replace('/storage/', '', parse_url($source, PHP_URL_PATH) ?? $source);
+            }
         }
 
-        unset($validated['photo']);
+        unset($validated['photo'], $validated['photo_url']);
 
         $person = Personnel::create($validated);
 
@@ -97,18 +111,32 @@ class PersonnelController extends Controller
             'effect_number' => 'nullable|integer',
             'photo' => 'nullable|image|max:10240',
             'photo_base64' => 'nullable|string',
+            'photo_url' => 'nullable|string',
+            'photo_path' => 'nullable|string',
         ]);
 
         if ($request->hasFile('photo')) {
             $stored = $this->storageService->storeUploadedImage($request->file('photo'));
             $validated['photo_path'] = $stored['path'];
             $validated['photo_base64'] = $stored['base64'];
-        } elseif (!empty($validated['photo_base64']) && $validated['photo_base64'] !== $personnel->photo_base64) {
-            $storedUrl = $this->storageService->storeBase64Image($validated['photo_base64'], 'personnel');
-            $validated['photo_path'] = $storedUrl ? str_replace('/storage/', '', parse_url($storedUrl, PHP_URL_PATH)) : null;
+        } elseif (!empty($validated['photo_base64']) && str_starts_with($validated['photo_base64'], 'data:image') && $validated['photo_base64'] !== $personnel->photo_base64) {
+            $stored = $this->storageService->storeFromBase64($validated['photo_base64'], 'personnel');
+            if ($stored) {
+                $validated['photo_path'] = $stored['path'];
+                $validated['photo_base64'] = $stored['base64'];
+            }
+        } elseif ((!empty($validated['photo_url']) || !empty($validated['photo_path'])) && ($validated['photo_url'] ?? $validated['photo_path']) !== $personnel->photo_path) {
+            $source = $validated['photo_url'] ?? $validated['photo_path'];
+            $stored = $this->storageService->storeFromUrlOrPath($source, 'personnel');
+            if ($stored) {
+                $validated['photo_path'] = $stored['path'];
+                $validated['photo_base64'] = $stored['base64'];
+            } else {
+                $validated['photo_path'] = str_replace('/storage/', '', parse_url($source, PHP_URL_PATH) ?? $source);
+            }
         }
 
-        unset($validated['photo']);
+        unset($validated['photo'], $validated['photo_url']);
 
         $personnel->update($validated);
 

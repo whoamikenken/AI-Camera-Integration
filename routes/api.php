@@ -15,7 +15,15 @@ Route::get('/stats', [DashboardStatsController::class, 'index']);
 Route::apiResource('devices', DeviceController::class);
 Route::post('devices/{device}/test-connection', [DeviceController::class, 'testConnection']);
 Route::post('devices/{device}/reboot', [DeviceController::class, 'reboot']);
+Route::get('devices/{device}/sys-param', [DeviceController::class, 'getSysParam']);
+Route::post('devices/{device}/sys-param', [DeviceController::class, 'setSysParam']);
+Route::get('devices/{device}/mqtt-param', [DeviceController::class, 'getMqttParam']);
 Route::post('devices/{device}/sync-mqtt', [DeviceController::class, 'syncMqtt']);
+Route::post('devices/{device}/sync-time', [DeviceController::class, 'setSysTime']);
+Route::post('devices/{device}/manual-push-records', [DeviceController::class, 'manualPushRecords']);
+Route::post('devices/{device}/manual-push-snaps', [DeviceController::class, 'manualPushSnaps']);
+Route::post('devices/{device}/factory-reset', [DeviceController::class, 'factoryReset']);
+Route::post('devices/{device}/clear-face-database', [DeviceController::class, 'deleteAllPersons']);
 Route::get('devices/{device}/search-camera-list', [DeviceController::class, 'searchCameraList']);
 
 // Personnel / Face Library

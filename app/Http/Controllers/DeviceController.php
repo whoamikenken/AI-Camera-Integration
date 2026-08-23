@@ -75,7 +75,6 @@ class DeviceController extends Controller
     public function update(Request $request, Device $device): JsonResponse
     {
         $validated = $request->validate([
-            'device_id' => "required|string|max:64|unique:devices,device_id,{$device->id}",
             'name' => 'required|string|max:128',
             'ip_address' => 'required|string|max:45',
             'port' => 'nullable|integer|min:1|max:65535',
@@ -119,14 +118,104 @@ class DeviceController extends Controller
     public function syncMqtt(Request $request, Device $device): JsonResponse
     {
         $params = $request->validate([
+            'MQEnable' => 'nullable|integer|in:0,1',
             'MQAddr' => 'nullable|string',
             'MQPort' => 'nullable|integer',
             'MQTopic' => 'nullable|string',
             'MQUser' => 'nullable|string',
             'MQPwd' => 'nullable|string',
+            'MQCloudID' => 'nullable|string',
+            'StrangerUploadType' => 'nullable|integer',
+            'RecordUploadType' => 'nullable|integer',
+            'KeepAliveInterval' => 'nullable|integer',
+            'BasicTopic' => 'nullable|string',
+            'HeartbeatTopic' => 'nullable|string',
+            'ResumefromBreakpoint' => 'nullable|integer',
         ]);
 
         $result = $this->cameraService->configureMqtt($device, $params);
+
+        if ($result['success'] && !empty($params['MQTopic'])) {
+            $device->update(['mqtt_topic' => $params['MQTopic']]);
+        }
+
+        return response()->json($result);
+    }
+
+    public function getMqttParam(Device $device): JsonResponse
+    {
+        $result = $this->cameraService->getMqttParam($device);
+
+        return response()->json($result);
+    }
+
+    public function getSysParam(Device $device): JsonResponse
+    {
+        $result = $this->cameraService->getSysParam($device);
+
+        return response()->json($result);
+    }
+
+    public function setSysParam(Request $request, Device $device): JsonResponse
+    {
+        $params = $request->validate([
+            'Name' => 'nullable|string|max:128',
+        ]);
+
+        $result = $this->cameraService->setSysParam($device, $params);
+
+        if ($result['success'] && !empty($params['Name'])) {
+            $device->update(['name' => $params['Name']]);
+        }
+
+        return response()->json($result);
+    }
+
+    public function setSysTime(Request $request, Device $device): JsonResponse
+    {
+        $time = $request->input('time');
+        $result = $this->cameraService->setSysTime($device, $time);
+
+        return response()->json($result);
+    }
+
+    public function manualPushRecords(Request $request, Device $device): JsonResponse
+    {
+        $request->validate([
+            'time_s' => 'required|string',
+            'time_e' => 'required|string',
+        ]);
+
+        $result = $this->cameraService->manualPushRecords($device, $request->input('time_s'), $request->input('time_e'));
+
+        return response()->json($result);
+    }
+
+    public function manualPushSnaps(Request $request, Device $device): JsonResponse
+    {
+        $request->validate([
+            'time_s' => 'required|string',
+            'time_e' => 'required|string',
+        ]);
+
+        $result = $this->cameraService->manualPushSnaps($device, $request->input('time_s'), $request->input('time_e'));
+
+        return response()->json($result);
+    }
+
+    public function factoryReset(Request $request, Device $device): JsonResponse
+    {
+        $netPar = (int) $request->input('default_net_par', 0);
+        $person = (int) $request->input('default_person', 1);
+
+        $result = $this->cameraService->setFactoryDefault($device, $netPar, $person);
+
+        return response()->json($result);
+    }
+
+    public function deleteAllPersons(Device $device): JsonResponse
+    {
+        $result = $this->cameraService->deleteAllPersonnel($device);
 
         return response()->json($result);
     }

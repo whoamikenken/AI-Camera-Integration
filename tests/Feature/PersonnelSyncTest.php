@@ -116,4 +116,37 @@ class PersonnelSyncTest extends TestCase
             'status' => 'COMPLETED',
         ]);
     }
+
+    public function test_can_enroll_personnel_from_stranger_snap_url(): void
+    {
+        \Illuminate\Support\Facades\Storage::fake('public');
+
+        // Put a fake stranger snapshot image into public disk
+        $strangerPath = 'strangers/2026/08/23/stranger_sample.jpg';
+        \Illuminate\Support\Facades\Storage::disk('public')->put($strangerPath, 'fake-jpeg-image-bytes');
+
+        $response = $this->postJson('/api/personnel', [
+            'name' => 'Identified Stranger',
+            'person_type' => 0,
+            'photo_url' => '/storage/' . $strangerPath,
+            'id_card' => 'GUEST-889',
+        ]);
+
+        $response->assertStatus(201)
+                 ->assertJson([
+                     'name' => 'Identified Stranger',
+                     'person_type' => 0,
+                     'id_card' => 'GUEST-889',
+                 ]);
+
+        $this->assertDatabaseHas('personnel', [
+            'name' => 'Identified Stranger',
+            'id_card' => 'GUEST-889',
+        ]);
+
+        $person = Personnel::where('name', 'Identified Stranger')->first();
+        $this->assertNotNull($person->photo_path);
+        $this->assertNotNull($person->photo_base64);
+        $this->assertTrue(\Illuminate\Support\Facades\Storage::disk('public')->exists($person->photo_path));
+    }
 }

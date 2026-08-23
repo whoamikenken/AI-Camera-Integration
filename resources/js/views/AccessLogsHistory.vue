@@ -119,7 +119,7 @@
           <h3 class="text-base font-semibold text-slate-100">{{ modal.title }} - Snapshot Inspection</h3>
           <button @click="modal.show = false" class="text-slate-400 hover:text-white text-lg font-bold">&times;</button>
         </div>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="grid grid-cols-1">
           <div v-if="modal.snapUrl">
             <div class="text-xs font-semibold text-slate-400 mb-1">Face Crop</div>
             <img :src="modal.snapUrl" class="rounded-xl border border-slate-700 w-full max-h-72 object-contain bg-black" />

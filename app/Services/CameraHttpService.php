@@ -161,17 +161,17 @@ class CameraHttpService
         $topic = $mqttParams['MQTopic'] ?? ($device->mqtt_topic ?: "mqtt/face/{$device->device_id}");
 
         $info = [
-            'MQEnable' => 1,
+            'MQEnable' => isset($mqttParams['MQEnable']) ? (int) $mqttParams['MQEnable'] : 1,
             'MQAddr' => $brokerHost,
             'MQPort' => $brokerPort,
             'MQTopic' => $topic,
-            'MQCloudID' => (string) $device->device_id,
-            'StrangerUploadType' => 0, // 0: Upload
-            'RecordUploadType' => 1,   // 1: Upload with captured image
-            'KeepAliveInterval' => 30,
-            'BasicTopic' => 'mqtt/face/basic',
-            'HeartbeatTopic' => 'mqtt/face/heartbeat',
-            'ResumefromBreakpoint' => 1,
+            'MQCloudID' => (string) ($mqttParams['MQCloudID'] ?? $device->device_id),
+            'StrangerUploadType' => isset($mqttParams['StrangerUploadType']) ? (int) $mqttParams['StrangerUploadType'] : 0, // 0: Upload with image
+            'RecordUploadType' => isset($mqttParams['RecordUploadType']) ? (int) $mqttParams['RecordUploadType'] : 1,     // 1: Upload with image
+            'KeepAliveInterval' => isset($mqttParams['KeepAliveInterval']) ? (int) $mqttParams['KeepAliveInterval'] : 30,
+            'BasicTopic' => $mqttParams['BasicTopic'] ?? 'mqtt/face/basic',
+            'HeartbeatTopic' => $mqttParams['HeartbeatTopic'] ?? 'mqtt/face/heartbeat',
+            'ResumefromBreakpoint' => isset($mqttParams['ResumefromBreakpoint']) ? (int) $mqttParams['ResumefromBreakpoint'] : 1,
         ];
 
         if (!empty($mqttParams['MQUser'])) {
@@ -180,6 +180,66 @@ class CameraHttpService
         }
 
         return $this->postAction($device, 'SetMQTTParam', $info);
+    }
+
+    /**
+     * Query current MQTT configuration from camera (/action/GetMQTTParam).
+     */
+    public function getMqttParam(Device $device): array
+    {
+        return $this->postAction($device, 'GetMQTTParam', []);
+    }
+
+    /**
+     * Set System Parameters on camera (/action/SetSysParam).
+     */
+    public function setSysParam(Device $device, array $params): array
+    {
+        return $this->postAction($device, 'SetSysParam', $params);
+    }
+
+    /**
+     * Set System Time on camera (/action/SetSysTime).
+     */
+    public function setSysTime(Device $device, ?string $time = null): array
+    {
+        $timeStr = $time ?: now()->setTimezone(config('app.timezone', 'Asia/Manila'))->format('Y-m-d H:i:s');
+        return $this->postAction($device, 'SetSysTime', [
+            'Time' => $timeStr,
+        ]);
+    }
+
+    /**
+     * Manual push historical recognition records from camera storage (/action/ManualPushRecords).
+     */
+    public function manualPushRecords(Device $device, string $timeS, string $timeE): array
+    {
+        return $this->postAction($device, 'ManualPushRecords', [
+            'TimeS' => $timeS,
+            'TimeE' => $timeE,
+        ]);
+    }
+
+    /**
+     * Manual push stranger snapshot records from camera storage (/action/ManualPushSnaps).
+     */
+    public function manualPushSnaps(Device $device, string $timeS, string $timeE): array
+    {
+        return $this->postAction($device, 'ManualPushSnaps', [
+            'TimeS' => $timeS,
+            'TimeE' => $timeE,
+        ]);
+    }
+
+    /**
+     * Restore camera to factory defaults (/action/SetFactoryDefault).
+     */
+    public function setFactoryDefault(Device $device, int $netPar = 0, int $person = 1): array
+    {
+        return $this->postAction($device, 'SetFactoryDefault', [
+            'DefaltNetPar' => $netPar,
+            'DefaltPerson' => $person,
+        ]);
     }
 
     /**
