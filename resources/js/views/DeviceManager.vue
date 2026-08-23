@@ -3,7 +3,7 @@
     <!-- Top Header & Device Enrollment -->
     <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-slate-900/80 border border-slate-800 p-4 rounded-xl backdrop-blur-md">
       <div>
-        <h2 class="text-lg font-semibold text-slate-100">Camera & Edge Device Fleet</h2>
+        <h2 class="text-lg font-semibold text-slate-100">Camera &amp; Edge Device Fleet</h2>
         <p class="text-xs text-slate-400">Configure edge AI cameras, dispatch MQTT parameters, trigger remote reboots, and monitor device heartbeats</p>
       </div>
 
@@ -44,20 +44,20 @@
             <div class="flex items-center gap-1">
               <button 
                 @click="openEditModal(device)" 
-                class="p-1 text-slate-400 hover:text-indigo-400 hover:bg-slate-800 rounded transition-colors cursor-pointer" 
-                title="Edit Camera Details"
+                class="p-1.5 text-slate-400 hover:text-indigo-400 hover:bg-slate-800 rounded transition-colors cursor-pointer" 
+                title="Edit Camera & Configuration"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/>
                 </svg>
               </button>
               <button 
                 @click="deleteDevice(device)" 
                 :disabled="deletingId === device.id"
-                class="p-1 text-slate-400 hover:text-rose-400 hover:bg-slate-800 rounded transition-colors disabled:opacity-50 cursor-pointer" 
+                class="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-slate-800 rounded transition-colors disabled:opacity-50 cursor-pointer" 
                 title="Delete Camera"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <polyline points="3 6 5 6 21 6"/>
                   <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
                   <line x1="10" y1="11" x2="10" y2="17"/>
@@ -75,8 +75,8 @@
             <span class="text-indigo-400">{{ device.ip_address }}:{{ device.port }}</span>
           </div>
           <div class="flex justify-between">
-            <span class="text-slate-500 font-sans">Device Type:</span>
-            <span>{{ getDeviceTypeName(device.device_type) }}</span>
+            <span class="text-slate-500 font-sans">MQTT Topic:</span>
+            <span class="text-amber-400 truncate max-w-[170px]">{{ device.mqtt_topic || `mqtt/face/${device.device_id}` }}</span>
           </div>
           <div class="flex justify-between">
             <span class="text-slate-500 font-sans">Last Heartbeat:</span>
@@ -108,44 +108,25 @@
         </button>
 
         <!-- Secondary Actions -->
-        <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-2 border-t border-slate-800/80">
+        <div class="grid grid-cols-3 gap-2 pt-2 border-t border-slate-800/80">
           <button 
             @click="testConnection(device)" 
             :disabled="testingId === device.id"
-            class="py-1.5 px-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium rounded-lg border border-slate-700 transition-colors disabled:opacity-50 cursor-pointer"
+            class="py-1.5 px-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium rounded-lg border border-slate-700 transition-colors disabled:opacity-50 cursor-pointer text-center truncate"
           >
             {{ testingId === device.id ? 'Testing...' : '📡 Ping' }}
           </button>
           <button 
-            @click="openMqttModal(device)"
-            class="py-1.5 px-2.5 bg-slate-800 hover:bg-slate-700 text-indigo-300 text-xs font-medium rounded-lg border border-slate-700 transition-colors cursor-pointer"
-          >
-            ⚙️ MQTT
-          </button>
-          <button 
             @click="auditCameraFaces(device)"
-            class="py-1.5 px-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium rounded-lg border border-slate-700 transition-colors cursor-pointer"
+            class="py-1.5 px-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium rounded-lg border border-slate-700 transition-colors cursor-pointer text-center truncate"
           >
             👥 Audit
           </button>
           <button 
-            @click="rebootDevice(device)"
-            class="py-1.5 px-2.5 bg-amber-950/30 hover:bg-amber-900/50 text-amber-300 text-xs font-medium rounded-lg border border-amber-800/30 transition-colors cursor-pointer"
-          >
-            🔄 Reboot
-          </button>
-          <button 
             @click="openEditModal(device)"
-            class="py-1.5 px-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium rounded-lg border border-slate-700 transition-colors cursor-pointer"
+            class="py-1.5 px-2 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 text-xs font-medium rounded-lg border border-indigo-500/30 transition-colors cursor-pointer text-center truncate"
           >
-            ✏️ Edit
-          </button>
-          <button 
-            @click="deleteDevice(device)" 
-            :disabled="deletingId === device.id"
-            class="py-1.5 px-2.5 bg-rose-950/30 hover:bg-rose-900/50 text-rose-300 text-xs font-medium rounded-lg border border-rose-800/30 transition-colors disabled:opacity-50 cursor-pointer"
-          >
-            {{ deletingId === device.id ? 'Deleting...' : '🗑️ Delete' }}
+            ⚙️ Config
           </button>
         </div>
       </div>
@@ -159,111 +140,399 @@
       <button @click="openCreateModal" class="mt-4 px-4 py-2 bg-indigo-600 text-white rounded-lg text-xs font-semibold">Add Camera Now</button>
     </div>
 
-    <!-- Device Setup Modal -->
-    <div v-if="deviceModal.show" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" @click.self="deviceModal.show = false">
-      <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-lg w-full p-6 space-y-4">
+    <!-- Comprehensive Camera Configuration & Edit Modal -->
+    <div v-if="deviceModal.show" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md" @click.self="deviceModal.show = false">
+      <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-4xl w-full p-6 sm:p-7 space-y-5 max-h-[92vh] overflow-y-auto shadow-2xl">
+        <!-- Modal Header -->
         <div class="flex items-center justify-between border-b border-slate-800 pb-3">
-          <h3 class="text-base font-semibold text-slate-100">{{ deviceModal.isEdit ? 'Edit Camera Parameters' : 'Register AI Camera Device' }}</h3>
-          <button @click="deviceModal.show = false" class="text-slate-400 hover:text-white text-lg font-bold">&times;</button>
+          <div>
+            <h3 class="text-base font-semibold text-slate-100 flex items-center gap-2">
+              <span>{{ deviceModal.isEdit ? '⚙️ Camera Configuration & Parameters' : '➕ Register AI Camera Device' }}</span>
+              <span v-if="deviceModal.isEdit" class="text-xs px-2 py-0.5 rounded font-mono bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+                ID: {{ deviceForm.device_id }}
+              </span>
+            </h3>
+            <p class="text-xs text-slate-400 mt-0.5">
+              {{ deviceModal.isEdit ? `Manage HTTP endpoints, MQTT telemetry streams, clock sync, and maintenance for ${deviceForm.name}` : 'Enter camera network coordinates and authentication' }}
+            </p>
+          </div>
+          <button @click="deviceModal.show = false" class="text-slate-400 hover:text-white text-xl font-bold">&times;</button>
         </div>
 
-        <form @submit.prevent="saveDevice" class="space-y-4">
-          <div class="grid grid-cols-2 gap-3">
+        <!-- Navigation Tabs (When Editing) -->
+        <div v-if="deviceModal.isEdit" class="flex items-center gap-1 border-b border-slate-800 overflow-x-auto pb-1">
+          <button 
+            type="button"
+            @click="modalTab = 'general'"
+            class="px-3 py-1.5 text-xs font-medium rounded-lg transition-colors whitespace-nowrap"
+            :class="modalTab === 'general' ? 'bg-indigo-600 text-white font-semibold shadow' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'"
+          >
+            🔌 General &amp; Network
+          </button>
+          <button 
+            type="button"
+            @click="modalTab = 'mqtt'"
+            class="px-3 py-1.5 text-xs font-medium rounded-lg transition-colors whitespace-nowrap"
+            :class="modalTab === 'mqtt' ? 'bg-indigo-600 text-white font-semibold shadow' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'"
+          >
+            📡 MQTT Protocol
+          </button>
+          <button 
+            type="button"
+            @click="modalTab = 'time'"
+            class="px-3 py-1.5 text-xs font-medium rounded-lg transition-colors whitespace-nowrap"
+            :class="modalTab === 'time' ? 'bg-indigo-600 text-white font-semibold shadow' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'"
+          >
+            🕒 Time &amp; Clock
+          </button>
+          <button 
+            type="button"
+            @click="modalTab = 'resend'"
+            class="px-3 py-1.5 text-xs font-medium rounded-lg transition-colors whitespace-nowrap"
+            :class="modalTab === 'resend' ? 'bg-indigo-600 text-white font-semibold shadow' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'"
+          >
+            📥 Log Backfill
+          </button>
+          <button 
+            type="button"
+            @click="modalTab = 'maintenance'"
+            class="px-3 py-1.5 text-xs font-medium rounded-lg transition-colors whitespace-nowrap"
+            :class="modalTab === 'maintenance' ? 'bg-rose-900/60 text-rose-200 font-semibold shadow' : 'text-slate-400 hover:text-rose-400 hover:bg-slate-800'"
+          >
+            🛠️ Maintenance
+          </button>
+        </div>
+
+        <!-- TAB 1: General & Network Parameters -->
+        <form v-if="!deviceModal.isEdit || modalTab === 'general'" @submit.prevent="saveDevice" class="space-y-4">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label class="block text-xs font-medium text-slate-300 mb-1">Device ID / Serial *</label>
-              <input v-model="deviceForm.device_id" required type="text" placeholder="e.g. 005a213b000b93cc" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-100" />
+              <label class="block text-xs font-medium text-slate-300 mb-1 flex items-center justify-between">
+                <span>Device ID / Serial *</span>
+                <span v-if="deviceModal.isEdit" class="text-[10px] text-amber-400 font-mono">🔒 Hardware ID (Immutable)</span>
+              </label>
+              <input 
+                v-model="deviceForm.device_id" 
+                :readonly="deviceModal.isEdit"
+                :disabled="deviceModal.isEdit"
+                required 
+                type="text" 
+                placeholder="e.g. 1026230 or 005a213b000b93cc" 
+                class="w-full border rounded-lg px-3 py-2 text-xs font-mono transition-colors"
+                :class="deviceModal.isEdit ? 'bg-slate-900/80 border-slate-800 text-slate-400 cursor-not-allowed select-none' : 'bg-slate-800 border-slate-700 text-slate-100 focus:ring-1 focus:ring-indigo-500'" 
+              />
             </div>
             <div>
-              <label class="block text-xs font-medium text-slate-300 mb-1">Friendly Name *</label>
-              <input v-model="deviceForm.name" required type="text" placeholder="e.g. Main Entrance Gate" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-100" />
+              <label class="block text-xs font-medium text-slate-300 mb-1">Friendly Display Name *</label>
+              <input v-model="deviceForm.name" required type="text" placeholder="e.g. Main Entrance Gate" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-100 focus:ring-1 focus:ring-indigo-500" />
             </div>
           </div>
 
-          <div class="grid grid-cols-3 gap-3">
-            <div class="col-span-2">
-              <label class="block text-xs font-medium text-slate-300 mb-1">Camera IP Address *</label>
-              <input v-model="deviceForm.ip_address" required type="text" placeholder="192.168.1.100" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-100" />
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div class="sm:col-span-2">
+              <label class="block text-xs font-medium text-slate-300 mb-1">Camera LAN IP Address *</label>
+              <input v-model="deviceForm.ip_address" required type="text" placeholder="192.168.1.100" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-100 font-mono focus:ring-1 focus:ring-indigo-500" />
             </div>
             <div>
-              <label class="block text-xs font-medium text-slate-300 mb-1">Port</label>
-              <input v-model.number="deviceForm.port" type="number" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-100" />
+              <label class="block text-xs font-medium text-slate-300 mb-1">HTTP Port *</label>
+              <input v-model.number="deviceForm.port" type="number" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-100 font-mono focus:ring-1 focus:ring-indigo-500" />
             </div>
           </div>
 
-          <div class="grid grid-cols-2 gap-3">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label class="block text-xs font-medium text-slate-300 mb-1">HTTP Username</label>
-              <input v-model="deviceForm.username" type="text" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-100" />
+              <label class="block text-xs font-medium text-slate-300 mb-1">HTTP Basic Auth Username</label>
+              <input v-model="deviceForm.username" type="text" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-100 font-mono" />
             </div>
             <div>
-              <label class="block text-xs font-medium text-slate-300 mb-1">HTTP Password</label>
-              <input v-model="deviceForm.password" type="password" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-100" />
+              <label class="block text-xs font-medium text-slate-300 mb-1">HTTP Basic Auth Password</label>
+              <input v-model="deviceForm.password" type="password" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-100 font-mono" />
             </div>
           </div>
 
-          <div>
-            <label class="block text-xs font-medium text-slate-300 mb-1">Device Form Factor</label>
-            <select v-model.number="deviceForm.device_type" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-100">
-              <option :value="0">0: IPC (Smart IP Camera)</option>
-              <option :value="1">1: DVR</option>
-              <option :value="2">2: NVR</option>
-              <option :value="3">3: Access Control Panel Unit</option>
-            </select>
+          <div class="flex items-center gap-2 pt-2">
+            <input type="checkbox" id="device_active" v-model="deviceForm.is_active" class="rounded bg-slate-800 border-slate-700 text-indigo-600 focus:ring-0" />
+            <label for="device_active" class="text-xs text-slate-300 cursor-pointer">Enable active telemetry synchronization &amp; face provisioning for this camera</label>
           </div>
 
-          <div class="flex items-center justify-between pt-3 border-t border-slate-800">
+          <div class="flex items-center justify-between pt-4 border-t border-slate-800">
             <button 
               v-if="deviceModal.isEdit" 
               type="button" 
-              @click="deleteDevice({ id: deviceModal.id, name: deviceForm.name, ip_address: deviceForm.ip_address })" 
-              class="px-3 py-2 bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 text-xs font-medium rounded-lg border border-rose-800/40 transition-colors"
+              @click="testConnection({ id: deviceModal.id, name: deviceForm.name, ip_address: deviceForm.ip_address, port: deviceForm.port })" 
+              class="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium rounded-lg border border-slate-700 transition-colors flex items-center gap-1.5"
             >
-              🗑️ Delete Camera
+              <span>📡</span> Test Live HTTP Connection
             </button>
             <div v-else></div>
 
             <div class="flex items-center gap-3">
               <button type="button" @click="deviceModal.show = false" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium rounded-lg">Cancel</button>
               <button type="submit" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-lg shadow-lg shadow-indigo-600/20">
-                {{ deviceModal.isEdit ? 'Update Camera' : 'Save Device' }}
+                {{ deviceModal.isEdit ? 'Save Device Changes' : 'Register Camera' }}
               </button>
             </div>
           </div>
         </form>
-      </div>
-    </div>
 
-    <!-- Push MQTT Config Modal -->
-    <div v-if="mqttModal.show" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" @click.self="mqttModal.show = false">
-      <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-md w-full p-6 space-y-4">
-        <div class="flex items-center justify-between border-b border-slate-800 pb-3">
-          <h3 class="text-base font-semibold text-slate-100">Push MQTT Broker Configuration</h3>
-          <button @click="mqttModal.show = false" class="text-slate-400 hover:text-white text-lg font-bold">&times;</button>
+        <!-- TAB 2: MQTT Telemetry Protocol Configuration -->
+        <div v-else-if="modalTab === 'mqtt'" class="space-y-4">
+          <div class="bg-indigo-950/20 border border-indigo-500/20 p-3.5 rounded-xl text-xs text-indigo-300 flex items-start gap-2.5">
+            <span class="text-base">ℹ️</span>
+            <div>
+              Configure how the camera publishes real-time verification logs (<code class="font-mono">VerifyPush</code>) and stranger detection snaps (<code class="font-mono">StrSnapPush</code>) to your MQTT broker via <code class="font-mono">/action/SetMQTTParam</code>.
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div class="sm:col-span-2">
+              <label class="block text-xs font-medium text-slate-300 mb-1">MQTT Broker Host/IP *</label>
+              <input v-model="mqttForm.MQAddr" type="text" placeholder="192.168.1.50" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-100 font-mono" />
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-slate-300 mb-1">MQTT Port *</label>
+              <input v-model.number="mqttForm.MQPort" type="number" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-100 font-mono" />
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs font-medium text-slate-300 mb-1">MQTT Telemetry Topic</label>
+              <input v-model="mqttForm.MQTopic" type="text" placeholder="mqtt/face/{DeviceID}" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-100 font-mono" />
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-slate-300 mb-1">Cloud Device ID (MQCloudID)</label>
+              <input v-model="mqttForm.MQCloudID" type="text" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-100 font-mono" />
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs font-medium text-slate-300 mb-1">MQTT Username (Optional)</label>
+              <input v-model="mqttForm.MQUser" type="text" placeholder="Leave blank if unauthenticated" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-100 font-mono" />
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-slate-300 mb-1">MQTT Password (Optional)</label>
+              <input v-model="mqttForm.MQPwd" type="password" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-100 font-mono" />
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs font-medium text-slate-300 mb-1">Recognition Upload Mode (RecordUploadType)</label>
+              <select v-model.number="mqttForm.RecordUploadType" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-100">
+                <option :value="1">1: Upload with Captured Picture (Recommended)</option>
+                <option :value="2">2: Upload Metadata Only (No Picture)</option>
+                <option :value="0">0: Disabled (Do not upload records)</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-slate-300 mb-1">Stranger Snap Upload Mode (StrangerUploadType)</label>
+              <select v-model.number="mqttForm.StrangerUploadType" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-100">
+                <option :value="0">0: Upload Stranger Snapshot (Recommended)</option>
+                <option :value="2">2: Upload Stranger Metadata Only</option>
+                <option :value="1">1: Disabled (Do not upload strangers)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs font-medium text-slate-300 mb-1">Keep-Alive Interval (Seconds)</label>
+              <input v-model.number="mqttForm.KeepAliveInterval" type="number" min="10" max="300" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-100 font-mono" />
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-slate-300 mb-1">Breakpoint Resume / ACK Mechanism</label>
+              <select v-model.number="mqttForm.ResumefromBreakpoint" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-100">
+                <option :value="1">1: Enabled (Reliable Transmission with PushAck)</option>
+                <option :value="0">0: Disabled (Standard QoS 0 Fire &amp; Forget)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="flex items-center justify-between pt-4 border-t border-slate-800">
+            <button 
+              type="button" 
+              @click="fetchCurrentCameraMqtt"
+              :disabled="fetchingMqtt"
+              class="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium rounded-lg border border-slate-700 transition-colors flex items-center gap-1.5 disabled:opacity-50"
+            >
+              <span>📥</span> {{ fetchingMqtt ? 'Querying Camera...' : 'Fetch From Camera' }}
+            </button>
+
+            <div class="flex items-center gap-3">
+              <button type="button" @click="deviceModal.show = false" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium rounded-lg">Close</button>
+              <button 
+                type="button" 
+                @click="pushMqttParamsToCamera" 
+                :disabled="pushingMqtt"
+                class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-lg shadow-lg shadow-indigo-600/20 disabled:opacity-50 flex items-center gap-1.5"
+              >
+                <span>📡</span> {{ pushingMqtt ? 'Pushing to Camera...' : 'Push & Apply to Camera' }}
+              </button>
+            </div>
+          </div>
         </div>
 
-        <p class="text-xs text-slate-400">Sends HTTP POST <code class="text-indigo-400">/action/SetMQTTParam</code> to the camera to direct telemetry streams to the server's broker.</p>
-
-        <form @submit.prevent="pushMqttSettings" class="space-y-3">
-          <div>
-            <label class="block text-xs font-medium text-slate-300 mb-1">MQTT Broker Host/IP</label>
-            <input v-model="mqttForm.MQAddr" required type="text" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-100" />
-          </div>
-          <div>
-            <label class="block text-xs font-medium text-slate-300 mb-1">MQTT Port</label>
-            <input v-model.number="mqttForm.MQPort" required type="number" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-100" />
-          </div>
-          <div>
-            <label class="block text-xs font-medium text-slate-300 mb-1">Custom Topic</label>
-            <input v-model="mqttForm.MQTopic" type="text" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-100" />
+        <!-- TAB 3: System Time & Clock Synchronization -->
+        <div v-else-if="modalTab === 'time'" class="space-y-4">
+          <div class="bg-indigo-950/20 border border-indigo-500/20 p-3.5 rounded-xl text-xs text-indigo-300">
+            Synchronize the camera hardware clock with the central server timezone (<strong class="text-indigo-200">Asia/Manila (UTC+8)</strong>) via <code class="font-mono">/action/SetSysTime</code> to ensure verification timestamps match accurately.
           </div>
 
-          <div class="flex justify-end gap-3 pt-3 border-t border-slate-800">
-            <button type="button" @click="mqttModal.show = false" class="px-4 py-2 bg-slate-800 text-slate-300 text-xs rounded-lg">Cancel</button>
-            <button type="submit" :disabled="pushingMqtt" class="px-4 py-2 bg-indigo-600 text-white text-xs font-semibold rounded-lg">
-              {{ pushingMqtt ? 'Configuring Camera...' : 'Push Settings' }}
+          <div class="bg-slate-800/40 rounded-xl p-4 space-y-3">
+            <div class="text-xs text-slate-400">Current Server Clock Time:</div>
+            <div class="text-xl font-bold font-mono text-emerald-400">
+              {{ currentServerClock }} (Asia/Manila)
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-xs font-medium text-slate-300 mb-1">Custom Clock Override (Optional)</label>
+            <input v-model="customTimeInput" type="text" placeholder="YYYY-MM-DD HH:mm:ss (leave blank to use current server time)" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-100 font-mono" />
+          </div>
+
+          <div class="flex justify-end gap-3 pt-4 border-t border-slate-800">
+            <button type="button" @click="deviceModal.show = false" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium rounded-lg">Close</button>
+            <button 
+              type="button" 
+              @click="syncCameraTime" 
+              :disabled="syncingTime"
+              class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded-lg shadow-lg shadow-emerald-600/20 disabled:opacity-50 flex items-center gap-1.5"
+            >
+              <span>🕒</span> {{ syncingTime ? 'Syncing Clock...' : 'Sync Camera Clock Now' }}
             </button>
           </div>
-        </form>
+        </div>
+
+        <!-- TAB 4: Telemetry Log Backfill & Resend -->
+        <div v-else-if="modalTab === 'resend'" class="space-y-4">
+          <div class="bg-amber-950/20 border border-amber-500/20 p-3.5 rounded-xl text-xs text-amber-300">
+            Request the camera hardware to resend offline verification records (<code class="font-mono">ManualPushRecords</code>) or stranger captures (<code class="font-mono">ManualPushSnaps</code>) recorded during a specific timeframe.
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs font-medium text-slate-300 mb-1">Start Time (TimeS) *</label>
+              <input v-model="resendForm.time_s" type="datetime-local" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-100 font-mono" />
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-slate-300 mb-1">End Time (TimeE) *</label>
+              <input v-model="resendForm.time_e" type="datetime-local" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-100 font-mono" />
+            </div>
+          </div>
+
+          <div class="flex items-center justify-end gap-3 pt-4 border-t border-slate-800">
+            <button 
+              type="button" 
+              @click="triggerManualPushRecords"
+              :disabled="resendingLogs"
+              class="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium rounded-lg border border-slate-700 transition-colors disabled:opacity-50"
+            >
+              📥 Resend Access Records
+            </button>
+            <button 
+              type="button" 
+              @click="triggerManualPushSnaps"
+              :disabled="resendingLogs"
+              class="px-3.5 py-2 bg-amber-600 hover:bg-amber-500 text-white text-xs font-semibold rounded-lg shadow-lg shadow-amber-600/20 disabled:opacity-50"
+            >
+              🎭 Resend Stranger Snaps
+            </button>
+          </div>
+        </div>
+
+        <!-- TAB 5: Hardware Maintenance & Danger Zone -->
+        <div v-else-if="modalTab === 'maintenance'" class="space-y-4">
+          <!-- Hardware Info Section -->
+          <div class="bg-slate-800/40 rounded-xl p-4 space-y-3">
+            <div class="flex items-center justify-between">
+              <h4 class="text-xs font-semibold uppercase tracking-wider text-slate-300">Live Hardware Telemetry Info</h4>
+              <button 
+                @click="queryLiveHardwareInfo" 
+                :disabled="queryingHardware"
+                class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs rounded border border-slate-700"
+              >
+                {{ queryingHardware ? 'Querying...' : '🔄 Query Camera' }}
+              </button>
+            </div>
+
+            <div v-if="hardwareInfo" class="grid grid-cols-2 gap-2 text-xs font-mono text-slate-300">
+              <div><span class="text-slate-500">Device Name:</span> {{ hardwareInfo.Name || '--' }}</div>
+              <div><span class="text-slate-500">Firmware Version:</span> {{ hardwareInfo.Version || hardwareInfo.SoftWareVersion || '--' }}</div>
+              <div><span class="text-slate-500">Hardware ID:</span> {{ hardwareInfo.DeviceID || '--' }}</div>
+              <div><span class="text-slate-500">Device Type:</span> {{ hardwareInfo.DeviceType ?? '--' }}</div>
+            </div>
+            <div v-else class="text-xs text-slate-500 italic">Click "Query Camera" to retrieve on-device firmware and hardware specifications.</div>
+          </div>
+
+          <!-- Danger Operations -->
+          <div class="border border-rose-500/20 bg-rose-950/10 rounded-xl p-4 space-y-3">
+            <h4 class="text-xs font-bold uppercase tracking-wider text-rose-400">Device Operations &amp; Danger Zone</h4>
+
+            <div class="space-y-2.5">
+              <div class="flex items-center justify-between p-2.5 bg-slate-900/60 rounded-lg border border-slate-800">
+                <div>
+                  <div class="text-xs font-semibold text-slate-200">Remote Reboot Camera</div>
+                  <div class="text-[11px] text-slate-400">Restarts camera hardware operating system via <code class="font-mono text-indigo-400">/action/RebootDevice</code></div>
+                </div>
+                <button 
+                  type="button" 
+                  @click="rebootDevice({ id: deviceModal.id, name: deviceForm.name, ip_address: deviceForm.ip_address })"
+                  class="px-3 py-1.5 bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 text-xs font-medium rounded-lg border border-amber-500/30"
+                >
+                  🔄 Reboot
+                </button>
+              </div>
+
+              <div class="flex items-center justify-between p-2.5 bg-slate-900/60 rounded-lg border border-slate-800">
+                <div>
+                  <div class="text-xs font-semibold text-rose-300">Wipe On-Device Face Database</div>
+                  <div class="text-[11px] text-slate-400">Clears all face whitelist/blacklist libraries from camera storage (<code class="font-mono text-rose-400">/action/DeleteAllPerson</code>)</div>
+                </div>
+                <button 
+                  type="button" 
+                  @click="clearCameraFaceDatabase"
+                  class="px-3 py-1.5 bg-rose-950/60 hover:bg-rose-900/80 text-rose-300 text-xs font-medium rounded-lg border border-rose-800/50"
+                >
+                  🗑️ Clear Faces
+                </button>
+              </div>
+
+              <div class="flex items-center justify-between p-2.5 bg-slate-900/60 rounded-lg border border-slate-800">
+                <div>
+                  <div class="text-xs font-semibold text-rose-300">Factory Reset Camera</div>
+                  <div class="text-[11px] text-slate-400">Restores default camera parameters via <code class="font-mono text-rose-400">/action/SetFactoryDefault</code></div>
+                </div>
+                <button 
+                  type="button" 
+                  @click="factoryResetCamera"
+                  class="px-3 py-1.5 bg-rose-950/60 hover:bg-rose-900/80 text-rose-300 text-xs font-medium rounded-lg border border-rose-800/50"
+                >
+                  ⚠️ Factory Reset
+                </button>
+              </div>
+
+              <div class="flex items-center justify-between p-2.5 bg-slate-900/60 rounded-lg border border-slate-800">
+                <div>
+                  <div class="text-xs font-semibold text-rose-400">Delete Device From Hub</div>
+                  <div class="text-[11px] text-slate-400">Removes camera entry from central PostgreSQL database</div>
+                </div>
+                <button 
+                  type="button" 
+                  @click="deleteDevice({ id: deviceModal.id, name: deviceForm.name, ip_address: deviceForm.ip_address })"
+                  class="px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold rounded-lg shadow"
+                >
+                  Delete Camera
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div class="flex justify-end pt-3 border-t border-slate-800">
+            <button type="button" @click="deviceModal.show = false" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium rounded-lg">Close</button>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -277,9 +546,9 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, onUnmounted } from 'vue';
 import { useCameraStore } from '../stores/cameraStore';
-import { formatTime } from '../utils/date';
+import { formatTime, formatDateTime } from '../utils/date';
 import CameraLivePreviewModal from '../components/CameraLivePreviewModal.vue';
 import notify from '../utils/notify';
 import axios from 'axios';
@@ -288,10 +557,18 @@ const store = useCameraStore();
 const testingId = ref(null);
 const deletingId = ref(null);
 const pushingMqtt = ref(false);
+const fetchingMqtt = ref(false);
+const syncingTime = ref(false);
+const resendingLogs = ref(false);
+const queryingHardware = ref(false);
 
 const deviceModal = ref({ show: false, isEdit: false, id: null });
-const mqttModal = ref({ show: false, device: null });
+const modalTab = ref('general');
 const previewModal = ref({ show: false, device: null });
+const hardwareInfo = ref(null);
+
+const currentServerClock = ref('');
+let clockTimer = null;
 
 const deviceForm = ref({
   device_id: '',
@@ -305,20 +582,27 @@ const deviceForm = ref({
 });
 
 const mqttForm = ref({
+  MQEnable: 1,
   MQAddr: '192.168.1.50',
   MQPort: 1883,
   MQTopic: '',
+  MQUser: '',
+  MQPwd: '',
+  MQCloudID: '',
+  RecordUploadType: 1,
+  StrangerUploadType: 0,
+  KeepAliveInterval: 30,
+  BasicTopic: 'mqtt/face/basic',
+  HeartbeatTopic: 'mqtt/face/heartbeat',
+  ResumefromBreakpoint: 1,
 });
 
-function getDeviceTypeName(type) {
-  switch (type) {
-    case 0: return 'IPC (Smart Camera)';
-    case 1: return 'DVR';
-    case 2: return 'NVR';
-    case 3: return 'Access Panel';
-    default: return 'Camera Unit';
-  }
-}
+const customTimeInput = ref('');
+
+const resendForm = ref({
+  time_s: '',
+  time_e: '',
+});
 
 function formatHeartbeat(dateStr) {
   if (!dateStr) return 'Never';
@@ -329,12 +613,24 @@ function formatHeartbeat(dateStr) {
   return formatTime(d);
 }
 
+function updateClock() {
+  const d = new Date();
+  currentServerClock.value = d.toLocaleTimeString('en-US', {
+    timeZone: 'Asia/Manila',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: true,
+  });
+}
+
 function openPreview(device) {
   previewModal.value = { show: true, device };
 }
 
 function openCreateModal() {
   deviceModal.value = { show: true, isEdit: false, id: null };
+  modalTab.value = 'general';
   deviceForm.value = {
     device_id: '',
     name: '',
@@ -349,6 +645,18 @@ function openCreateModal() {
 
 function openEditModal(device) {
   deviceModal.value = { show: true, isEdit: true, id: device.id };
+  modalTab.value = 'general';
+  hardwareInfo.value = null;
+  customTimeInput.value = '';
+
+  // Setup default resend time range (last 24 hours)
+  const now = new Date();
+  const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+  resendForm.value = {
+    time_s: yesterday.toISOString().slice(0, 16),
+    time_e: now.toISOString().slice(0, 16),
+  };
+
   deviceForm.value = {
     device_id: device.device_id,
     name: device.name,
@@ -359,31 +667,28 @@ function openEditModal(device) {
     device_type: device.device_type ?? 0,
     is_active: device.is_active ?? true,
   };
-}
 
-async function deleteDevice(device) {
-  const confirmed = await notify.confirm(
-    `Delete Camera "${device.name}"?`,
-    `All associated telemetry records and access logs for this camera (${device.ip_address}) will be removed permanently.`,
-    'Yes, Delete Camera',
-    'Cancel',
-    true
-  );
+  const clientHost = window.location.hostname;
+  const defaultMqHost = (clientHost && clientHost !== 'localhost' && clientHost !== '127.0.0.1') ? clientHost : '';
 
-  if (!confirmed) return;
+  mqttForm.value = {
+    MQEnable: 1,
+    MQAddr: defaultMqHost,
+    MQPort: 1883,
+    MQTopic: device.mqtt_topic || `mqtt/face/${device.device_id}`,
+    MQUser: '',
+    MQPwd: '',
+    MQCloudID: String(device.device_id),
+    RecordUploadType: 1,
+    StrangerUploadType: 0,
+    KeepAliveInterval: 30,
+    BasicTopic: 'mqtt/face/basic',
+    HeartbeatTopic: 'mqtt/face/heartbeat',
+    ResumefromBreakpoint: 1,
+  };
 
-  deletingId.value = device.id;
-  try {
-    await axios.delete(`/api/devices/${device.id}`);
-    deviceModal.value.show = false;
-    await store.fetchDevices();
-    await store.fetchStats();
-    notify.toast(`Camera "${device.name}" removed successfully`, 'success');
-  } catch (err) {
-    notify.error('Delete Failed', err.response?.data?.message || err.message);
-  } finally {
-    deletingId.value = null;
-  }
+  // Auto-fetch current live MQTT configuration directly from edge camera
+  fetchCurrentCameraMqtt();
 }
 
 async function saveDevice() {
@@ -399,6 +704,188 @@ async function saveDevice() {
     store.fetchDevices();
   } catch (err) {
     notify.error('Save Failed', err.response?.data?.message || 'Failed to save camera device');
+  }
+}
+
+async function fetchCurrentCameraMqtt() {
+  if (!deviceModal.value.id) return;
+  fetchingMqtt.value = true;
+  try {
+    const res = await axios.get(`/api/devices/${deviceModal.value.id}/mqtt-param`);
+    if (res.data.success && res.data.data?.info) {
+      const info = res.data.data.info;
+      mqttForm.value = {
+        ...mqttForm.value,
+        MQEnable: info.MQEnable ?? 1,
+        MQAddr: info.MQAddr || mqttForm.value.MQAddr,
+        MQPort: info.MQPort || mqttForm.value.MQPort,
+        MQTopic: info.MQTopic || mqttForm.value.MQTopic,
+        MQUser: info.MQUser || '',
+        MQPwd: info.MQPwd || '',
+        MQCloudID: info.MQCloudID || mqttForm.value.MQCloudID,
+        RecordUploadType: info.RecordUploadType ?? 1,
+        StrangerUploadType: info.StrangerUploadType ?? 0,
+        KeepAliveInterval: info.KeepAliveInterval || 30,
+        ResumefromBreakpoint: info.ResumefromBreakpoint ?? 1,
+      };
+    } else {
+      notify.error('Query Failed', res.data.error || 'Could not retrieve camera MQTT parameters.');
+    }
+  } catch (err) {
+    notify.error('MQTT Query Error', err.response?.data?.message || err.message);
+  } finally {
+    fetchingMqtt.value = false;
+  }
+}
+
+async function pushMqttParamsToCamera() {
+  if (!deviceModal.value.id) return;
+  pushingMqtt.value = true;
+  try {
+    const res = await axios.post(`/api/devices/${deviceModal.value.id}/sync-mqtt`, mqttForm.value);
+    if (res.data.success) {
+      notify.success('MQTT Synchronized', 'MQTT configuration was successfully applied to the edge camera.');
+      store.fetchDevices();
+    } else {
+      notify.error('Configuration Failed', res.data.error || 'Camera rejected MQTT settings.');
+    }
+  } catch (err) {
+    notify.error('MQTT Push Error', err.response?.data?.message || err.message);
+  } finally {
+    pushingMqtt.value = false;
+  }
+}
+
+async function syncCameraTime() {
+  if (!deviceModal.value.id) return;
+  syncingTime.value = true;
+  try {
+    const payload = customTimeInput.value ? { time: customTimeInput.value } : {};
+    const res = await axios.post(`/api/devices/${deviceModal.value.id}/sync-time`, payload);
+    if (res.data.success) {
+      notify.success('Clock Synchronized', 'Camera system clock was synchronized to server time.');
+    } else {
+      notify.error('Clock Sync Failed', res.data.error || 'Camera rejected clock synchronization.');
+    }
+  } catch (err) {
+    notify.error('Time Sync Error', err.response?.data?.message || err.message);
+  } finally {
+    syncingTime.value = false;
+  }
+}
+
+async function triggerManualPushRecords() {
+  if (!resendForm.value.time_s || !resendForm.value.time_e) {
+    notify.warning('Time Range Required', 'Please select both start and end times.');
+    return;
+  }
+  resendingLogs.value = true;
+  try {
+    const formatStr = (str) => str.replace('T', ' ') + ':00';
+    const res = await axios.post(`/api/devices/${deviceModal.value.id}/manual-push-records`, {
+      time_s: formatStr(resendForm.value.time_s),
+      time_e: formatStr(resendForm.value.time_e),
+    });
+    if (res.data.success) {
+      notify.success('Resend Command Dispatched', 'Camera is streaming historical verification records to MQTT broker.');
+    } else {
+      notify.error('Resend Failed', res.data.error || 'Camera rejected record resend command.');
+    }
+  } catch (err) {
+    notify.error('Resend Error', err.response?.data?.message || err.message);
+  } finally {
+    resendingLogs.value = false;
+  }
+}
+
+async function triggerManualPushSnaps() {
+  if (!resendForm.value.time_s || !resendForm.value.time_e) {
+    notify.warning('Time Range Required', 'Please select both start and end times.');
+    return;
+  }
+  resendingLogs.value = true;
+  try {
+    const formatStr = (str) => str.replace('T', ' ') + ':00';
+    const res = await axios.post(`/api/devices/${deviceModal.value.id}/manual-push-snaps`, {
+      time_s: formatStr(resendForm.value.time_s),
+      time_e: formatStr(resendForm.value.time_e),
+    });
+    if (res.data.success) {
+      notify.success('Resend Command Dispatched', 'Camera is streaming historical stranger snapshots to MQTT broker.');
+    } else {
+      notify.error('Resend Failed', res.data.error || 'Camera rejected stranger resend command.');
+    }
+  } catch (err) {
+    notify.error('Resend Error', err.response?.data?.message || err.message);
+  } finally {
+    resendingLogs.value = false;
+  }
+}
+
+async function queryLiveHardwareInfo() {
+  if (!deviceModal.value.id) return;
+  queryingHardware.value = true;
+  try {
+    const res = await axios.get(`/api/devices/${deviceModal.value.id}/sys-param`);
+    if (res.data.success && res.data.data?.info) {
+      hardwareInfo.value = res.data.data.info;
+      notify.toast('Hardware info retrieved from camera', 'success');
+    } else {
+      notify.error('Query Failed', res.data.error || 'Could not query camera system parameters.');
+    }
+  } catch (err) {
+    notify.error('Query Error', err.response?.data?.message || err.message);
+  } finally {
+    queryingHardware.value = false;
+  }
+}
+
+async function clearCameraFaceDatabase() {
+  const confirmed = await notify.confirm(
+    'Wipe All Face Data from Camera?',
+    `This will remove ALL registered personnel and face templates from ${deviceForm.value.name} (${deviceForm.value.ip_address}). The camera will automatically reboot.`,
+    'Yes, Wipe Face Library',
+    'Cancel',
+    true
+  );
+
+  if (!confirmed) return;
+
+  try {
+    const res = await axios.post(`/api/devices/${deviceModal.value.id}/clear-face-database`);
+    if (res.data.success) {
+      notify.success('Face Library Wiped', 'Camera face library deleted. Device is rebooting.');
+    } else {
+      notify.error('Wipe Failed', res.data.error || 'Camera rejected clear command.');
+    }
+  } catch (err) {
+    notify.error('Clear Request Error', err.response?.data?.message || err.message);
+  }
+}
+
+async function factoryResetCamera() {
+  const confirmed = await notify.confirm(
+    'Restore Camera to Factory Defaults?',
+    `This will reset all hardware and algorithmic settings on ${deviceForm.value.name} (${deviceForm.value.ip_address}).`,
+    'Yes, Factory Reset',
+    'Cancel',
+    true
+  );
+
+  if (!confirmed) return;
+
+  try {
+    const res = await axios.post(`/api/devices/${deviceModal.value.id}/factory-reset`, {
+      default_net_par: 0,
+      default_person: 1,
+    });
+    if (res.data.success) {
+      notify.success('Factory Reset Initiated', 'Camera is resetting to factory default parameters.');
+    } else {
+      notify.error('Reset Failed', res.data.error || 'Camera rejected factory reset command.');
+    }
+  } catch (err) {
+    notify.error('Reset Request Error', err.response?.data?.message || err.message);
   }
 }
 
@@ -442,32 +929,6 @@ async function rebootDevice(device) {
   }
 }
 
-function openMqttModal(device) {
-  mqttModal.value = { show: true, device };
-  mqttForm.value = {
-    MQAddr: window.location.hostname || '192.168.1.50',
-    MQPort: 1883,
-    MQTopic: device.mqtt_topic || `mqtt/face/${device.device_id}`,
-  };
-}
-
-async function pushMqttSettings() {
-  pushingMqtt.value = true;
-  try {
-    const res = await axios.post(`/api/devices/${mqttModal.value.device.id}/sync-mqtt`, mqttForm.value);
-    if (res.data.success) {
-      notify.success('MQTT Synchronized', 'MQTT broker parameters pushed to the edge camera.');
-      mqttModal.value.show = false;
-    } else {
-      notify.error('Configuration Failed', res.data.error || 'Failed to update MQTT parameters');
-    }
-  } catch (err) {
-    notify.error('MQTT Push Error', err.message);
-  } finally {
-    pushingMqtt.value = false;
-  }
-}
-
 async function auditCameraFaces(device) {
   try {
     const res = await axios.get(`/api/devices/${device.id}/search-camera-list`);
@@ -482,7 +943,38 @@ async function auditCameraFaces(device) {
   }
 }
 
+async function deleteDevice(device) {
+  const confirmed = await notify.confirm(
+    `Delete Camera "${device.name}"?`,
+    `All associated telemetry records and access logs for this camera (${device.ip_address}) will be removed permanently.`,
+    'Yes, Delete Camera',
+    'Cancel',
+    true
+  );
+
+  if (!confirmed) return;
+
+  deletingId.value = device.id;
+  try {
+    await axios.delete(`/api/devices/${device.id}`);
+    deviceModal.value.show = false;
+    await store.fetchDevices();
+    await store.fetchStats();
+    notify.toast(`Camera "${device.name}" removed successfully`, 'success');
+  } catch (err) {
+    notify.error('Delete Failed', err.response?.data?.message || err.message);
+  } finally {
+    deletingId.value = null;
+  }
+}
+
 onMounted(() => {
   store.fetchDevices();
+  updateClock();
+  clockTimer = setInterval(updateClock, 1000);
+});
+
+onUnmounted(() => {
+  if (clockTimer) clearInterval(clockTimer);
 });
 </script>
