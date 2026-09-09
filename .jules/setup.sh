@@ -13,7 +13,7 @@ sed -i 's/MQTT_HOST=mqtt/MQTT_HOST=127.0.0.1/g' .env
 sed -i 's/REVERB_HOST=reverb/REVERB_HOST=127.0.0.1/g' .env
 
 sudo apt-get update
-sudo apt-get install -y php-pgsql postgresql postgresql-contrib redis-server mosquitto
+sudo apt-get install -y php-pgsql php-redis postgresql postgresql-contrib redis-server mosquitto
 
 sudo service postgresql start
 sudo service redis-server start
