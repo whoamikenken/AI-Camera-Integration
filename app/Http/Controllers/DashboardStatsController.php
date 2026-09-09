@@ -16,22 +16,48 @@ class DashboardStatsController extends Controller
     {
         $today = Carbon::today();
 
-        $totalScansToday = AccessLog::where('captured_at', '>=', $today)->count();
-        $allowedToday = AccessLog::where('captured_at', '>=', $today)->where('verify_status', 1)->count();
-        $rejectedToday = AccessLog::where('captured_at', '>=', $today)->where('verify_status', 2)->count();
+        // Optimize access log queries into a single query
+        $accessLogStats = AccessLog::toBase()
+            ->where('captured_at', '>=', $today)
+            ->selectRaw('count(*) as total')
+            ->selectRaw('sum(case when verify_status = 1 then 1 else 0 end) as allowed')
+            ->selectRaw('sum(case when verify_status = 2 then 1 else 0 end) as rejected')
+            ->first();
+
+        $totalScansToday = (int) ($accessLogStats->total ?? 0);
+        $allowedToday = (int) ($accessLogStats->allowed ?? 0);
+        $rejectedToday = (int) ($accessLogStats->rejected ?? 0);
+
         $strangersToday = StrangerSnap::where('captured_at', '>=', $today)->count();
 
-        $totalDevices = Device::count();
-        $onlineDevices = Device::where('is_active', true)
-            ->where('last_heartbeat_at', '>=', now()->subSeconds(90))
-            ->count();
+        // Optimize device queries into a single query
+        $deviceStats = Device::toBase()
+            ->selectRaw('count(*) as total')
+            ->selectRaw('sum(case when is_active = 1 and last_heartbeat_at >= ? then 1 else 0 end) as online', [now()->subSeconds(90)])
+            ->first();
 
-        $totalPersonnel = Personnel::count();
-        $whitelisted = Personnel::where('person_type', 0)->count();
-        $blacklisted = Personnel::where('person_type', 1)->count();
+        $totalDevices = (int) ($deviceStats->total ?? 0);
+        $onlineDevices = (int) ($deviceStats->online ?? 0);
 
-        $pendingSyncs = SyncTask::where('status', 'PENDING')->orWhere('status', 'PROCESSING')->count();
-        $failedSyncs = SyncTask::where('status', 'FAILED')->count();
+        // Optimize personnel queries into a single query
+        $personnelStats = Personnel::toBase()
+            ->selectRaw('count(*) as total')
+            ->selectRaw('sum(case when person_type = 0 then 1 else 0 end) as whitelisted')
+            ->selectRaw('sum(case when person_type = 1 then 1 else 0 end) as blacklisted')
+            ->first();
+
+        $totalPersonnel = (int) ($personnelStats->total ?? 0);
+        $whitelisted = (int) ($personnelStats->whitelisted ?? 0);
+        $blacklisted = (int) ($personnelStats->blacklisted ?? 0);
+
+        // Optimize sync task queries into a single query
+        $syncTaskStats = SyncTask::toBase()
+            ->selectRaw('sum(case when status in (?, ?) then 1 else 0 end) as pending', ['PENDING', 'PROCESSING'])
+            ->selectRaw('sum(case when status = ? then 1 else 0 end) as failed', ['FAILED'])
+            ->first();
+
+        $pendingSyncs = (int) ($syncTaskStats->pending ?? 0);
+        $failedSyncs = (int) ($syncTaskStats->failed ?? 0);
 
         return response()->json([
             'telemetry' => [
