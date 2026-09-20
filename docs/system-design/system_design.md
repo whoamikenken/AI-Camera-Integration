@@ -11,7 +11,7 @@
 The **Intelligent Vision Edge & Telemetry Hub** provides a single-pane-of-glass access control, identity synchronizer, and high-throughput vision telemetry processing system for smart IP cameras and biometric edge units (such as X40Y series hardware).
 
 ### Key System Objectives
-1. **Biometric Face Library Sync**: Maintain master employee records in PostgreSQL and synchronize face photos/schedules to cameras via local HTTP REST dispatchers (`/action/EditPersonNew`, `/action/AddPersons`).
+1. **Biometric Face Library Sync**: Maintain master employee records in PostgreSQL and synchronize face photos/schedules to cameras via network HTTP/HTTPS REST dispatchers (`/action/EditPersonNew`, `/action/AddPersons`). Supports both HTTP and HTTPS endpoint camera devices.
 2. **Sub-second Verification Ingestion**: Ingest high-volume face verification logs (`RecPush`), stranger snapshots (`StrSnapPush`), and security alarms in real-time over MQTT.
 3. **Live Dashboard Broadcasting**: Push biometric match results, similarity confidence scores, snapshot images, and admission states directly to the Vue 3 dashboard using WebSockets (Laravel Reverb).
 4. **Resilient Failure Recovery**: Implement transactional outbox queuing (`sync_tasks`), automatic retry policies with exponential backoff, and MQTT continuous transmission acknowledgements (`PushAck`).
@@ -52,8 +52,8 @@ The **Intelligent Vision Edge & Telemetry Hub** provides a single-pane-of-glass 
 |  (Queue: camera-sync)         |             |                         |
 +---------------+---------------+             |                         |
                 |                             |                         |
-HTTP POST :8080 | Basic Auth                  |                         |
-/action/*       |                             |                         |
+HTTP/HTTPS POST     | Basic Auth
+/action/*       |
                 v                             |                         |
 +-------------------------------+             |                         |
 |     Edge AI Camera (X40Y)     |             |                         |
@@ -235,13 +235,13 @@ sequenceDiagram
 
 | System Action | Protocol / Method | Target / Topic | Key Parameters |
 | :--- | :--- | :--- | :--- |
-| **Add / Edit Person** | HTTP POST | `http://<cam_ip>:8080/action/EditPersonNew` | `DeviceID`, `IdType: 0`, `CustomizeID`, `Name`, `PersonType`, `picinfo`/`picURI` |
-| **Batch Add (URI)** | HTTP POST | `http://<cam_ip>:8080/action/AddPersons` | `DeviceID`, `Total`, `Personinfo_0: {...}` |
-| **Delete Person** | HTTP POST | `http://<cam_ip>:8080/action/DeletePerson` | `DeviceID`, `TotalNum`, `IdType: 0`, `CustomizeID: [id1, id2]` |
-| **Wipe Database** | HTTP POST | `http://<cam_ip>:8080/action/DeleteAllPerson` | `DeleteAllPersonCheck: 1` *(Reboots camera)* |
-| **Audit Sync / Query** | HTTP POST | `http://<cam_ip>:8080/action/SearchPersonList` | `DeviceID`, `PersonType: 2`, `BeginNO: 0`, `RequestCount: 50` |
-| **Push MQTT Config** | HTTP POST | `http://<cam_ip>:8080/action/SetMQTTParam` | `MQEnable: 1`, `MQAddr`, `MQPort`, `MQTopic`, `RecordUploadType: 1` |
-| **Reboot Camera** | HTTP POST | `http://<cam_ip>:8080/action/RebootDevice` | `DeviceID`, `IsRebootDevice: 1` |
+| **Add / Edit Person** | HTTP / HTTPS POST | `http://<cam_ip>:8080/action/EditPersonNew` or `https://...` | `DeviceID`, `IdType: 0`, `CustomizeID`, `Name`, `PersonType`, `picinfo`/`picURI` |
+| **Batch Add (URI)** | HTTP / HTTPS POST | `http://<cam_ip>:8080/action/AddPersons` or `https://...` | `DeviceID`, `Total`, `Personinfo_0: {...}` |
+| **Delete Person** | HTTP / HTTPS POST | `http://<cam_ip>:8080/action/DeletePerson` or `https://...` | `DeviceID`, `TotalNum`, `IdType: 0`, `CustomizeID: [id1, id2]` |
+| **Wipe Database** | HTTP / HTTPS POST | `http://<cam_ip>:8080/action/DeleteAllPerson` or `https://...` | `DeleteAllPersonCheck: 1` *(Reboots camera)* |
+| **Audit Sync / Query** | HTTP / HTTPS POST | `http://<cam_ip>:8080/action/SearchPersonList` or `https://...` | `DeviceID`, `PersonType: 2`, `BeginNO: 0`, `RequestCount: 50` |
+| **Push MQTT Config** | HTTP / HTTPS POST | `http://<cam_ip>:8080/action/SetMQTTParam` or `https://...` | `MQEnable: 1`, `MQAddr`, `MQPort`, `MQTopic`, `RecordUploadType: 1` |
+| **Reboot Camera** | HTTP / HTTPS POST | `http://<cam_ip>:8080/action/RebootDevice` or `https://...` | `DeviceID`, `IsRebootDevice: 1` |
 | **Live Access Telemetry** | MQTT Ingest | `mqtt/face/{DeviceID}/Rec` | `VerifyPush` (`VerifyStatus`, `similarity1`, `pic`, `scene`) |
 | **Stranger Detection** | MQTT Ingest | `mqtt/face/{DeviceID}/Snap` | `StrSnapPush` (`CreateTime`, `pic`, `scene`) |
 | **Device Heartbeat** | MQTT Ingest | `mqtt/face/heartbeat` | `HeartBeat` (`facesluiceId`, `time`) |
@@ -260,7 +260,7 @@ php artisan migrate --force
 Ensure EMQX or Mosquitto is active on port `1883` with standard authentication.
 
 ### Step 3: Link Camera to MQTT Broker
-Issue a one-time provisioning HTTP POST request to the camera:
+Issue a one-time provisioning HTTP or HTTPS POST request to the camera (supporting both HTTP and HTTPS endpoint camera devices):
 ```bash
 curl -X POST http://192.168.1.100:8080/action/SetMQTTParam \
   -u admin:admin \

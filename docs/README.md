@@ -18,7 +18,7 @@ This folder contains protocol specifications, interface documentation, and syste
 
 | Documentation File | Protocol & Version | Transport | Key Use Case / Mode |
 | :--- | :--- | :--- | :--- |
-| **[http_protocol_v1.13.md](file:///home/whoamiken/AI-Camera-Integration/docs/http_protocol_v1.13.md)** | Intelligent Camera HTTP Protocol V1.13 | Direct HTTP POST | Local Area Network (LAN) direct control, face database enrollment, and HTTP webhook event subscriptions (`/Subscribe/Snap`, `/Subscribe/Verify`, `/Subscribe/heartbeat`). |
+| **[http_protocol_v1.13.md](file:///home/whoamiken/AI-Camera-Integration/docs/http_protocol_v1.13.md)** | Intelligent Camera HTTP Protocol V1.13 | Direct HTTP / HTTPS POST | Network (LAN/WAN) direct control over HTTP or HTTPS endpoints, face database enrollment, and HTTP/HTTPS webhook event subscriptions (`/Subscribe/Snap`, `/Subscribe/Verify`, `/Subscribe/heartbeat`). |
 | **[mqtt_protocol_v1.25.md](file:///home/whoamiken/AI-Camera-Integration/docs/mqtt_protocol_v1.25.md)** | Intelligent Camera MQTT Protocol V1.25 | MQTT v3.1.1 (QoS 0) | Cloud & IoT broker integration, asynchronous message dispatching (`mqtt/face/<ID>`), batch face enrollments, AI analytics streams, and 4G SIM integration. |
 | **[wan_http_reverse_polling_protocol_v1.01.md](file:///home/whoamiken/AI-Camera-Integration/docs/wan_http_reverse_polling_protocol_v1.01.md)** | X40Y WAN HTTP Interface Protocol V1.01 | HTTP Reverse-Polling | Cameras behind NAT / Firewalls / Intranets without public IPs; commands are piggybacked in the cloud server's HTTP 200 OK heartbeat response. |
 

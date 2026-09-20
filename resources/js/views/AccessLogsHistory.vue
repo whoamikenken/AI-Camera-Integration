@@ -1,34 +1,39 @@
 <template>
   <div class="space-y-6">
     <!-- Header -->
-    <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-slate-900/80 border border-slate-800 p-4 rounded-xl backdrop-blur-md">
+    <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white border border-slate-200/80 p-4 rounded-xl shadow-xs">
       <div>
-        <h2 class="text-lg font-semibold text-slate-100">Access Telemetry & Audit Logs</h2>
-        <p class="text-xs text-slate-400">Search and filter historical facial recognition verification events, admission statuses, and match similarities</p>
+        <h2 class="text-lg font-bold text-slate-900">Access Telemetry & Audit Logs</h2>
+        <p class="text-xs text-slate-500">Search and filter historical facial recognition verification events, admission statuses, and match similarities</p>
       </div>
-      <button @click="fetchLogs" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-lg text-xs font-medium">
-        🔄 Refresh Logs
-      </button>
+      <div class="flex items-center gap-2">
+        <button @click="showBackfillModal = true" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white border border-indigo-600 rounded-lg text-xs font-semibold shadow-xs flex items-center gap-1.5 cursor-pointer transition-colors">
+          <span>📥</span> Historical Backfill
+        </button>
+        <button @click="fetchLogs" class="px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-lg text-xs font-semibold shadow-xs cursor-pointer">
+          🔄 Refresh Logs
+        </button>
+      </div>
     </div>
 
     <!-- Filters -->
-    <div class="grid grid-cols-1 sm:grid-cols-4 gap-3 bg-slate-900/60 border border-slate-800 p-3 rounded-xl">
+    <div class="grid grid-cols-1 sm:grid-cols-4 gap-3 bg-white border border-slate-200 p-3 rounded-xl shadow-xs">
       <input 
         v-model="filters.search" 
         @input="debouncedFetch"
         type="text" 
         placeholder="Search person name or custom ID..."
-        class="bg-slate-800/80 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-200 placeholder-slate-500"
+        class="bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 shadow-xs"
       />
 
-      <select v-model="filters.status" @change="fetchLogs" class="bg-slate-800/80 border border-slate-700 text-xs rounded-lg px-3 py-2 text-slate-200">
+      <select v-model="filters.status" @change="fetchLogs" class="bg-white border border-slate-200 text-xs rounded-lg px-3 py-2 text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 cursor-pointer shadow-xs">
         <option value="">All Verification Statuses</option>
         <option value="1">Allowed (Whitelisted)</option>
         <option value="2">Rejected / Denied</option>
         <option value="3">Not Registered</option>
       </select>
 
-      <select v-model="filters.deviceId" @change="fetchLogs" class="bg-slate-800/80 border border-slate-700 text-xs rounded-lg px-3 py-2 text-slate-200">
+      <select v-model="filters.deviceId" @change="fetchLogs" class="bg-white border border-slate-200 text-xs rounded-lg px-3 py-2 text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 cursor-pointer shadow-xs">
         <option value="">All Cameras</option>
         <option v-for="d in store.devices" :key="d.device_id" :value="d.device_id">{{ d.name }} ({{ d.device_id }})</option>
       </select>
@@ -40,15 +45,15 @@
         min="0" 
         max="100" 
         placeholder="Min Match % (e.g. 80)" 
-        class="bg-slate-800/80 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-200"
+        class="bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 shadow-xs"
       />
     </div>
 
     <!-- Table -->
-    <div class="bg-slate-900/90 border border-slate-800 rounded-xl overflow-hidden shadow-xl">
+    <div class="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-xs">
       <div class="overflow-x-auto">
-        <table class="w-full text-left text-xs text-slate-300">
-          <thead class="bg-slate-800/60 text-slate-400 uppercase text-[11px] font-semibold border-b border-slate-800">
+        <table class="w-full text-left text-xs text-slate-700">
+          <thead class="bg-slate-50 text-slate-500 uppercase text-[11px] font-semibold border-b border-slate-200">
             <tr>
               <th class="py-3 px-4">Face</th>
               <th class="py-3 px-4">Timestamp</th>
@@ -59,42 +64,42 @@
               <th class="py-3 px-4 text-right">Scene</th>
             </tr>
           </thead>
-          <tbody class="divide-y divide-slate-800/60">
+          <tbody class="divide-y divide-slate-100">
             <tr v-if="loading">
               <td colspan="7" class="py-12 text-center text-slate-500">Loading access logs...</td>
             </tr>
             <tr v-else-if="logs.length === 0">
               <td colspan="7" class="py-12 text-center text-slate-500">No access logs matching filter criteria.</td>
             </tr>
-            <tr v-for="log in logs" :key="log.id" class="hover:bg-slate-800/30 transition-colors">
+            <tr v-for="log in logs" :key="log.id" class="hover:bg-slate-50 transition-colors">
               <td class="py-3 px-4">
-                <div class="w-10 h-10 rounded-lg bg-slate-800 border border-slate-700 overflow-hidden shrink-0 cursor-pointer" @click="openImage(log.snap_pic_url, log.scene_pic_url, log.person_name)">
+                <div class="w-10 h-10 rounded-lg bg-slate-100 border border-slate-200 overflow-hidden shrink-0 cursor-pointer" @click="openImage(log.snap_pic_url, log.scene_pic_url, log.person_name)">
                   <img v-if="log.snap_pic_url" :src="log.snap_pic_url" class="w-full h-full object-cover" />
-                  <span v-else class="w-full h-full flex items-center justify-center text-[10px] text-slate-500">No Pic</span>
+                  <span v-else class="w-full h-full flex items-center justify-center text-[10px] text-slate-400">No Pic</span>
                 </div>
               </td>
-              <td class="py-3 px-4 font-mono text-slate-300">{{ formatDateTime(log.captured_at) }}</td>
-              <td class="py-3 px-4 font-mono text-slate-300">{{ log.device?.name || log.device_id }}</td>
+              <td class="py-3 px-4 font-mono text-slate-700 font-medium">{{ formatDateTime(log.captured_at) }}</td>
+              <td class="py-3 px-4 font-mono text-slate-700 font-medium">{{ log.device?.name || log.device_id }}</td>
               <td class="py-3 px-4">
-                <div class="font-semibold text-slate-100">{{ log.person_name || 'Unregistered' }}</div>
+                <div class="font-bold text-slate-900">{{ log.person_name || 'Unregistered' }}</div>
                 <div class="text-[11px] text-slate-500 font-mono">ID: {{ log.customize_id || '--' }}</div>
               </td>
               <td class="py-3 px-4 font-mono">
-                <span v-if="log.similarity" :class="log.similarity >= 80 ? 'text-emerald-400 font-bold' : 'text-amber-400'">
+                <span v-if="log.similarity" :class="log.similarity >= 80 ? 'text-emerald-700 font-bold' : 'text-amber-700 font-bold'">
                   {{ log.similarity }}%
                 </span>
-                <span v-else class="text-slate-600">--</span>
+                <span v-else class="text-slate-400">--</span>
               </td>
               <td class="py-3 px-4">
-                <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider" :class="getStatusBadgeClass(log.verify_status)">
+                <span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider" :class="getStatusBadgeClass(log.verify_status)">
                   {{ getStatusText(log.verify_status) }}
                 </span>
               </td>
               <td class="py-3 px-4 text-right">
-                <button v-if="log.scene_pic_url" @click="openImage(log.snap_pic_url, log.scene_pic_url, log.person_name)" class="text-xs text-indigo-400 hover:text-indigo-300">
+                <button v-if="log.scene_pic_url" @click="openImage(log.snap_pic_url, log.scene_pic_url, log.person_name)" class="text-xs text-indigo-600 hover:text-indigo-800 font-semibold cursor-pointer">
                   Inspect
                 </button>
-                <span v-else class="text-slate-600 text-xs">None</span>
+                <span v-else class="text-slate-400 text-xs">None</span>
               </td>
             </tr>
           </tbody>
@@ -102,35 +107,42 @@
       </div>
 
       <!-- Pagination -->
-      <div v-if="pagination.total > pagination.per_page" class="p-3 border-t border-slate-800 flex items-center justify-between text-xs text-slate-400">
+      <div v-if="pagination.total > pagination.per_page" class="p-3 border-t border-slate-200 flex items-center justify-between text-xs text-slate-600">
         <div>Showing {{ pagination.from }} to {{ pagination.to }} of {{ pagination.total }} entries</div>
         <div class="flex items-center gap-1">
-          <button @click="changePage(pagination.current_page - 1)" :disabled="pagination.current_page === 1" class="px-3 py-1 bg-slate-800 rounded border border-slate-700 disabled:opacity-50">Prev</button>
-          <span class="px-2">{{ pagination.current_page }} / {{ pagination.last_page }}</span>
-          <button @click="changePage(pagination.current_page + 1)" :disabled="pagination.current_page === pagination.last_page" class="px-3 py-1 bg-slate-800 rounded border border-slate-700 disabled:opacity-50">Next</button>
+          <button @click="changePage(pagination.current_page - 1)" :disabled="pagination.current_page === 1" class="px-3 py-1 bg-white hover:bg-slate-50 rounded border border-slate-200 disabled:opacity-50 text-slate-700 font-medium shadow-xs cursor-pointer">Prev</button>
+          <span class="px-2 font-mono text-slate-700 font-medium">{{ pagination.current_page }} / {{ pagination.last_page }}</span>
+          <button @click="changePage(pagination.current_page + 1)" :disabled="pagination.current_page === pagination.last_page" class="px-3 py-1 bg-white hover:bg-slate-50 rounded border border-slate-200 disabled:opacity-50 text-slate-700 font-medium shadow-xs cursor-pointer">Next</button>
         </div>
       </div>
     </div>
 
     <!-- Modal -->
-    <div v-if="modal.show" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" @click.self="modal.show = false">
-      <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-3xl w-full p-6 space-y-4">
-        <div class="flex items-center justify-between border-b border-slate-800 pb-3">
-          <h3 class="text-base font-semibold text-slate-100">{{ modal.title }} - Snapshot Inspection</h3>
-          <button @click="modal.show = false" class="text-slate-400 hover:text-white text-lg font-bold">&times;</button>
+    <div v-if="modal.show" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm" @click.self="modal.show = false">
+      <div class="bg-white border border-slate-200 rounded-2xl max-w-3xl w-full p-6 space-y-4 shadow-2xl">
+        <div class="flex items-center justify-between border-b border-slate-200 pb-3">
+          <h3 class="text-base font-bold text-slate-900">{{ modal.title }} - Snapshot Inspection</h3>
+          <button @click="modal.show = false" class="text-slate-400 hover:text-slate-700 text-lg font-bold cursor-pointer">&times;</button>
         </div>
         <div class="grid grid-cols-1">
           <div v-if="modal.snapUrl">
-            <div class="text-xs font-semibold text-slate-400 mb-1">Face Crop</div>
-            <img :src="modal.snapUrl" class="rounded-xl border border-slate-700 w-full max-h-72 object-contain bg-black" />
+            <div class="text-xs font-semibold text-slate-500 mb-1">Face Crop</div>
+            <img :src="modal.snapUrl" class="rounded-xl border border-slate-200 w-full max-h-72 object-contain bg-slate-950" />
           </div>
           <div v-if="modal.sceneUrl">
-            <div class="text-xs font-semibold text-slate-400 mb-1">Scene View</div>
-            <img :src="modal.sceneUrl" class="rounded-xl border border-slate-700 w-full max-h-72 object-contain bg-black" />
+            <div class="text-xs font-semibold text-slate-500 mb-1">Scene View</div>
+            <img :src="modal.sceneUrl" class="rounded-xl border border-slate-200 w-full max-h-72 object-contain bg-slate-950" />
           </div>
         </div>
       </div>
     </div>
+
+    <!-- Historical Backfill Modal -->
+    <HistoricalBackfillModal
+      :is-open="showBackfillModal"
+      @close="showBackfillModal = false"
+      @success="fetchLogs"
+    />
   </div>
 </template>
 
@@ -138,24 +150,26 @@
 import { ref, onMounted } from 'vue';
 import { useCameraStore } from '../stores/cameraStore';
 import { formatDateTime } from '../utils/date';
+import HistoricalBackfillModal from '../components/HistoricalBackfillModal.vue';
 import axios from 'axios';
 
 const store = useCameraStore();
 const logs = ref([]);
 const loading = ref(false);
+const showBackfillModal = ref(false);
 
 const filters = ref({
   search: '',
   status: '',
   deviceId: '',
-  minSimilarity: '',
+  minSimilarity: ''
 });
 
 const pagination = ref({
   current_page: 1,
   last_page: 1,
   total: 0,
-  per_page: 20,
+  per_page: 15,
   from: 0,
   to: 0,
 });
@@ -212,10 +226,10 @@ function getStatusText(status) {
 
 function getStatusBadgeClass(status) {
   switch (Number(status)) {
-    case 1: return 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20';
-    case 2: return 'bg-rose-500/10 text-rose-400 border border-rose-500/20';
-    case 3: return 'bg-amber-500/10 text-amber-400 border border-amber-500/20';
-    default: return 'bg-slate-800 text-slate-400 border border-slate-700';
+    case 1: return 'bg-emerald-50 text-emerald-700 border border-emerald-200';
+    case 2: return 'bg-rose-50 text-rose-700 border border-rose-200';
+    case 3: return 'bg-amber-50 text-amber-700 border border-amber-200';
+    default: return 'bg-slate-100 text-slate-700 border border-slate-200';
   }
 }
 

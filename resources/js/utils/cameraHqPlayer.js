@@ -165,8 +165,12 @@ class WebGLYUVRenderer {
 export class CameraHqPlayer {
   constructor(canvas, options = {}) {
     this.canvas = canvas;
-    this.host = options.host || '192.168.1.100';
-    this.port = options.port || 80;
+    this.scheme = options.scheme || (options.host && options.host.startsWith('https') ? 'https' : 'http');
+    this.host = (options.host || '192.168.1.100')
+      .replace(/^https?:\/\//i, '')
+      .replace(/\/.*$/, '')
+      .replace(/ai-camera-api\./i, 'ai-camera.');
+    this.port = options.port || (this.scheme === 'https' ? 443 : 80);
     this.username = options.username || 'admin';
     this.password = options.password || 'admin';
     this.streamType = options.streamType || 0; // 0: Main (1080P), 1: Sub (720P/VGA)
@@ -244,9 +248,12 @@ export class CameraHqPlayer {
 
   connectWebSocket() {
     if (this.isDestroyed) return;
-    this.onStatus({ state: 'CONNECTING', message: `Connecting to ws://${this.host}/...` });
+    const isHttps = this.scheme === 'https' || window.location.protocol === 'https:';
+    const wsProtocol = isHttps ? 'wss:' : 'ws:';
+    const wsPortStr = (this.port && this.port !== 80 && this.port !== 443) ? `:${this.port}` : '';
+    const wsUrl = `${wsProtocol}//${this.host}${wsPortStr}/`;
 
-    const wsUrl = `ws://${this.host}/`;
+    this.onStatus({ state: 'CONNECTING', message: `Connecting to ${wsUrl}...` });
 
     try {
       this.ws = new WebSocket(wsUrl);

@@ -33,7 +33,7 @@
 ## 1. Architecture & Design Motivation
 
 ### 1.1 The NAT / Intranet Challenge
-In traditional LAN deployments, the management platform directly sends HTTP POST requests to the camera's local IP address (e.g. `http://192.168.1.10:8080/action/AddPersons`).
+In traditional LAN deployments, the management platform directly sends HTTP or HTTPS POST requests to the camera's local IP address or domain endpoint (e.g. `http://192.168.1.10:8080/action/AddPersons` or `https://...`).
 
 However, when cameras are deployed in **Intranets, branch offices, or behind 4G/cellular routers**, they do not possess public IPv4 addresses and cannot be reached directly from the cloud platform without complex VPNs or port forwarding.
 

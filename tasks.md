@@ -18,7 +18,7 @@
 
 ### 2. Services, Jobs & Event Broadcasting
 - [x] `App\Services\ImageStorageService`: Base64 decoding to JPEG files and uploaded image processing.
-- [x] `App\Services\CameraHttpService`: Direct LAN camera REST communication (`EditPersonNew`, `DeletePerson`, `DeleteAllPerson`, `SearchPersonList`, `SetMQTTParam`, `RebootDevice`, `GetSysParam`).
+- [x] `App\Services\CameraHttpService`: Direct camera REST communication supporting both HTTP and HTTPS endpoint devices (`EditPersonNew`, `DeletePerson`, `DeleteAllPerson`, `SearchPersonList`, `SetMQTTParam`, `RebootDevice`, `GetSysParam`).
 - [x] `App\Jobs\SyncPersonnelJob`: Queued job executing on `camera-sync` Redis queue.
 - [x] `App\Observers\PersonnelObserver`: Automatic queue dispatch on created/updated/deleted personnel.
 - [x] Broadcast Events:

@@ -1,38 +1,38 @@
 <template>
   <div class="space-y-6">
     <!-- Top Control Bar -->
-    <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-slate-900/80 border border-slate-800 p-4 rounded-xl backdrop-blur-md">
+    <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white border border-slate-200/80 p-4 rounded-xl shadow-xs">
       <div class="flex items-center gap-3">
         <div class="relative flex h-3.5 w-3.5">
           <span v-if="store.wsConnected" class="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
           <span :class="store.wsConnected ? 'bg-amber-500' : 'bg-rose-500'" class="relative inline-flex rounded-full h-3.5 w-3.5"></span>
         </div>
         <div>
-          <h2 class="text-lg font-semibold text-slate-100 flex items-center gap-2">
+          <h2 class="text-lg font-bold text-slate-900 flex items-center gap-2">
             Stranger &amp; AI Detection Alerts
-            <span class="text-xs px-2 py-0.5 rounded-full font-mono font-normal" :class="store.wsConnected ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'">
+            <span class="text-xs px-2.5 py-0.5 rounded-full font-mono font-medium" :class="store.wsConnected ? 'bg-amber-50 text-amber-700 border border-amber-200' : 'bg-rose-50 text-rose-700 border border-rose-200'">
               {{ store.wsConnected ? 'Real-Time Monitoring' : 'Reconnecting...' }}
             </span>
           </h2>
-          <p class="text-xs text-slate-400">Live edge stranger snapshot captures, unidentified face detections, and alarm triggers</p>
+          <p class="text-xs text-slate-500">Live edge stranger snapshot captures, unidentified face detections, and alarm triggers</p>
         </div>
       </div>
 
       <div class="flex items-center gap-2 flex-wrap w-full sm:w-auto justify-end">
         <!-- View Mode Switcher -->
-        <div class="bg-slate-800/80 p-0.5 rounded-lg border border-slate-700 flex items-center">
+        <div class="bg-slate-100 p-0.5 rounded-lg border border-slate-200 flex items-center">
           <button 
             @click="viewMode = 'grid'" 
-            class="px-2.5 py-1 text-xs font-medium rounded-md transition-colors"
-            :class="viewMode === 'grid' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'"
+            class="px-2.5 py-1 text-xs font-medium rounded-md transition-colors cursor-pointer"
+            :class="viewMode === 'grid' ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'"
             title="Grid Gallery View"
           >
             🖼️ Cards
           </button>
           <button 
             @click="viewMode = 'table'" 
-            class="px-2.5 py-1 text-xs font-medium rounded-md transition-colors"
-            :class="viewMode === 'table' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'"
+            class="px-2.5 py-1 text-xs font-medium rounded-md transition-colors cursor-pointer"
+            :class="viewMode === 'table' ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'"
             title="Table List View"
           >
             📋 Table
@@ -40,8 +40,15 @@
         </div>
 
         <button 
+          @click="showBackfillModal = true" 
+          class="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white border border-amber-600 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-xs cursor-pointer"
+        >
+          <span>📥</span> Backfill Logs
+        </button>
+
+        <button 
           @click="fetchSnaps" 
-          class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors"
+          class="px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors shadow-xs cursor-pointer"
         >
           <span>🔄</span> Refresh
         </button>
@@ -49,15 +56,15 @@
     </div>
 
     <!-- Filters & Stats Banner -->
-    <div class="bg-slate-900/60 border border-slate-800 p-4 rounded-xl space-y-3">
+    <div class="bg-white border border-slate-200 p-4 rounded-xl space-y-3 shadow-xs">
       <div class="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-4 gap-3">
         <!-- Camera Filter -->
         <div>
-          <label class="block text-[11px] font-medium text-slate-400 mb-1">Camera Device</label>
+          <label class="block text-[11px] font-medium text-slate-500 mb-1">Camera Device</label>
           <select 
             v-model="filters.deviceId" 
             @change="applyFilters" 
-            class="w-full bg-slate-800/80 border border-slate-700 text-xs rounded-lg px-3 py-2 text-slate-200 focus:outline-none focus:ring-1 focus:ring-amber-500"
+            class="w-full bg-white border border-slate-200 text-xs rounded-lg px-3 py-2 text-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 cursor-pointer shadow-xs"
           >
             <option value="">All Cameras</option>
             <option v-for="d in store.devices" :key="d.device_id" :value="d.device_id">
@@ -68,23 +75,23 @@
 
         <!-- Date From -->
         <div>
-          <label class="block text-[11px] font-medium text-slate-400 mb-1">From Date</label>
+          <label class="block text-[11px] font-medium text-slate-500 mb-1">From Date</label>
           <input 
             type="date" 
             v-model="filters.from" 
             @change="applyFilters"
-            class="w-full bg-slate-800/80 border border-slate-700 text-xs rounded-lg px-3 py-2 text-slate-200 focus:outline-none focus:ring-1 focus:ring-amber-500"
+            class="w-full bg-white border border-slate-200 text-xs rounded-lg px-3 py-2 text-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 shadow-xs"
           />
         </div>
 
         <!-- Date To -->
         <div>
-          <label class="block text-[11px] font-medium text-slate-400 mb-1">To Date</label>
+          <label class="block text-[11px] font-medium text-slate-500 mb-1">To Date</label>
           <input 
             type="date" 
             v-model="filters.to" 
             @change="applyFilters"
-            class="w-full bg-slate-800/80 border border-slate-700 text-xs rounded-lg px-3 py-2 text-slate-200 focus:outline-none focus:ring-1 focus:ring-amber-500"
+            class="w-full bg-white border border-slate-200 text-xs rounded-lg px-3 py-2 text-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 shadow-xs"
           />
         </div>
 
@@ -92,7 +99,7 @@
         <div class="flex items-end">
           <button 
             @click="resetFilters" 
-            class="w-full py-2 px-3 bg-slate-800/80 hover:bg-slate-700/80 text-slate-300 text-xs rounded-lg border border-slate-700 transition-colors"
+            class="w-full py-2 px-3 bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs rounded-lg border border-slate-200 transition-colors shadow-xs cursor-pointer font-medium"
           >
             Clear Filters
           </button>
@@ -101,32 +108,32 @@
     </div>
 
     <!-- Live Snaps Stream Banner if active -->
-    <div v-if="store.strangerSnaps.length > 0 && !isFiltered" class="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4">
+    <div v-if="store.strangerSnaps.length > 0 && !isFiltered" class="bg-amber-50 border border-amber-200 rounded-xl p-4 shadow-xs">
       <div class="flex items-center justify-between mb-3">
         <div class="flex items-center gap-2">
-          <span class="inline-block w-2 h-2 rounded-full bg-amber-400 animate-ping"></span>
-          <h3 class="text-xs font-bold uppercase tracking-wider text-amber-400">
+          <span class="inline-block w-2 h-2 rounded-full bg-amber-500 animate-ping"></span>
+          <h3 class="text-xs font-bold uppercase tracking-wider text-amber-800">
             Live Incoming Stream ({{ store.strangerSnaps.length }} captures this session)
           </h3>
         </div>
-        <span class="text-[11px] text-amber-300/80">Real-time MQTT <code class="font-mono">mqtt/face/+/Snap</code></span>
+        <span class="text-[11px] text-amber-700">Real-time MQTT <code class="font-mono font-semibold">mqtt/face/+/Snap</code></span>
       </div>
 
       <div class="flex items-center gap-3 overflow-x-auto pb-2 scrollbar-thin">
         <div 
           v-for="snap in store.strangerSnaps.slice(0, 10)" 
           :key="'live-' + (snap.id || snap.captured_at)"
-          class="shrink-0 w-36 bg-slate-900/90 border border-amber-500/40 rounded-xl p-2 cursor-pointer hover:border-amber-400 transition-all group"
+          class="shrink-0 w-36 bg-white border border-amber-300 rounded-xl p-2 cursor-pointer hover:border-amber-500 transition-all group shadow-xs hover:shadow-md"
           @click="openImageModal(snap.snap_pic_url, snap.scene_pic_url, snap.device_id, snap.captured_at, snap.alarm_action)"
         >
-          <div class="w-full h-24 rounded-lg bg-slate-800 overflow-hidden relative border border-slate-700">
+          <div class="w-full h-24 rounded-lg bg-slate-100 overflow-hidden relative border border-slate-200">
             <img v-if="snap.snap_pic_url" :src="snap.snap_pic_url" alt="Stranger Crop" class="w-full h-full object-cover group-hover:scale-105 transition-transform" />
-            <div v-else class="w-full h-full flex items-center justify-center text-[10px] text-slate-500 font-mono">NO PIC</div>
+            <div v-else class="w-full h-full flex items-center justify-center text-[10px] text-slate-400 font-mono">NO PIC</div>
             <div v-if="snap.is_no_mask === 1" class="absolute bottom-0 right-0 bg-amber-500 text-black text-[8px] px-1 font-bold rounded-tl">NO MASK</div>
           </div>
           <div class="mt-1.5">
-            <div class="text-[11px] font-semibold text-amber-300 truncate">Cam: {{ snap.device_id }}</div>
-            <div class="text-[10px] text-slate-400 font-mono">{{ formatTime(snap.captured_at) }}</div>
+            <div class="text-[11px] font-bold text-amber-900 truncate">Cam: {{ snap.device_id }}</div>
+            <div class="text-[10px] text-slate-500 font-mono">{{ formatTime(snap.captured_at) }}</div>
           </div>
         </div>
       </div>
@@ -135,19 +142,19 @@
     <!-- Main Content: Grid Mode -->
     <div v-if="viewMode === 'grid'">
       <div class="flex items-center justify-between mb-4">
-        <h3 class="text-sm font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-2">
+        <h3 class="text-sm font-semibold uppercase tracking-wider text-slate-500 flex items-center gap-2">
           Stranger Snapshot Archive ({{ pagination.total }})
         </h3>
         <span class="text-xs text-slate-500">Page {{ pagination.current_page }} of {{ pagination.last_page || 1 }}</span>
       </div>
 
-      <div v-if="loading" class="bg-slate-900/40 border border-slate-800 rounded-xl p-12 text-center text-slate-500">
+      <div v-if="loading" class="bg-white border border-slate-200 rounded-xl p-12 text-center text-slate-500 shadow-xs">
         Loading stranger snapshots...
       </div>
 
-      <div v-else-if="snaps.length === 0" class="bg-slate-900/40 border border-dashed border-slate-800 rounded-xl p-12 text-center text-slate-500">
+      <div v-else-if="snaps.length === 0" class="bg-white border border-dashed border-slate-300 rounded-xl p-12 text-center text-slate-500 shadow-xs">
         <div class="text-4xl mb-2">🎭</div>
-        <div class="font-medium text-slate-300">No Stranger Captures Found</div>
+        <div class="font-medium text-slate-800">No Stranger Captures Found</div>
         <div class="text-xs mt-1 text-slate-500">Stranger face events captured by cameras will be listed here.</div>
       </div>
 
@@ -155,7 +162,7 @@
         <div 
           v-for="snap in snaps" 
           :key="snap.id"
-          class="bg-slate-900/90 border border-slate-800 rounded-xl overflow-hidden hover:border-amber-500/50 transition-all flex flex-col justify-between shadow-lg"
+          class="bg-white border border-slate-200/80 rounded-xl overflow-hidden hover:border-amber-400 transition-all flex flex-col justify-between shadow-xs hover:shadow-md"
         >
           <!-- Image Section -->
           <div class="relative bg-slate-950 h-48 overflow-hidden cursor-pointer group" @click="openImageModal(snap.snap_pic_url, snap.scene_pic_url, snap.device?.name || snap.device_id, snap.captured_at, snap.alarm_action)">
@@ -165,22 +172,22 @@
               alt="Stranger Capture" 
               class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" 
             />
-            <div v-else class="w-full h-full flex items-center justify-center text-xs text-slate-500 font-mono">
+            <div v-else class="w-full h-full flex items-center justify-center text-xs text-slate-400 font-mono">
               No Snapshot Image
             </div>
 
             <!-- Overlay Badges -->
             <div class="absolute top-2 left-2 flex items-center gap-1.5">
-              <span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-amber-500/90 text-slate-950 shadow">
+              <span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-amber-500 text-slate-950 shadow-xs">
                 Stranger
               </span>
-              <span v-if="snap.is_no_mask === 1" class="px-1.5 py-0.5 rounded text-[9px] font-bold bg-rose-600 text-white shadow">
+              <span v-if="snap.is_no_mask === 1" class="px-1.5 py-0.5 rounded text-[9px] font-bold bg-rose-600 text-white shadow-xs">
                 NO MASK
               </span>
             </div>
 
             <div class="absolute bottom-2 right-2">
-              <span v-if="snap.scene_pic_url" class="px-2 py-0.5 rounded-md text-[10px] font-medium bg-slate-900/80 text-slate-200 border border-slate-700 backdrop-blur-sm">
+              <span v-if="snap.scene_pic_url" class="px-2 py-0.5 rounded-md text-[10px] font-medium bg-white/90 text-slate-800 border border-slate-200 backdrop-blur-sm shadow-xs">
                 🔍 Full Scene
               </span>
             </div>
@@ -189,27 +196,27 @@
           <!-- Info Details -->
           <div class="p-3.5 space-y-2">
             <div class="flex items-center justify-between">
-              <div class="text-xs font-semibold text-slate-200 truncate">
+              <div class="text-xs font-bold text-slate-900 truncate">
                 {{ snap.device?.name || ('Camera ' + snap.device_id) }}
               </div>
-              <span class="text-[10px] text-slate-400 font-mono">
+              <span class="text-[10px] text-slate-500 font-mono">
                 ID: {{ snap.device_id }}
               </span>
             </div>
 
-            <div class="text-[11px] text-slate-400 flex items-center justify-between font-mono">
+            <div class="text-[11px] text-slate-500 flex items-center justify-between font-mono">
               <span>Time:</span>
-              <span class="text-slate-300">{{ formatDateTime(snap.captured_at) }}</span>
+              <span class="text-slate-700 font-medium">{{ formatDateTime(snap.captured_at) }}</span>
             </div>
 
-            <div v-if="snap.alarm_action" class="text-[10px] text-rose-400 bg-rose-500/10 border border-rose-500/20 px-2 py-0.5 rounded truncate">
+            <div v-if="snap.alarm_action" class="text-[10px] text-rose-700 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded truncate font-medium">
               ⚠️ {{ snap.alarm_action }}
             </div>
 
-            <div class="pt-2 border-t border-slate-800 flex items-center justify-between gap-2">
+            <div class="pt-2 border-t border-slate-100 flex items-center justify-between gap-2">
               <button 
                 @click="openImageModal(snap.snap_pic_url, snap.scene_pic_url, snap.device?.name || snap.device_id, snap.captured_at, snap.alarm_action)"
-                class="flex-1 py-1.5 px-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium rounded-lg border border-slate-700 transition-colors text-center"
+                class="flex-1 py-1.5 px-2 bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-semibold rounded-lg border border-slate-200 transition-colors text-center cursor-pointer shadow-xs"
               >
                 Inspect
               </button>
@@ -220,10 +227,10 @@
     </div>
 
     <!-- Main Content: Table Mode -->
-    <div v-else class="bg-slate-900/90 border border-slate-800 rounded-xl overflow-hidden shadow-xl">
+    <div v-else class="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-xs">
       <div class="overflow-x-auto">
-        <table class="w-full text-left text-xs text-slate-300">
-          <thead class="bg-slate-800/60 text-slate-400 uppercase text-[11px] font-semibold border-b border-slate-800">
+        <table class="w-full text-left text-xs text-slate-700">
+          <thead class="bg-slate-50 text-slate-500 uppercase text-[11px] font-semibold border-b border-slate-200">
             <tr>
               <th class="py-3 px-4">Face Crop</th>
               <th class="py-3 px-4">Timestamp</th>
@@ -232,37 +239,37 @@
               <th class="py-3 px-4 text-right">Actions</th>
             </tr>
           </thead>
-          <tbody class="divide-y divide-slate-800/60">
+          <tbody class="divide-y divide-slate-100">
             <tr v-if="loading">
               <td colspan="5" class="py-12 text-center text-slate-500">Loading stranger captures...</td>
             </tr>
             <tr v-else-if="snaps.length === 0">
               <td colspan="5" class="py-12 text-center text-slate-500">No stranger snapshots recorded.</td>
             </tr>
-            <tr v-for="snap in snaps" :key="snap.id" class="hover:bg-slate-800/30 transition-colors">
+            <tr v-for="snap in snaps" :key="snap.id" class="hover:bg-slate-50 transition-colors">
               <td class="py-3 px-4">
                 <div 
-                  class="w-12 h-12 rounded-lg bg-slate-800 border border-slate-700 overflow-hidden shrink-0 cursor-pointer" 
+                  class="w-12 h-12 rounded-lg bg-slate-100 border border-slate-200 overflow-hidden shrink-0 cursor-pointer" 
                   @click="openImageModal(snap.snap_pic_url, snap.scene_pic_url, snap.device?.name || snap.device_id, snap.captured_at, snap.alarm_action)"
                 >
                   <img v-if="snap.snap_pic_url" :src="snap.snap_pic_url" class="w-full h-full object-cover" />
-                  <span v-else class="w-full h-full flex items-center justify-center text-[10px] text-slate-500">No Pic</span>
+                  <span v-else class="w-full h-full flex items-center justify-center text-[10px] text-slate-400">No Pic</span>
                 </div>
               </td>
-              <td class="py-3 px-4 font-mono text-slate-300">{{ formatDateTime(snap.captured_at) }}</td>
+              <td class="py-3 px-4 font-mono text-slate-700 font-medium">{{ formatDateTime(snap.captured_at) }}</td>
               <td class="py-3 px-4">
-                <div class="font-semibold text-slate-100">{{ snap.device?.name || 'Camera' }}</div>
+                <div class="font-semibold text-slate-900">{{ snap.device?.name || 'Camera' }}</div>
                 <div class="text-[11px] text-slate-500 font-mono">{{ snap.device_id }}</div>
               </td>
               <td class="py-3 px-4">
                 <div class="flex items-center gap-1.5 flex-wrap">
-                  <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider bg-amber-500/10 text-amber-400 border border-amber-500/30">
+                  <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider bg-amber-50 text-amber-700 border border-amber-200">
                     Stranger
                   </span>
-                  <span v-if="snap.is_no_mask === 1" class="px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider bg-rose-500/10 text-rose-400 border border-rose-500/30">
+                  <span v-if="snap.is_no_mask === 1" class="px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider bg-rose-50 text-rose-700 border border-rose-200">
                     No Mask
                   </span>
-                  <span v-if="snap.alarm_action" class="text-[11px] text-slate-400">
+                  <span v-if="snap.alarm_action" class="text-[11px] text-slate-600 font-medium">
                     {{ snap.alarm_action }}
                   </span>
                 </div>
@@ -270,7 +277,7 @@
               <td class="py-3 px-4 text-right">
                 <button 
                   @click="openImageModal(snap.snap_pic_url, snap.scene_pic_url, snap.device?.name || snap.device_id, snap.captured_at, snap.alarm_action)" 
-                  class="text-xs text-indigo-400 hover:text-indigo-300 px-2 py-1 rounded bg-slate-800/60 border border-slate-700"
+                  class="text-xs text-indigo-600 hover:text-indigo-800 font-semibold px-2.5 py-1 rounded bg-slate-50 border border-slate-200 shadow-xs hover:bg-slate-100 transition-colors cursor-pointer"
                 >
                   Inspect
                 </button>
@@ -282,7 +289,7 @@
     </div>
 
     <!-- Pagination Controls -->
-    <div v-if="pagination.total > pagination.per_page" class="flex items-center justify-between bg-slate-900/80 border border-slate-800 px-4 py-3 rounded-xl text-xs text-slate-400">
+    <div v-if="pagination.total > pagination.per_page" class="flex items-center justify-between bg-white border border-slate-200 px-4 py-3 rounded-xl text-xs text-slate-600 shadow-xs">
       <div>
         Showing {{ (pagination.current_page - 1) * pagination.per_page + 1 }} to 
         {{ Math.min(pagination.current_page * pagination.per_page, pagination.total) }} of {{ pagination.total }} captures
@@ -291,15 +298,15 @@
         <button 
           :disabled="pagination.current_page === 1" 
           @click="goToPage(pagination.current_page - 1)" 
-          class="px-3 py-1 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 disabled:hover:bg-slate-800 text-slate-200 rounded-lg border border-slate-700 transition-colors"
+          class="px-3 py-1 bg-white hover:bg-slate-50 disabled:opacity-40 disabled:hover:bg-white text-slate-700 rounded-lg border border-slate-200 transition-colors shadow-xs cursor-pointer font-medium"
         >
           Previous
         </button>
-        <span class="px-2 font-mono text-slate-300">{{ pagination.current_page }} / {{ pagination.last_page }}</span>
+        <span class="px-2 font-mono text-slate-700 font-medium">{{ pagination.current_page }} / {{ pagination.last_page }}</span>
         <button 
           :disabled="pagination.current_page === pagination.last_page" 
           @click="goToPage(pagination.current_page + 1)" 
-          class="px-3 py-1 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 disabled:hover:bg-slate-800 text-slate-200 rounded-lg border border-slate-700 transition-colors"
+          class="px-3 py-1 bg-white hover:bg-slate-50 disabled:opacity-40 disabled:hover:bg-white text-slate-700 rounded-lg border border-slate-200 transition-colors shadow-xs cursor-pointer font-medium"
         >
           Next
         </button>
@@ -307,44 +314,44 @@
     </div>
 
     <!-- Image Inspection Modal -->
-    <div v-if="modal.show" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" @click.self="modal.show = false">
-      <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-3xl w-full p-6 space-y-4 max-h-[90vh] overflow-y-auto shadow-2xl">
-        <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+    <div v-if="modal.show" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm" @click.self="modal.show = false">
+      <div class="bg-white border border-slate-200 rounded-2xl max-w-3xl w-full p-6 space-y-4 max-h-[90vh] overflow-y-auto shadow-2xl">
+        <div class="flex items-center justify-between border-b border-slate-200 pb-3">
           <div>
-            <h3 class="text-base font-semibold text-slate-100 flex items-center gap-2">
+            <h3 class="text-base font-bold text-slate-900 flex items-center gap-2">
               <span>🎭 Stranger Detection Snapshot</span>
-              <span class="text-xs px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/30">Unregistered Face</span>
+              <span class="text-xs px-2 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200 font-semibold">Unregistered Face</span>
             </h3>
-            <p class="text-xs text-slate-400 mt-0.5">Camera: <strong class="text-slate-200">{{ modal.cameraName }}</strong> &bull; Time: <span class="font-mono text-slate-300">{{ formatDateTime(modal.capturedAt) }}</span></p>
+            <p class="text-xs text-slate-500 mt-0.5">Camera: <strong class="text-slate-800">{{ modal.cameraName }}</strong> &bull; Time: <span class="font-mono text-slate-700 font-medium">{{ formatDateTime(modal.capturedAt) }}</span></p>
           </div>
-          <button @click="modal.show = false" class="text-slate-400 hover:text-white text-xl font-bold">&times;</button>
+          <button @click="modal.show = false" class="text-slate-400 hover:text-slate-700 text-xl font-bold cursor-pointer">&times;</button>
         </div>
 
         <div class="grid grid-cols-1">
           <div v-if="modal.snapUrl" class="space-y-2">
-            <div class="text-xs font-semibold text-slate-400 flex items-center justify-between">
+            <div class="text-xs font-semibold text-slate-500 flex items-center justify-between">
               <span class="flex items-center gap-1.5">
                 <span>Biometric Face Crop</span>
-                <span class="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20">Ready to Enroll</span>
+                <span class="text-[10px] px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200 font-semibold">Ready to Enroll</span>
               </span>
               <div class="flex items-center gap-2">
                 <button 
                   @click="openEnrollModalFromSnap" 
-                  class="text-[11px] text-indigo-400 hover:text-indigo-300 font-medium flex items-center gap-1 transition-colors"
+                  class="text-[11px] text-indigo-600 hover:text-indigo-800 font-semibold flex items-center gap-1 transition-colors cursor-pointer"
                   title="Add this stranger as personnel"
                 >
                   <span>➕ Add as Personnel</span>
                 </button>
-                <span class="text-slate-600">&bull;</span>
-                <a :href="modal.snapUrl" target="_blank" download class="text-[11px] text-slate-400 hover:text-slate-200 hover:underline">Download</a>
+                <span class="text-slate-300">&bull;</span>
+                <a :href="modal.snapUrl" target="_blank" download class="text-[11px] text-slate-500 hover:text-slate-800 hover:underline">Download</a>
               </div>
             </div>
-            <div class="relative group rounded-xl overflow-hidden border border-slate-700 bg-black">
+            <div class="relative group rounded-xl overflow-hidden border border-slate-200 bg-slate-950">
               <img :src="modal.snapUrl" class="rounded-xl w-full max-h-80 object-contain mx-auto" />
-              <div class="absolute inset-0 bg-indigo-950/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+              <div class="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
                 <button 
                   @click="openEnrollModalFromSnap"
-                  class="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-lg shadow-lg flex items-center gap-1.5 transition-transform group-hover:scale-105"
+                  class="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-lg shadow-md flex items-center gap-1.5 transition-transform group-hover:scale-105 cursor-pointer"
                 >
                   <span>👤 Enroll this Face</span>
                 </button>
@@ -352,29 +359,29 @@
             </div>
           </div>
           <div v-if="modal.sceneUrl" class="space-y-2">
-            <div class="text-xs font-semibold text-slate-400 flex items-center justify-between">
+            <div class="text-xs font-semibold text-slate-500 flex items-center justify-between">
               <span>Context Scene View</span>
-              <a :href="modal.sceneUrl" target="_blank" download class="text-[11px] text-indigo-400 hover:underline">Download</a>
+              <a :href="modal.sceneUrl" target="_blank" download class="text-[11px] text-indigo-600 hover:underline font-medium">Download</a>
             </div>
-            <img :src="modal.sceneUrl" class="rounded-xl border border-slate-700 w-full max-h-80 object-contain bg-black" />
+            <img :src="modal.sceneUrl" class="rounded-xl border border-slate-200 w-full max-h-80 object-contain bg-slate-950" />
           </div>
         </div>
 
-        <div v-if="modal.alarmAction" class="bg-rose-500/10 border border-rose-500/20 p-3 rounded-xl text-xs text-rose-300">
+        <div v-if="modal.alarmAction" class="bg-rose-50 border border-rose-200 p-3 rounded-xl text-xs text-rose-700 font-medium">
           <strong>Alarm Action:</strong> {{ modal.alarmAction }}
         </div>
 
-        <div class="flex items-center justify-between pt-3 border-t border-slate-800">
+        <div class="flex items-center justify-between pt-3 border-t border-slate-200">
           <button 
             v-if="modal.snapUrl"
             @click="openEnrollModalFromSnap" 
-            class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-lg shadow-lg shadow-indigo-600/30 transition-all flex items-center gap-2"
+            class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-lg shadow-xs transition-all flex items-center gap-2 cursor-pointer"
           >
             <span>👤 Add as Personnel</span>
           </button>
           <div v-else></div>
 
-          <button @click="modal.show = false" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium rounded-lg transition-colors">
+          <button @click="modal.show = false" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg border border-slate-300 transition-colors cursor-pointer">
             Close
           </button>
         </div>
@@ -382,44 +389,44 @@
     </div>
 
     <!-- Enroll Stranger as Personnel Modal -->
-    <div v-if="enrollModal.show" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm" @click.self="enrollModal.show = false">
-      <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-2xl w-full p-6 space-y-4 max-h-[90vh] overflow-y-auto shadow-2xl">
-        <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+    <div v-if="enrollModal.show" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm" @click.self="enrollModal.show = false">
+      <div class="bg-white border border-slate-200 rounded-2xl max-w-2xl w-full p-6 space-y-4 max-h-[90vh] overflow-y-auto shadow-2xl">
+        <div class="flex items-center justify-between border-b border-slate-200 pb-3">
           <div>
-            <h3 class="text-base font-semibold text-slate-100 flex items-center gap-2">
+            <h3 class="text-base font-bold text-slate-900 flex items-center gap-2">
               <span>👤 Enroll Stranger as Personnel</span>
-              <span class="text-xs px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-400 border border-indigo-500/30">Biometric Enrollment</span>
+              <span class="text-xs px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-200 font-semibold">Biometric Enrollment</span>
             </h3>
-            <p class="text-xs text-slate-400 mt-0.5">
+            <p class="text-xs text-slate-500 mt-0.5">
               Convert stranger detection snapshot into an authorized personnel record and sync to edge cameras
             </p>
           </div>
-          <button @click="enrollModal.show = false" class="text-slate-400 hover:text-white text-xl font-bold">&times;</button>
+          <button @click="enrollModal.show = false" class="text-slate-400 hover:text-slate-700 text-xl font-bold cursor-pointer">&times;</button>
         </div>
 
         <form @submit.prevent="saveStrangerAsPersonnel" class="space-y-4">
           <!-- Face Photo Preview & Info -->
-          <div class="bg-slate-800/40 border border-slate-800 rounded-xl p-4 space-y-3">
-            <div class="text-xs font-semibold text-slate-300 flex items-center justify-between">
+          <div class="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3 shadow-xs">
+            <div class="text-xs font-semibold text-slate-700 flex items-center justify-between">
               <span>Biometric Face Template</span>
-              <span class="text-[11px] text-amber-400 font-mono">
+              <span class="text-[11px] text-amber-700 font-mono font-medium">
                 Source: {{ modal.cameraName }} &bull; {{ formatTime(modal.capturedAt) }}
               </span>
             </div>
 
             <div class="flex flex-col sm:flex-row items-center gap-4">
-              <div class="w-24 h-24 rounded-xl bg-slate-950 border border-indigo-500/40 overflow-hidden flex items-center justify-center shrink-0 relative shadow-inner">
+              <div class="w-24 h-24 rounded-xl bg-slate-950 border border-indigo-200 overflow-hidden flex items-center justify-center shrink-0 relative shadow-inner">
                 <img v-if="enrollModal.previewPhoto" :src="enrollModal.previewPhoto" class="w-full h-full object-cover" />
-                <span v-else class="text-3xl text-slate-600">👤</span>
+                <span v-else class="text-3xl text-slate-400">👤</span>
               </div>
               <div class="flex-1 space-y-1.5 text-left w-full">
                 <div class="flex items-center gap-2 flex-wrap">
-                  <span class="text-xs text-slate-200 font-medium">Face crop from camera detection</span>
+                  <span class="text-xs text-slate-700 font-medium">Face crop from camera detection</span>
                   <button 
                     v-if="enrollModal.previewPhoto !== modal.snapUrl" 
                     type="button" 
                     @click="resetToSnapPhoto" 
-                    class="text-[11px] text-amber-400 hover:underline"
+                    class="text-[11px] text-amber-700 hover:underline font-semibold"
                   >
                     Reset to snapshot face
                   </button>
@@ -428,7 +435,7 @@
                   type="file" 
                   accept="image/*" 
                   @change="onEnrollFileSelected" 
-                  class="text-xs text-slate-400 file:mr-3 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-500 cursor-pointer" 
+                  class="text-xs text-slate-600 file:mr-3 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-700 cursor-pointer" 
                 />
                 <p class="text-[10px] text-slate-500">The stranger face crop will be synchronized as the biometric face credential for edge cameras.</p>
               </div>
@@ -438,20 +445,20 @@
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <!-- Full Name -->
             <div>
-              <label class="block text-xs font-medium text-slate-300 mb-1">Full Name *</label>
+              <label class="block text-xs font-medium text-slate-700 mb-1">Full Name *</label>
               <input 
                 v-model="enrollForm.name" 
                 required 
                 type="text" 
                 placeholder="e.g., Jane Doe / Visitor 01"
-                class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-100 placeholder-slate-500 focus:ring-1 focus:ring-indigo-500" 
+                class="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 shadow-xs" 
               />
             </div>
 
             <!-- Category (Whitelist / Blacklist) -->
             <div>
-              <label class="block text-xs font-medium text-slate-300 mb-1">Access Category *</label>
-              <select v-model="enrollForm.person_type" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-100">
+              <label class="block text-xs font-medium text-slate-700 mb-1">Access Category *</label>
+              <select v-model="enrollForm.person_type" class="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 shadow-xs cursor-pointer">
                 <option :value="0">Whitelist (Allowed Access)</option>
                 <option :value="1">Blacklist (Denied / Trigger Alarm)</option>
               </select>
@@ -459,93 +466,93 @@
 
             <!-- ID Card -->
             <div>
-              <label class="block text-xs font-medium text-slate-300 mb-1">National ID / Badge Number</label>
+              <label class="block text-xs font-medium text-slate-700 mb-1">National ID / Badge Number</label>
               <input 
                 v-model="enrollForm.id_card" 
                 type="text" 
                 placeholder="e.g., ID-90823"
-                class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-100 placeholder-slate-500" 
+                class="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 shadow-xs" 
               />
             </div>
 
             <!-- Phone Number -->
             <div>
-              <label class="block text-xs font-medium text-slate-300 mb-1">Phone Number</label>
+              <label class="block text-xs font-medium text-slate-700 mb-1">Phone Number</label>
               <input 
                 v-model="enrollForm.tel_num" 
                 type="text" 
                 placeholder="e.g., +1 234 567 890"
-                class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-100 placeholder-slate-500" 
+                class="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 shadow-xs" 
               />
             </div>
 
             <!-- Gender & Birthday -->
             <div>
-              <label class="block text-xs font-medium text-slate-300 mb-1">Gender</label>
-              <select v-model="enrollForm.gender" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-100">
+              <label class="block text-xs font-medium text-slate-700 mb-1">Gender</label>
+              <select v-model="enrollForm.gender" class="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 shadow-xs cursor-pointer">
                 <option :value="0">Male</option>
                 <option :value="1">Female</option>
               </select>
             </div>
 
             <div>
-              <label class="block text-xs font-medium text-slate-300 mb-1">Birthday</label>
+              <label class="block text-xs font-medium text-slate-700 mb-1">Birthday</label>
               <input 
                 v-model="enrollForm.birthday" 
                 type="date" 
-                class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-100" 
+                class="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 shadow-xs" 
               />
             </div>
           </div>
 
           <!-- Schedule & Validity -->
-          <div class="bg-slate-800/40 border border-slate-800 rounded-xl p-4 space-y-3">
+          <div class="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3 shadow-xs">
             <div class="flex items-center justify-between">
-              <label class="text-xs font-semibold text-slate-300">Access Schedule & Validity</label>
+              <label class="text-xs font-semibold text-slate-700">Access Schedule & Validity</label>
               <div class="flex items-center gap-4 text-xs">
                 <label class="flex items-center gap-1.5 cursor-pointer">
                   <input type="radio" :value="0" v-model="enrollForm.temp_valid" class="text-indigo-600" />
-                  <span class="text-slate-200">Permanent</span>
+                  <span class="text-slate-800 font-medium">Permanent</span>
                 </label>
                 <label class="flex items-center gap-1.5 cursor-pointer">
                   <input type="radio" :value="1" v-model="enrollForm.temp_valid" class="text-indigo-600" />
-                  <span class="text-slate-200">Temporary Period</span>
+                  <span class="text-slate-800 font-medium">Temporary Period</span>
                 </label>
               </div>
             </div>
 
             <div v-if="enrollForm.temp_valid === 1" class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
               <div>
-                <label class="block text-[11px] text-slate-400 mb-1">Valid Start Time</label>
+                <label class="block text-[11px] text-slate-500 mb-1">Valid Start Time</label>
                 <input 
                   v-model="enrollForm.valid_begin" 
                   type="datetime-local" 
-                  class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-100" 
+                  class="w-full bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 shadow-xs" 
                 />
               </div>
               <div>
-                <label class="block text-[11px] text-slate-400 mb-1">Valid End Time</label>
+                <label class="block text-[11px] text-slate-500 mb-1">Valid End Time</label>
                 <input 
                   v-model="enrollForm.valid_end" 
                   type="datetime-local" 
-                  class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-100" 
+                  class="w-full bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 shadow-xs" 
                 />
               </div>
             </div>
           </div>
 
-          <div class="flex items-center justify-between pt-3 border-t border-slate-800">
+          <div class="flex items-center justify-between pt-3 border-t border-slate-200">
             <button 
               type="button" 
               @click="enrollModal.show = false" 
-              class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium rounded-lg transition-colors"
+              class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg border border-slate-300 transition-colors cursor-pointer"
             >
               Cancel
             </button>
             <button 
               type="submit" 
               :disabled="enrollSaving" 
-              class="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-lg shadow-lg shadow-indigo-600/30 transition-all flex items-center gap-2 disabled:opacity-50"
+              class="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-lg shadow-sm transition-all flex items-center gap-2 disabled:opacity-50 cursor-pointer"
             >
               <span>{{ enrollSaving ? 'Enrolling & Syncing...' : '💾 Enroll & Sync to Cameras' }}</span>
             </button>
@@ -553,6 +560,13 @@
         </form>
       </div>
     </div>
+
+    <!-- Historical Backfill Modal -->
+    <HistoricalBackfillModal
+      :is-open="showBackfillModal"
+      @close="showBackfillModal = false"
+      @success="fetchSnaps"
+    />
   </div>
 </template>
 
@@ -560,12 +574,14 @@
 import { ref, computed, onMounted } from 'vue';
 import { useCameraStore } from '../stores/cameraStore';
 import { formatTime, formatDateTime } from '../utils/date';
+import HistoricalBackfillModal from '../components/HistoricalBackfillModal.vue';
 import notify from '../utils/notify';
 import axios from 'axios';
 
 const store = useCameraStore();
 const viewMode = ref('grid');
 const loading = ref(false);
+const showBackfillModal = ref(false);
 const snaps = ref([]);
 
 const filters = ref({

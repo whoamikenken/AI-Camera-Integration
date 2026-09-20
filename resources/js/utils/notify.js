@@ -1,18 +1,18 @@
 import Swal from 'sweetalert2';
 
-// Base customized SweetAlert instance with Dark Slate theme
+// Base customized SweetAlert instance with Light Slate theme
 const customSwal = Swal.mixin({
-    background: '#0f172a', // slate-900
-    color: '#f8fafc',      // slate-50
+    background: '#ffffff', // pure white
+    color: '#0f172a',      // slate-900
     confirmButtonColor: '#4f46e5', // indigo-600
-    cancelButtonColor: '#475569',  // slate-600
+    cancelButtonColor: '#94a3b8',  // slate-400
     customClass: {
-        popup: 'border border-slate-700 rounded-2xl shadow-2xl backdrop-blur-md',
-        title: 'text-slate-100 font-bold text-lg',
-        htmlContainer: 'text-slate-300 text-xs leading-relaxed',
-        confirmButton: 'px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-lg shadow-lg shadow-indigo-600/30 transition-all cursor-pointer',
-        cancelButton: 'px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium rounded-lg border border-slate-700 transition-all cursor-pointer mr-2',
-        denyButton: 'px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold rounded-lg shadow-lg shadow-rose-600/30 transition-all cursor-pointer',
+        popup: 'border border-slate-200 rounded-2xl shadow-xl backdrop-blur-md',
+        title: 'text-slate-900 font-bold text-lg',
+        htmlContainer: 'text-slate-600 text-xs leading-relaxed',
+        confirmButton: 'px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-lg shadow-md shadow-indigo-600/20 transition-all cursor-pointer',
+        cancelButton: 'px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium rounded-lg border border-slate-300 transition-all cursor-pointer mr-2',
+        denyButton: 'px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold rounded-lg shadow-md shadow-rose-600/20 transition-all cursor-pointer',
     },
     buttonsStyling: true,
 });
@@ -24,11 +24,11 @@ const Toast = Swal.mixin({
     showConfirmButton: false,
     timer: 3500,
     timerProgressBar: true,
-    background: '#0f172a',
-    color: '#f8fafc',
+    background: '#ffffff',
+    color: '#0f172a',
     customClass: {
-        popup: 'border border-slate-700 rounded-xl shadow-xl',
-        title: 'text-xs font-medium text-slate-200',
+        popup: 'border border-slate-200 rounded-xl shadow-lg',
+        title: 'text-xs font-medium text-slate-800',
     },
     didOpen: (toast) => {
         toast.addEventListener('mouseenter', Swal.stopTimer);

@@ -1,24 +1,24 @@
 <template>
   <div
     v-if="isOpen"
-    class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fadeIn"
+    class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md animate-fadeIn"
     @click.self="close"
   >
     <div
-      class="relative w-full max-w-5xl bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]"
+      class="relative w-full max-w-5xl bg-white border border-slate-200 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]"
       :class="{ '!max-w-none !h-full !max-h-none !rounded-none': isFullscreen }"
     >
       <!-- Modal Header -->
-      <div class="flex items-center justify-between px-6 py-4 bg-slate-900/90 border-b border-slate-800">
+      <div class="flex items-center justify-between px-6 py-4 bg-white border-b border-slate-200">
         <div class="flex items-center space-x-3">
-          <div class="p-2 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400">
+          <div class="p-2 rounded-xl bg-indigo-50 border border-indigo-100 text-indigo-600">
             <svg class="w-6 h-6 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
             </svg>
           </div>
           <div>
             <div class="flex items-center space-x-2">
-              <h3 class="text-lg font-bold text-white tracking-wide">{{ device?.name || 'Camera Preview' }}</h3>
+              <h3 class="text-lg font-bold text-slate-900 tracking-wide">{{ device?.name || 'Camera Preview' }}</h3>
               <span
                 class="px-2.5 py-0.5 text-xs font-semibold rounded-full flex items-center space-x-1.5"
                 :class="statusBadgeClass"
@@ -27,10 +27,10 @@
                 <span>{{ playerStatus.state || 'CONNECTING' }}</span>
               </span>
             </div>
-            <p class="text-xs text-slate-400 font-mono mt-0.5">
-              ID: <span class="text-slate-200">{{ device?.device_id }}</span> |
-              IP: <span class="text-slate-200">{{ device?.ip_address }}</span> |
-              WS Protocol: <span class="text-indigo-400 font-bold">ws://{{ device?.ip_address }}/</span>
+            <p class="text-xs text-slate-500 font-mono mt-0.5">
+              ID: <span class="text-slate-700">{{ device?.device_id }}</span> |
+              Host: <span class="text-slate-700">{{ previewHost }}</span> |
+              WS Protocol: <span class="text-indigo-600 font-bold">{{ (device?.scheme === 'https' || window?.location?.protocol === 'https:') ? 'wss' : 'ws' }}://{{ previewHost }}/</span>
             </p>
           </div>
         </div>
@@ -38,18 +38,18 @@
         <!-- Header Actions -->
         <div class="flex items-center space-x-2">
           <!-- Quality Switcher -->
-          <div class="bg-slate-800/80 p-1 rounded-lg border border-slate-700 flex items-center text-xs font-medium">
+          <div class="bg-slate-100 p-1 rounded-lg border border-slate-200 flex items-center text-xs font-medium">
             <button
               @click="switchQuality(0)"
               class="px-2.5 py-1 rounded transition-all"
-              :class="streamType === 0 ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'"
+              :class="streamType === 0 ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900'"
             >
               1080P Main
             </button>
             <button
               @click="switchQuality(1)"
               class="px-2.5 py-1 rounded transition-all"
-              :class="streamType === 1 ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'"
+              :class="streamType === 1 ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900'"
             >
               720P Sub
             </button>
@@ -57,10 +57,10 @@
 
           <!-- Open Web UI -->
           <a
-            :href="`http://${device?.ip_address}/#/preview`"
+            :href="`${previewEndpointUrl}/#/preview`"
             target="_blank"
             rel="noopener noreferrer"
-            class="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 transition"
+            class="p-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-900 border border-slate-200 transition"
             title="Open Camera Native Web UI"
           >
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -71,7 +71,7 @@
           <!-- Fullscreen Toggle -->
           <button
             @click="toggleFullscreen"
-            class="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 transition"
+            class="p-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-900 border border-slate-200 transition"
             :title="isFullscreen ? 'Exit Fullscreen' : 'Enter Fullscreen'"
           >
             <svg v-if="!isFullscreen" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -85,7 +85,7 @@
           <!-- Close Modal -->
           <button
             @click="close"
-            class="p-2 rounded-lg bg-slate-800/80 hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 border border-slate-700 hover:border-rose-500/30 transition"
+            class="p-2 rounded-lg bg-slate-100 hover:bg-rose-50 text-slate-500 hover:text-rose-600 border border-slate-200 hover:border-rose-200 transition"
           >
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
@@ -95,7 +95,7 @@
       </div>
 
       <!-- Main Video Feed Viewport -->
-      <div class="relative flex-1 bg-black flex items-center justify-center overflow-hidden min-h-[380px]">
+      <div class="relative flex-1 bg-slate-950 flex items-center justify-center overflow-hidden min-h-[380px]">
         <!-- WebGL Video Canvas -->
         <canvas
           ref="videoCanvas"
@@ -113,7 +113,7 @@
             <div class="absolute inset-0 rounded-full border-4 border-t-indigo-500 border-r-transparent border-b-transparent border-l-transparent animate-spin"></div>
           </div>
           <p class="text-sm font-semibold text-white tracking-wide uppercase">{{ playerStatus.message || 'Connecting to WebSocket Feed...' }}</p>
-          <p class="text-xs text-slate-400 mt-1 font-mono">Negotiating auth key with {{ device?.ip_address }}</p>
+          <p class="text-xs text-slate-400 mt-1 font-mono">Negotiating auth key with {{ previewHost }}</p>
         </div>
 
         <!-- Error Overlay -->
@@ -136,7 +136,7 @@
               🔄 Retry Connection
             </button>
             <a
-              :href="`http://${device?.ip_address}/#/preview`"
+              :href="`${previewEndpointUrl}/#/preview`"
               target="_blank"
               class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-medium border border-slate-700 transition"
             >
@@ -171,19 +171,19 @@
       </div>
 
       <!-- Bottom Control Bar -->
-      <div class="px-6 py-3.5 bg-slate-900/95 border-t border-slate-800 flex items-center justify-between">
-        <div class="flex items-center space-x-4 text-xs text-slate-400 font-mono">
+      <div class="px-6 py-3.5 bg-white border-t border-slate-200 flex items-center justify-between">
+        <div class="flex items-center space-x-4 text-xs text-slate-600 font-mono">
           <span class="flex items-center space-x-1.5">
             <span class="text-slate-500">Host:</span>
-            <span class="text-slate-200">{{ device?.ip_address }}</span>
+            <span class="text-slate-800 font-medium">{{ previewHost }}</span>
           </span>
           <span class="flex items-center space-x-1.5">
             <span class="text-slate-500">User:</span>
-            <span class="text-slate-200">{{ device?.username || 'admin' }}</span>
+            <span class="text-slate-800 font-medium">{{ device?.username || 'admin' }}</span>
           </span>
           <span class="flex items-center space-x-1.5">
             <span class="text-slate-500">Codec:</span>
-            <span class="text-emerald-400 font-semibold">H.264/WASM WebGL</span>
+            <span class="text-emerald-600 font-semibold">H.264/WASM WebGL</span>
           </span>
         </div>
 
@@ -191,9 +191,9 @@
           <!-- Capture Snapshot Button -->
           <button
             @click="takeSnapshot"
-            class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white rounded-lg text-xs font-semibold border border-slate-700 flex items-center space-x-1.5 transition"
+            class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-900 rounded-lg text-xs font-semibold border border-slate-200 flex items-center space-x-1.5 transition"
           >
-            <svg class="w-4 h-4 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg class="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
             </svg>
@@ -231,17 +231,28 @@ const errorMessage = ref('');
 const playerStatus = ref({ state: 'CONNECTING', message: 'Connecting to WebSocket feed...' });
 const decodeInfo = ref({ width: 0, height: 0, fps: 0, bitrateKbps: 0 });
 
+const previewHost = computed(() => {
+  if (!props.device?.ip_address) return '';
+  return props.device.ip_address.replace(/ai-camera-api\./i, 'ai-camera.');
+});
+
+const previewEndpointUrl = computed(() => {
+  if (!props.device) return '';
+  const scheme = props.device.scheme || 'http';
+  return `${scheme}://${previewHost.value}`;
+});
+
 const statusBadgeClass = computed(() => {
   switch (playerStatus.value.state) {
     case 'STREAMING':
-      return 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400';
+      return 'bg-emerald-50 border border-emerald-200 text-emerald-700';
     case 'AUTHENTICATING':
     case 'HANDSHAKE':
-      return 'bg-indigo-500/10 border border-indigo-500/20 text-indigo-400';
+      return 'bg-indigo-50 border border-indigo-200 text-indigo-700';
     case 'DISCONNECTED':
-      return 'bg-amber-500/10 border border-amber-500/20 text-amber-400';
+      return 'bg-amber-50 border border-amber-200 text-amber-700';
     default:
-      return 'bg-slate-500/10 border border-slate-500/20 text-slate-400';
+      return 'bg-slate-100 border border-slate-200 text-slate-600';
   }
 });
 
@@ -268,8 +279,9 @@ function initPlayer() {
 
   try {
     playerInstance.value = new CameraHqPlayer(videoCanvas.value, {
-      host: props.device.ip_address,
-      port: 80, // Web WebSocket is on port 80
+      scheme: props.device.scheme || 'http',
+      host: previewHost.value,
+      port: props.device.port || (props.device.scheme === 'https' ? 443 : 80),
       username: props.device.username || 'admin',
       password: props.device.password || 'admin',
       streamType: streamType.value,

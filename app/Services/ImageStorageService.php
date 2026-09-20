@@ -46,6 +46,14 @@ class ImageStorageService
     }
 
     /**
+     * Alias for storeBase64Image.
+     */
+    public function saveBase64Image(?string $base64Data, string $folder = 'snaps'): ?string
+    {
+        return $this->storeBase64Image($base64Data, $folder);
+    }
+
+    /**
      * Store a base64 encoded image and return both path, url, and full base64 data uri.
      *
      * @param string|null $base64Data

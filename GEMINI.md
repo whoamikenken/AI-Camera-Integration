@@ -9,7 +9,7 @@ This document outlines the system architecture, component breakdown, database sc
 The **Intelligent Vision Edge & Telemetry Hub** is a centralized access control, biometric identity synchronization, and real-time vision telemetry platform designed for network-based face recognition and smart AI cameras (specifically X40Y and related edge hardware).
 
 The system implements a **Decoupled Hybrid Architecture**:
-- **Synchronous Device Control (LAN)**: Manages personnel enrollment, whitelist/blacklist provisioning, credentials, face templates, and camera hardware settings via direct HTTP POST requests (`/action/<Operator>`) with HTTP Basic Authentication (`admin:admin`).
+- **Synchronous Device Control (LAN)**: Manages personnel enrollment, whitelist/blacklist provisioning, credentials, face templates, and camera hardware settings via direct HTTP/HTTPS POST requests (`/action/<Operator>`) with HTTP Basic Authentication (`admin:admin`). Supports both HTTP and HTTPS endpoint camera devices.
 - **Asynchronous Telemetry Streaming (WAN / MQTT)**: Ingests high-frequency real-time verification logs (`VerifyPush`), stranger snapshots (`SnapPush`), behavioral infractions, and device heartbeats via an MQTT broker subscribing to camera topic streams (`mqtt/face/<DeviceID>/*`).
 - **Real-Time Client Broadcasting**: Distributes ingested telemetry events to live web dashboards via WebSockets with minimal latency.
 
@@ -73,7 +73,7 @@ flowchart TD
     RedisCache --> Horizon
     Horizon --> LANWorker
 
-    LANWorker -->|HTTP POST /action/*\nBasic Auth| Camera
+    LANWorker -->|HTTP / HTTPS POST /action/*\nBasic Auth| Camera
 
     Camera -->|MQTT Pub: mqtt/face/{ID}/*| MQTTBroker
     MQTTBroker -->|Sub: mqtt/face/#| MQTTDaemon
@@ -172,13 +172,13 @@ CREATE TABLE sync_tasks (
 ## 5. Subsystem Component Breakdown
 
 ### A. Core Laravel Backend & API Services
-- **Camera Management Service (`App\Services\CameraService`)**: Formulates JSON payloads and sends HTTP POST requests to camera hardware endpoints using `Illuminate\Support\Facades\Http` with HTTP Basic Authentication.
+- **Camera Management Service (`App\Services\CameraService`)**: Formulates JSON payloads and sends HTTP/HTTPS POST requests to camera hardware endpoints (supporting both HTTP and HTTPS endpoint camera devices) using `Illuminate\Support\Facades\Http` with HTTP Basic Authentication.
 - **Personnel Sync Observer (`App\Observers\PersonnelObserver`)**: Automatically dispatches `SyncPersonnelToDeviceJob` to the `camera-sync` Redis queue whenever a personnel record or facial image is created, updated, or removed.
 - **Storage Manager (`App\Services\ImageStorageService`)**: Ingests Base64 image payloads received from MQTT/Webhooks, saves binaries to local disk or S3/R2 storage, and generates public storage URLs for the UI.
 
 ### B. LAN Dispatcher (Edge Sync Worker)
 - Runs as a dedicated Redis queue worker: `php artisan queue:work redis --queue=camera-sync`
-- Dispatches personnel sync operations (`/action/EditPersonNew`, `/action/AddPersons`, `/action/DeletePerson`) to cameras on the local network (`http://192.168.1.100:8080`).
+- Dispatches personnel sync operations (`/action/EditPersonNew`, `/action/AddPersons`, `/action/DeletePerson`) to cameras on the network via HTTP or HTTPS (`http://` or `https://192.168.1.100:8080`).
 - Implements exponential backoff, rate limiting (&ge; 1s between single calls), and error logging using camera status codes.
 
 ### C. Cloud MQTT Telemetry Daemon
@@ -201,13 +201,13 @@ CREATE TABLE sync_tasks (
 
 | Operation | Protocol / Endpoint | Channel | Key Payload Parameters |
 | :--- | :--- | :--- | :--- |
-| **Add / Update Person** | `POST /action/EditPersonNew` | HTTP (LAN) | `DeviceID`, `IdType: 0`, `CustomizeID`, `Name`, `PersonType`, `picinfo` / `picURI` |
-| **Batch Add Persons** | `POST /action/AddPersons` | HTTP (LAN) | `DeviceID`, `Total`, `Personinfo_0: {...}` (up to 32 Base64 / 1000 URI) |
-| **Delete Person** | `POST /action/DeletePerson` | HTTP (LAN) | `DeviceID`, `TotalNum`, `IdType: 0`, `CustomizeID: [id1, id2]` |
-| **Delete All Persons** | `POST /action/DeleteAllPerson` | HTTP (LAN) | `DeleteAllPersonCheck: 1` *(Triggers auto-reboot)* |
-| **Search List** | `POST /action/SearchPersonList` | HTTP (LAN) | `DeviceID`, `PersonType: 2`, `BeginNO: 0`, `RequestCount: 50` |
-| **Configure MQTT** | `POST /action/SetMQTTParam` | HTTP (LAN) | `MQEnable: 1`, `MQAddr`, `MQPort`, `MQTopic`, `RecordUploadType: 1` |
-| **Reboot Camera** | `POST /action/RebootDevice` | HTTP (LAN) | `DeviceID`, `IsRebootDevice: 1` |
+| **Add / Update Person** | `POST /action/EditPersonNew` | HTTP / HTTPS (LAN) | `DeviceID`, `IdType: 0`, `CustomizeID`, `Name`, `PersonType`, `picinfo` / `picURI` |
+| **Batch Add Persons** | `POST /action/AddPersons` | HTTP / HTTPS (LAN) | `DeviceID`, `Total`, `Personinfo_0: {...}` (up to 32 Base64 / 1000 URI) |
+| **Delete Person** | `POST /action/DeletePerson` | HTTP / HTTPS (LAN) | `DeviceID`, `TotalNum`, `IdType: 0`, `CustomizeID: [id1, id2]` |
+| **Delete All Persons** | `POST /action/DeleteAllPerson` | HTTP / HTTPS (LAN) | `DeleteAllPersonCheck: 1` *(Triggers auto-reboot)* |
+| **Search List** | `POST /action/SearchPersonList` | HTTP / HTTPS (LAN) | `DeviceID`, `PersonType: 2`, `BeginNO: 0`, `RequestCount: 50` |
+| **Configure MQTT** | `POST /action/SetMQTTParam` | HTTP / HTTPS (LAN) | `MQEnable: 1`, `MQAddr`, `MQPort`, `MQTopic`, `RecordUploadType: 1` |
+| **Reboot Camera** | `POST /action/RebootDevice` | HTTP / HTTPS (LAN) | `DeviceID`, `IsRebootDevice: 1` |
 | **Live Verification Stream** | `mqtt/face/{DeviceID}/Rec` | MQTT (Broker) | `VerifyPush` (`VerifyStatus`, `similarity1`, `pic`, `scene`) |
 | **Stranger Alert Stream** | `mqtt/face/{DeviceID}/Snap` | MQTT (Broker) | `StrSnapPush` (`CreateTime`, `pic`, `scene`) |
 | **Heartbeat Stream** | `mqtt/face/heartbeat` | MQTT (Broker) | `HeartBeat` (`facesluiceId`, `time`) |
@@ -222,7 +222,7 @@ CREATE TABLE sync_tasks (
    - Launch EMQX or Mosquitto on port `1883`.
    - Configure authentication credentials for the cameras and Laravel daemon.
 3. **Camera Initialization**:
-   - Send HTTP POST `/action/SetMQTTParam` to the camera (`192.168.1.100:8080`) with the broker's IP, port, and topics.
+   - Send HTTP/HTTPS POST `/action/SetMQTTParam` to the camera (`http://` or `https://192.168.1.100:8080`) with the broker's IP, port, and topics.
 4. **Daemon Deployment (Supervisord)**:
    - Configure supervisor programs for:
      - `php artisan horizon` (or `php artisan queue:work --queue=camera-sync`)

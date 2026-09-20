@@ -58,21 +58,23 @@
 ## 1. Architectural Overview & Communication Principles
 
 ### 1.1 Protocol Basics
-- **Transport**: Standard HTTP / HTTPS over TCP.
-- **HTTP Method**: All API control and subscription requests use **POST**.
+- **Transport**: Standard HTTP / HTTPS over TCP (SSL/TLS support for secure camera endpoints). The system supports both HTTP (`http://`) and HTTPS (`https://`) endpoint camera devices for REST control and subscription callbacks.
+- **HTTP Method**: All API control and subscription requests use **POST** over HTTP or HTTPS.
 - **Data Format**: `application/json` (UTF-8 encoded) for control APIs; `multipart/form-data` for video uploads and specific alarm streams.
-- **Header Rules**: HTTP requests MUST contain valid `Content-Length` or `Transfer-Encoding: chunked` (case-sensitive).
+- **Header Rules**: HTTP/HTTPS requests MUST contain valid `Content-Length` or `Transfer-Encoding: chunked` (case-sensitive).
 - **Image Transmission**:
   - `picinfo`: Base64-encoded string (`data:image/jpeg;base64,...`). Max size usually 1MB (or 2MB for scene images).
   - `picURI`: Public or local HTTP/HTTPS URL accessible by the camera (camera downloads image directly).
   - *Note:* If both `picinfo` and `picURI` are supplied, `picinfo` takes priority.
 
 ### 1.2 Request Grammar & Addressing
-Standard endpoint format:
+Standard endpoint format (supports HTTP and HTTPS endpoints):
 ```http
 POST http://<camera_ip>:<port>/action/<Operator>
+-- OR --
+POST https://<camera_ip>:<port>/action/<Operator>
 ```
-- Default Port: `8080` (or `80`)
+- Default Ports: `8080` or `80` (HTTP); `8443` or `443` (HTTPS)
 - `<Operator>` corresponds exactly to the action requested in the JSON payload body.
 
 ### 1.3 Authentication
@@ -656,6 +658,10 @@ Includes comprehensive attributes: `carColor` (0-13), `carClass` (Sedan, SUV, Tr
 ### 3.4 Manual Push & Resend Control Records
 
 Used to retrieve or re-stream missing logs from camera storage to the server over a given timeframe.
+
+> [!NOTE]
+> 1. **Endpoint Domain Requirement**: Cloud API endpoints must target the hardware HTTP API host (e.g., `ai-camera-api.philyra.cloud` with `-api` suffix instead of the web frontend domain). `CameraHttpService::parseEndpoint` automatically maps `ai-camera.philyra.cloud` to `ai-camera-api.philyra.cloud`.
+> 2. **ISO Timestamp Format**: `TimeS` and `TimeE` require ISO 8601 formatting with a `T` separator (`YYYY-MM-DDTHH:mm:ss`). Space-separated timestamps cause error `464: Unknow TimeS`.
 
 - **Manual Push Identification Records (`ManualPushRecords`)**:
   - **URI**: `POST /action/ManualPushRecords`

@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500" width="100%" height="100%">
+  <defs>
+    <linearGradient id="pinnacle-grad-icon" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#052E76"/>
+      <stop offset="45%" stop-color="#0066FF"/>
+      <stop offset="100%" stop-color="#00F0FF"/>
+    </linearGradient>
+    <linearGradient id="pinnacle-accent-icon" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00C6FF"/>
+      <stop offset="100%" stop-color="#0040B8"/>
+    </linearGradient>
+  </defs>
+
+  <g transform="translate(45, 10) scale(0.95)">
+    <!-- Outer P Ribbon -->
+    <path d="M 110 50
+             C 270 50, 410 110, 410 240
+             C 410 370, 280 410, 180 410
+             L 180 470
+             C 180 485, 165 490, 150 490
+             L 90 490
+             C 75 490, 65 480, 65 465
+             L 65 75
+             C 65 60, 75 50, 90 50 Z" fill="url(#pinnacle-grad-icon)"/>
+
+    <!-- Upward Pinnacle Arrow -->
+    <path d="M 65 310
+             L 210 210
+             L 210 255
+             L 250 255
+             L 290 190
+             L 230 190
+             L 330 100
+             L 350 220
+             L 305 175
+             L 245 270
+             C 235 285, 215 295, 195 295
+             L 135 295
+             L 65 345 Z" fill="#FFFFFF"/>
+
+    <!-- Highlight Curve -->
+    <path d="M 180 120
+             C 260 120, 340 150, 340 230
+             C 340 290, 270 330, 180 330
+             L 180 270
+             C 220 270, 260 250, 260 225
+             C 260 180, 210 170, 180 170 Z" fill="url(#pinnacle-accent-icon)" opacity="0.85"/>
+  </g>
+</svg>

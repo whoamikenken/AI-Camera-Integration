@@ -33,7 +33,7 @@ class DashboardStatsController extends Controller
         // Optimize device queries into a single query
         $deviceStats = Device::toBase()
             ->selectRaw('count(*) as total')
-            ->selectRaw('sum(case when is_active = 1 and last_heartbeat_at >= ? then 1 else 0 end) as online', [now()->subSeconds(90)])
+            ->selectRaw('sum(case when is_active = true and last_heartbeat_at >= ? then 1 else 0 end) as online', [now()->subSeconds(90)])
             ->first();
 
         $totalDevices = (int) ($deviceStats->total ?? 0);

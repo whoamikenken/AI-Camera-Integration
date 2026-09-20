@@ -13,6 +13,7 @@ class Device extends Model
     protected $fillable = [
         'device_id',
         'name',
+        'scheme',
         'ip_address',
         'port',
         'username',
@@ -43,6 +44,17 @@ class Device extends Model
     public function syncTasks(): HasMany
     {
         return $this->hasMany(SyncTask::class, 'device_id', 'device_id');
+    }
+
+    public function getEndpointUrlAttribute(): string
+    {
+        $scheme = $this->scheme ?: 'http';
+        $host = preg_replace('#^https?://#i', '', rtrim($this->ip_address, '/'));
+        $portStr = ($scheme === 'https' && $this->port == 443) || ($scheme === 'http' && $this->port == 80)
+            ? ''
+            : ":{$this->port}";
+
+        return "{$scheme}://{$host}{$portStr}";
     }
 
     public function getIsOnlineAttribute(): bool

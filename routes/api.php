@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Route;
 Route::get('/stats', [DashboardStatsController::class, 'index']);
 
 // Device Management
+Route::post('devices/probe', [DeviceController::class, 'probe']);
 Route::apiResource('devices', DeviceController::class);
 Route::post('devices/{device}/test-connection', [DeviceController::class, 'testConnection']);
 Route::post('devices/{device}/reboot', [DeviceController::class, 'reboot']);
@@ -25,6 +26,22 @@ Route::post('devices/{device}/manual-push-snaps', [DeviceController::class, 'man
 Route::post('devices/{device}/factory-reset', [DeviceController::class, 'factoryReset']);
 Route::post('devices/{device}/clear-face-database', [DeviceController::class, 'deleteAllPersons']);
 Route::get('devices/{device}/search-camera-list', [DeviceController::class, 'searchCameraList']);
+Route::post('devices/{device}/subscribe', [DeviceController::class, 'subscribe']);
+Route::post('devices/{device}/unsubscribe', [DeviceController::class, 'unsubscribe']);
+Route::get('devices/{device}/subscribe', [DeviceController::class, 'getSubscribe']);
+Route::get('devices/{device}/device-info', [DeviceController::class, 'getDeviceInformation']);
+Route::post('devices/{device}/search-person', [DeviceController::class, 'searchPerson']);
+Route::get('devices/{device}/search-person-num', [DeviceController::class, 'searchPersonNum']);
+Route::get('devices/{device}/handshake-data', [DeviceController::class, 'getHandSharkData']);
+Route::post('devices/{device}/handshake-data', [DeviceController::class, 'setHandSharkData']);
+Route::get('devices/{device}/flow-count', [DeviceController::class, 'getCount']);
+Route::post('devices/{device}/upgrade', [DeviceController::class, 'upgradeFirmware']);
+Route::get('devices/{device}/audit', [DeviceController::class, 'audit']);
+
+// Camera HTTP Webhook Event Push Endpoints (HTTP Protocol V1.13 Section 3)
+Route::post('/Subscribe/heartbeat', [\App\Http\Controllers\HttpWebhookController::class, 'handleHeartbeat']);
+Route::post('/Subscribe/Verify', [\App\Http\Controllers\HttpWebhookController::class, 'handleVerify']);
+Route::post('/Subscribe/Snap', [\App\Http\Controllers\HttpWebhookController::class, 'handleSnap']);
 
 // Personnel / Face Library
 Route::apiResource('personnel', PersonnelController::class);

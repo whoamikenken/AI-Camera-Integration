@@ -1,16 +1,16 @@
 <template>
   <div class="space-y-6">
     <!-- Header with Action Buttons -->
-    <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-slate-900/80 border border-slate-800 p-4 rounded-xl backdrop-blur-md">
+    <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white border border-slate-200/80 p-4 rounded-xl shadow-xs">
       <div>
-        <h2 class="text-lg font-semibold text-slate-100">Personnel & Face Library</h2>
-        <p class="text-xs text-slate-400">Manage whitelisted employees, blacklisted individuals, schedules, and biometric templates</p>
+        <h2 class="text-lg font-bold text-slate-900">Personnel & Face Library</h2>
+        <p class="text-xs text-slate-500">Manage whitelisted employees, blacklisted individuals, schedules, and biometric templates</p>
       </div>
 
       <div class="flex items-center gap-3">
         <button 
           @click="openCreateModal"
-          class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-lg shadow-lg shadow-indigo-600/20 transition-all flex items-center gap-2"
+          class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-lg shadow-sm transition-all flex items-center gap-2 cursor-pointer"
         >
           <span>➕ Enroll New Person</span>
         </button>
@@ -18,25 +18,25 @@
     </div>
 
     <!-- Filter & Search Bar -->
-    <div class="flex flex-col sm:flex-row items-center gap-3 bg-slate-900/60 border border-slate-800 p-3 rounded-xl">
+    <div class="flex flex-col sm:flex-row items-center gap-3 bg-white border border-slate-200 p-3 rounded-xl shadow-xs">
       <div class="relative flex-1 w-full">
         <input 
           v-model="search" 
           @input="fetchPersonnel"
           type="text" 
           placeholder="Search by name, ID number, phone, or custom ID..."
-          class="w-full bg-slate-800/80 border border-slate-700 rounded-lg pl-9 pr-4 py-2 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+          class="w-full bg-white border border-slate-200 rounded-lg pl-9 pr-4 py-2 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 shadow-xs"
         />
-        <span class="absolute left-3 top-2.5 text-slate-500 text-xs">🔍</span>
+        <span class="absolute left-3 top-2.5 text-slate-400 text-xs">🔍</span>
       </div>
 
-      <select v-model="personTypeFilter" @change="fetchPersonnel" class="w-full sm:w-44 bg-slate-800/80 border border-slate-700 text-xs rounded-lg px-3 py-2 text-slate-200">
+      <select v-model="personTypeFilter" @change="fetchPersonnel" class="w-full sm:w-44 bg-white border border-slate-200 text-xs rounded-lg px-3 py-2 text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 cursor-pointer shadow-xs">
         <option value="">All Categories</option>
         <option value="0">Whitelist (Allow)</option>
         <option value="1">Blacklist (Block)</option>
       </select>
 
-      <select v-model="validityFilter" @change="fetchPersonnel" class="w-full sm:w-44 bg-slate-800/80 border border-slate-700 text-xs rounded-lg px-3 py-2 text-slate-200">
+      <select v-model="validityFilter" @change="fetchPersonnel" class="w-full sm:w-44 bg-white border border-slate-200 text-xs rounded-lg px-3 py-2 text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 cursor-pointer shadow-xs">
         <option value="">All Validity</option>
         <option value="0">Permanent</option>
         <option value="1">Temporary Schedule</option>
@@ -44,10 +44,10 @@
     </div>
 
     <!-- Personnel Data Table -->
-    <div class="bg-slate-900/90 border border-slate-800 rounded-xl overflow-hidden shadow-xl">
+    <div class="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-xs">
       <div class="overflow-x-auto">
-        <table class="w-full text-left text-xs text-slate-300">
-          <thead class="bg-slate-800/60 text-slate-400 uppercase text-[11px] font-semibold border-b border-slate-800">
+        <table class="w-full text-left text-xs text-slate-700">
+          <thead class="bg-slate-50 text-slate-500 uppercase text-[11px] font-semibold border-b border-slate-200">
             <tr>
               <th class="py-3 px-4">Photo</th>
               <th class="py-3 px-4">Custom ID</th>
@@ -58,45 +58,45 @@
               <th class="py-3 px-4 text-right">Actions</th>
             </tr>
           </thead>
-          <tbody class="divide-y divide-slate-800/60">
+          <tbody class="divide-y divide-slate-100">
             <tr v-if="loading">
               <td colspan="7" class="py-12 text-center text-slate-500">Loading personnel records...</td>
             </tr>
             <tr v-else-if="records.length === 0">
               <td colspan="7" class="py-12 text-center text-slate-500">No personnel records found. Click "Enroll New Person" to add one.</td>
             </tr>
-            <tr v-for="person in records" :key="person.id" class="hover:bg-slate-800/30 transition-colors">
+            <tr v-for="person in records" :key="person.id" class="hover:bg-slate-50 transition-colors">
               <td class="py-3 px-4">
-                <div class="w-10 h-10 rounded-full bg-slate-800 border border-slate-700 overflow-hidden shrink-0">
+                <div class="w-10 h-10 rounded-full bg-slate-100 border border-slate-200 overflow-hidden shrink-0">
                   <img v-if="person.photo_path || person.photo_base64" :src="person.photo_path ? `/storage/${person.photo_path}` : person.photo_base64" class="w-full h-full object-cover" />
-                  <div v-else class="w-full h-full flex items-center justify-center text-slate-500 text-[10px]">No Pic</div>
+                  <div v-else class="w-full h-full flex items-center justify-center text-slate-400 text-[10px]">No Pic</div>
                 </div>
               </td>
-              <td class="py-3 px-4 font-mono text-slate-300 font-medium">#{{ person.customize_id }}</td>
-              <td class="py-3 px-4 font-semibold text-slate-100">{{ person.name }}</td>
+              <td class="py-3 px-4 font-mono text-slate-900 font-medium">#{{ person.customize_id }}</td>
+              <td class="py-3 px-4 font-bold text-slate-900">{{ person.name }}</td>
               <td class="py-3 px-4">
-                <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider" :class="person.person_type === 0 ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'">
+                <span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider" :class="person.person_type === 0 ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-rose-50 text-rose-700 border border-rose-200'">
                   {{ person.person_type === 0 ? 'Whitelist' : 'Blacklist' }}
                 </span>
               </td>
-              <td class="py-3 px-4 text-slate-400">
-                <div>{{ person.id_card || '--' }}</div>
-                <div class="text-[11px] text-slate-500">{{ person.tel_num || '--' }}</div>
+              <td class="py-3 px-4 text-slate-600">
+                <div class="font-mono text-slate-800">{{ person.id_card || '--' }}</div>
+                <div class="text-[11px] text-slate-500 font-mono">{{ person.tel_num || '--' }}</div>
               </td>
               <td class="py-3 px-4">
-                <span v-if="person.temp_valid === 0" class="text-slate-400">Permanent</span>
-                <span v-else class="text-amber-400 text-[11px]">
+                <span v-if="person.temp_valid === 0" class="text-slate-600 font-medium">Permanent</span>
+                <span v-else class="text-amber-700 font-semibold text-[11px]">
                   Temp ({{ formatDate(person.valid_begin) }} ~ {{ formatDate(person.valid_end) }})
                 </span>
               </td>
               <td class="py-3 px-4 text-right space-x-2">
-                <button @click="triggerSync(person)" :disabled="syncingId === person.id" class="px-2.5 py-1 text-[11px] bg-slate-800 hover:bg-slate-700 text-indigo-400 border border-slate-700 rounded transition-colors" title="Sync to cameras">
+                <button @click="triggerSync(person)" :disabled="syncingId === person.id" class="px-2.5 py-1 text-[11px] bg-white hover:bg-slate-50 text-indigo-600 font-semibold border border-slate-200 rounded transition-colors shadow-xs cursor-pointer disabled:opacity-50" title="Sync to cameras">
                   {{ syncingId === person.id ? 'Syncing...' : '⚡ Sync' }}
                 </button>
-                <button @click="openEditModal(person)" class="px-2.5 py-1 text-[11px] bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 rounded transition-colors">
+                <button @click="openEditModal(person)" class="px-2.5 py-1 text-[11px] bg-white hover:bg-slate-50 text-slate-700 font-medium border border-slate-200 rounded transition-colors shadow-xs cursor-pointer">
                   Edit
                 </button>
-                <button @click="deletePerson(person)" class="px-2.5 py-1 text-[11px] bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 border border-rose-800/40 rounded transition-colors">
+                <button @click="deletePerson(person)" class="px-2.5 py-1 text-[11px] bg-rose-50 hover:bg-rose-100 text-rose-700 font-semibold border border-rose-200 rounded transition-colors shadow-xs cursor-pointer">
                   Delete
                 </button>
               </td>
@@ -106,36 +106,36 @@
       </div>
 
       <!-- Pagination -->
-      <div v-if="pagination.total > pagination.per_page" class="p-3 border-t border-slate-800 flex items-center justify-between text-xs text-slate-400">
+      <div v-if="pagination.total > pagination.per_page" class="p-3 border-t border-slate-200 flex items-center justify-between text-xs text-slate-600">
         <div>Showing {{ pagination.from }} to {{ pagination.to }} of {{ pagination.total }} records</div>
         <div class="flex items-center gap-1">
-          <button @click="changePage(pagination.current_page - 1)" :disabled="pagination.current_page === 1" class="px-3 py-1 bg-slate-800 rounded border border-slate-700 disabled:opacity-50">Prev</button>
-          <span class="px-2">{{ pagination.current_page }} / {{ pagination.last_page }}</span>
-          <button @click="changePage(pagination.current_page + 1)" :disabled="pagination.current_page === pagination.last_page" class="px-3 py-1 bg-slate-800 rounded border border-slate-700 disabled:opacity-50">Next</button>
+          <button @click="changePage(pagination.current_page - 1)" :disabled="pagination.current_page === 1" class="px-3 py-1 bg-white hover:bg-slate-50 rounded border border-slate-200 disabled:opacity-50 text-slate-700 font-medium shadow-xs cursor-pointer">Prev</button>
+          <span class="px-2 font-mono text-slate-700 font-medium">{{ pagination.current_page }} / {{ pagination.last_page }}</span>
+          <button @click="changePage(pagination.current_page + 1)" :disabled="pagination.current_page === pagination.last_page" class="px-3 py-1 bg-white hover:bg-slate-50 rounded border border-slate-200 disabled:opacity-50 text-slate-700 font-medium shadow-xs cursor-pointer">Next</button>
         </div>
       </div>
     </div>
 
     <!-- Create / Edit Modal -->
-    <div v-if="modal.show" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" @click.self="modal.show = false">
-      <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-2xl w-full p-6 space-y-4 max-h-[90vh] overflow-y-auto">
-        <div class="flex items-center justify-between border-b border-slate-800 pb-3">
-          <h3 class="text-base font-semibold text-slate-100">{{ modal.isEdit ? 'Edit Person Record' : 'Enroll New Person & Face' }}</h3>
-          <button @click="modal.show = false" class="text-slate-400 hover:text-white text-lg font-bold">&times;</button>
+    <div v-if="modal.show" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm" @click.self="modal.show = false">
+      <div class="bg-white border border-slate-200 rounded-2xl max-w-2xl w-full p-6 space-y-4 max-h-[90vh] overflow-y-auto shadow-2xl">
+        <div class="flex items-center justify-between border-b border-slate-200 pb-3">
+          <h3 class="text-base font-bold text-slate-900">{{ modal.isEdit ? 'Edit Person Record' : 'Enroll New Person & Face' }}</h3>
+          <button @click="modal.show = false" class="text-slate-400 hover:text-slate-700 text-lg font-bold cursor-pointer">&times;</button>
         </div>
 
         <form @submit.prevent="savePersonnel" class="space-y-4">
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <!-- Full Name -->
             <div>
-              <label class="block text-xs font-medium text-slate-300 mb-1">Full Name *</label>
-              <input v-model="form.name" required type="text" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-100 focus:ring-1 focus:ring-indigo-500" />
+              <label class="block text-xs font-medium text-slate-700 mb-1">Full Name *</label>
+              <input v-model="form.name" required type="text" class="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 shadow-xs" />
             </div>
 
             <!-- Person Type (Whitelist / Blacklist) -->
             <div>
-              <label class="block text-xs font-medium text-slate-300 mb-1">Category *</label>
-              <select v-model="form.person_type" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-100">
+              <label class="block text-xs font-medium text-slate-700 mb-1">Category *</label>
+              <select v-model="form.person_type" class="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 shadow-xs cursor-pointer">
                 <option :value="0">Whitelist (Allowed Access)</option>
                 <option :value="1">Blacklist (Denied / Alarm)</option>
               </select>
@@ -143,77 +143,77 @@
 
             <!-- ID Card -->
             <div>
-              <label class="block text-xs font-medium text-slate-300 mb-1">National ID / Badge Number</label>
-              <input v-model="form.id_card" type="text" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-100" />
+              <label class="block text-xs font-medium text-slate-700 mb-1">National ID / Badge Number</label>
+              <input v-model="form.id_card" type="text" class="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 shadow-xs" />
             </div>
 
             <!-- Phone Number -->
             <div>
-              <label class="block text-xs font-medium text-slate-300 mb-1">Phone Number</label>
-              <input v-model="form.tel_num" type="text" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-100" />
+              <label class="block text-xs font-medium text-slate-700 mb-1">Phone Number</label>
+              <input v-model="form.tel_num" type="text" class="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 shadow-xs" />
             </div>
 
             <!-- Gender & Birthday -->
             <div>
-              <label class="block text-xs font-medium text-slate-300 mb-1">Gender</label>
-              <select v-model="form.gender" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-100">
+              <label class="block text-xs font-medium text-slate-700 mb-1">Gender</label>
+              <select v-model="form.gender" class="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 shadow-xs cursor-pointer">
                 <option :value="0">Male</option>
                 <option :value="1">Female</option>
               </select>
             </div>
 
             <div>
-              <label class="block text-xs font-medium text-slate-300 mb-1">Birthday</label>
-              <input v-model="form.birthday" type="date" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-100" />
+              <label class="block text-xs font-medium text-slate-700 mb-1">Birthday</label>
+              <input v-model="form.birthday" type="date" class="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 shadow-xs" />
             </div>
           </div>
 
           <!-- Schedule & Validity -->
-          <div class="bg-slate-800/40 border border-slate-800 rounded-xl p-4 space-y-3">
+          <div class="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3 shadow-xs">
             <div class="flex items-center justify-between">
-              <label class="text-xs font-semibold text-slate-300">Access Schedule & Validity</label>
+              <label class="text-xs font-semibold text-slate-700">Access Schedule & Validity</label>
               <div class="flex items-center gap-4 text-xs">
                 <label class="flex items-center gap-1.5 cursor-pointer">
                   <input type="radio" :value="0" v-model="form.temp_valid" class="text-indigo-600" />
-                  <span>Permanent</span>
+                  <span class="text-slate-800 font-medium">Permanent</span>
                 </label>
                 <label class="flex items-center gap-1.5 cursor-pointer">
                   <input type="radio" :value="1" v-model="form.temp_valid" class="text-indigo-600" />
-                  <span>Temporary Period</span>
+                  <span class="text-slate-800 font-medium">Temporary Period</span>
                 </label>
               </div>
             </div>
 
             <div v-if="form.temp_valid === 1" class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
               <div>
-                <label class="block text-[11px] text-slate-400 mb-1">Valid Start Time</label>
-                <input v-model="form.valid_begin" type="datetime-local" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-100" />
+                <label class="block text-[11px] text-slate-500 mb-1">Valid Start Time</label>
+                <input v-model="form.valid_begin" type="datetime-local" class="w-full bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 shadow-xs" />
               </div>
               <div>
-                <label class="block text-[11px] text-slate-400 mb-1">Valid End Time</label>
-                <input v-model="form.valid_end" type="datetime-local" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-100" />
+                <label class="block text-[11px] text-slate-500 mb-1">Valid End Time</label>
+                <input v-model="form.valid_end" type="datetime-local" class="w-full bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 shadow-xs" />
               </div>
             </div>
           </div>
 
           <!-- Face Photo Upload & Preview -->
           <div class="space-y-2">
-            <label class="block text-xs font-medium text-slate-300">Biometric Face Image *</label>
+            <label class="block text-xs font-medium text-slate-700">Biometric Face Image *</label>
             <div class="flex items-center gap-4">
-              <div class="w-20 h-20 rounded-xl bg-slate-800 border border-slate-700 overflow-hidden flex items-center justify-center shrink-0">
+              <div class="w-20 h-20 rounded-xl bg-slate-100 border border-slate-200 overflow-hidden flex items-center justify-center shrink-0">
                 <img v-if="previewPhoto" :src="previewPhoto" class="w-full h-full object-cover" />
-                <span v-else class="text-2xl text-slate-600">👤</span>
+                <span v-else class="text-2xl text-slate-400">👤</span>
               </div>
               <div class="flex-1">
-                <input type="file" accept="image/*" @change="onFileSelected" class="text-xs text-slate-400 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-500 cursor-pointer" />
+                <input type="file" accept="image/*" @change="onFileSelected" class="text-xs text-slate-600 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-700 cursor-pointer" />
                 <p class="text-[11px] text-slate-500 mt-1">Recommended: Clear frontal facial photo (&lt; 2MB). Auto-encoded to Base64 for edge device synchronization.</p>
               </div>
             </div>
           </div>
 
-          <div class="flex justify-end gap-3 pt-3 border-t border-slate-800">
-            <button type="button" @click="modal.show = false" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium rounded-lg">Cancel</button>
-            <button type="submit" :disabled="saving" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-lg shadow-lg shadow-indigo-600/20 disabled:opacity-50">
+          <div class="flex justify-end gap-3 pt-3 border-t border-slate-200">
+            <button type="button" @click="modal.show = false" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg border border-slate-300 transition-colors cursor-pointer">Cancel</button>
+            <button type="submit" :disabled="saving" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-lg shadow-sm disabled:opacity-50 transition-all cursor-pointer">
               {{ saving ? 'Saving & Enrolling...' : (modal.isEdit ? 'Update Personnel' : 'Enroll Personnel') }}
             </button>
           </div>
