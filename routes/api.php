@@ -25,6 +25,7 @@ Route::post('devices/{device}/manual-push-records', [DeviceController::class, 'm
 Route::post('devices/{device}/manual-push-snaps', [DeviceController::class, 'manualPushSnaps']);
 Route::post('devices/{device}/factory-reset', [DeviceController::class, 'factoryReset']);
 Route::post('devices/{device}/clear-face-database', [DeviceController::class, 'deleteAllPersons']);
+Route::post('devices/{device}/import-personnel', [DeviceController::class, 'importPersonnel']);
 Route::get('devices/{device}/search-camera-list', [DeviceController::class, 'searchCameraList']);
 Route::post('devices/{device}/subscribe', [DeviceController::class, 'subscribe']);
 Route::post('devices/{device}/unsubscribe', [DeviceController::class, 'unsubscribe']);

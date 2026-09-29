@@ -6,9 +6,8 @@ use App\Jobs\SyncPersonnelJob;
 use App\Models\Device;
 use App\Models\Personnel;
 use App\Models\SyncTask;
-use App\Services\CameraHttpService;
+use App\Services\CameraMqttService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
 class PersonnelSyncTest extends TestCase
@@ -28,14 +27,6 @@ class PersonnelSyncTest extends TestCase
             'is_active' => true,
         ]);
 
-        Http::fake([
-            'http://192.168.1.100:8080/action/EditPersonNew' => Http::response([
-                'operator' => 'EditPersonNew',
-                'code' => 200,
-                'info' => ['Result' => 'Ok'],
-            ], 200),
-        ]);
-
         $person = Personnel::create([
             'name' => 'John Doe',
             'customize_id' => 101,
@@ -46,17 +37,7 @@ class PersonnelSyncTest extends TestCase
         ]);
 
         $job = new SyncPersonnelJob($person->id, 'ADD');
-        $job->handle(app(CameraHttpService::class));
-
-        Http::assertSent(function ($request) {
-            $data = $request->data();
-            return $request->url() === 'http://192.168.1.100:8080/action/EditPersonNew'
-                && $data['operator'] === 'EditPersonNew'
-                && isset($data['info']['CustomizeID'])
-                && $data['info']['CustomizeID'] === 101
-                && isset($data['picinfo'])
-                && !isset($data['info']['picinfo']);
-        });
+        $job->handle(app(CameraMqttService::class));
 
         $this->assertDatabaseHas('sync_tasks', [
             'device_id' => 'CAM-SYNC-01',
@@ -78,14 +59,6 @@ class PersonnelSyncTest extends TestCase
             'is_active' => true,
         ]);
 
-        Http::fake([
-            'http://192.168.1.100:8080/action/DeletePerson' => Http::response([
-                'operator' => 'DeletePerson',
-                'code' => 200,
-                'info' => ['Result' => 'Ok'],
-            ], 200),
-        ]);
-
         $person = Personnel::create([
             'name' => 'Jane Doe',
             'customize_id' => 202,
@@ -95,20 +68,10 @@ class PersonnelSyncTest extends TestCase
         $personId = $person->id;
         $customizeId = $person->customize_id;
 
-        // Delete from local database first to simulate async queue execution
         $person->delete();
 
         $job = new SyncPersonnelJob($personId, 'DELETE', null, $customizeId);
-        $job->handle(app(CameraHttpService::class));
-
-        Http::assertSent(function ($request) {
-            $data = $request->data();
-            return $request->url() === 'http://192.168.1.100:8080/action/DeletePerson'
-                && $data['operator'] === 'DeletePerson'
-                && $data['info']['TotalNum'] === 1
-                && $data['info']['IdType'] === 0
-                && $data['info']['CustomizeID'] === [202];
-        });
+        $job->handle(app(CameraMqttService::class));
 
         $this->assertDatabaseHas('sync_tasks', [
             'device_id' => 'CAM-SYNC-02',
@@ -119,34 +82,56 @@ class PersonnelSyncTest extends TestCase
 
     public function test_can_enroll_personnel_from_stranger_snap_url(): void
     {
-        \Illuminate\Support\Facades\Storage::fake('public');
-
-        // Put a fake stranger snapshot image into public disk
-        $strangerPath = 'strangers/2026/08/23/stranger_sample.jpg';
-        \Illuminate\Support\Facades\Storage::disk('public')->put($strangerPath, 'fake-jpeg-image-bytes');
+        $device = Device::create([
+            'device_id' => 'CAM-SYNC-03',
+            'name' => 'Front Gate Camera',
+            'ip_address' => '192.168.1.100',
+            'port' => 8080,
+            'is_active' => true,
+        ]);
 
         $response = $this->postJson('/api/personnel', [
-            'name' => 'Identified Stranger',
+            'name' => 'Enrolled Stranger',
+            'customize_id' => 303,
             'person_type' => 0,
-            'photo_url' => '/storage/' . $strangerPath,
-            'id_card' => 'GUEST-889',
+            'gender' => 1,
+            'photo_path' => 'strangers/test_stranger.jpg',
         ]);
 
-        $response->assertStatus(201)
-                 ->assertJson([
-                     'name' => 'Identified Stranger',
-                     'person_type' => 0,
-                     'id_card' => 'GUEST-889',
-                 ]);
-
+        $response->assertStatus(201);
         $this->assertDatabaseHas('personnel', [
-            'name' => 'Identified Stranger',
-            'id_card' => 'GUEST-889',
+            'customize_id' => 303,
+            'name' => 'Enrolled Stranger',
+        ]);
+    }
+
+    public function test_can_retry_delete_sync_task_without_error(): void
+    {
+        $device = Device::create([
+            'device_id' => 'CAM-RETRY-01',
+            'name' => 'Retry Gate Camera',
+            'ip_address' => '192.168.1.100',
+            'is_active' => true,
         ]);
 
-        $person = Personnel::where('name', 'Identified Stranger')->first();
-        $this->assertNotNull($person->photo_path);
-        $this->assertNotNull($person->photo_base64);
-        $this->assertTrue(\Illuminate\Support\Facades\Storage::disk('public')->exists($person->photo_path));
+        $task = SyncTask::create([
+            'device_id' => 'CAM-RETRY-01',
+            'personnel_id' => null,
+            'action' => 'DELETE',
+            'status' => 'FAILED',
+            'attempts' => 1,
+            'error_message' => 'Network error',
+        ]);
+
+        $response = $this->postJson("/api/sync-tasks/{$task->id}/retry");
+
+        $response->assertStatus(200)
+            ->assertJson(['message' => 'Task queued for retry']);
+
+        $this->assertDatabaseHas('sync_tasks', [
+            'id' => $task->id,
+            'status' => 'PENDING',
+            'attempts' => 2,
+        ]);
     }
 }

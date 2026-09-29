@@ -11,7 +11,7 @@
             </span>
           </h3>
           <p class="text-xs text-slate-500 mt-0.5">
-            Querying on-device face database and log records directly via HTTP API (<code class="font-mono text-indigo-600 font-semibold">/action/SearchPersonList</code> &amp; <code class="font-mono text-indigo-600 font-semibold">/action/ManualPushRecords</code>)
+            Querying on-device face database and telemetry records via MQTT Protocol (<code class="font-mono text-indigo-600 font-semibold">SearchPersonList</code> &amp; <code class="font-mono text-indigo-600 font-semibold">ManualPushRecords</code>)
           </p>
         </div>
         <button @click="$emit('close')" class="text-slate-400 hover:text-slate-700 text-xl font-bold cursor-pointer">&times;</button>
@@ -20,7 +20,7 @@
       <!-- Loading State -->
       <div v-if="loading" class="py-16 text-center text-slate-500 space-y-3">
         <div class="inline-block w-8 h-8 border-3 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
-        <p class="text-xs font-semibold text-slate-700">Auditing camera storage &amp; hardware via HTTP API...</p>
+        <p class="text-xs font-semibold text-slate-700">Auditing camera storage &amp; hardware via MQTT protocol...</p>
       </div>
 
       <!-- Audit Results View -->

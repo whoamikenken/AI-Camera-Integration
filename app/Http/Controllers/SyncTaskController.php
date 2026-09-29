@@ -37,7 +37,14 @@ class SyncTaskController extends Controller
             'error_message' => null,
         ]);
 
-        SyncPersonnelJob::dispatch($syncTask->personnel_id, $syncTask->action, $targetDeviceId);
+        $customizeId = $syncTask->personnel ? $syncTask->personnel->customize_id : null;
+
+        SyncPersonnelJob::dispatch(
+            $syncTask->personnel_id,
+            $syncTask->action,
+            $targetDeviceId,
+            $customizeId
+        );
 
         return response()->json(['message' => 'Task queued for retry']);
     }

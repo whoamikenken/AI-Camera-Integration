@@ -14,12 +14,6 @@
         >
           <span>📥</span> Historical Backfill
         </button>
-        <button 
-          @click="openCreateModal"
-          class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-lg shadow-sm transition-all flex items-center gap-2 cursor-pointer"
-        >
-          <span>➕ Add Camera Device</span>
-        </button>
       </div>
     </div>
 
@@ -119,32 +113,40 @@
         </button>
 
         <!-- Secondary Actions -->
-        <div class="grid grid-cols-4 gap-1.5 pt-2 border-t border-slate-100">
+        <div class="grid grid-cols-5 gap-1 pt-2 border-t border-slate-100">
           <button 
             @click="testConnection(device)" 
             :disabled="testingId === device.id"
-            class="py-1.5 px-1.5 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold rounded-lg border border-slate-200 transition-colors disabled:opacity-50 cursor-pointer text-center truncate shadow-xs"
-            title="Check camera status via HTTP API"
+            class="py-1.5 px-1 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold rounded-lg border border-slate-200 transition-colors disabled:opacity-50 cursor-pointer text-center truncate shadow-xs"
+            title="Check camera status via MQTT Protocol"
           >
-            {{ testingId === device.id ? 'Check...' : '🔍 Check' }}
+            {{ testingId === device.id ? '...' : '🔍 Check' }}
+          </button>
+          <button 
+            @click="importPersonnelFromCamera(device)"
+            :disabled="importingId === device.id"
+            class="py-1.5 px-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-semibold rounded-lg border border-emerald-200 transition-colors disabled:opacity-50 cursor-pointer text-center truncate shadow-xs"
+            title="Import Personnel & Face Library from Camera"
+          >
+            {{ importingId === device.id ? 'Importing...' : '📥 Import' }}
           </button>
           <button 
             @click="auditCameraFaces(device)"
-            class="py-1.5 px-1.5 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold rounded-lg border border-slate-200 transition-colors cursor-pointer text-center truncate shadow-xs"
+            class="py-1.5 px-1 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold rounded-lg border border-slate-200 transition-colors cursor-pointer text-center truncate shadow-xs"
             title="Audit Face Synchronization"
           >
             👥 Audit
           </button>
           <button 
             @click="openBackfillModal(device)"
-            class="py-1.5 px-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 text-xs font-semibold rounded-lg border border-amber-200 transition-colors cursor-pointer text-center truncate shadow-xs"
+            class="py-1.5 px-1 bg-amber-50 hover:bg-amber-100 text-amber-800 text-xs font-semibold rounded-lg border border-amber-200 transition-colors cursor-pointer text-center truncate shadow-xs"
             title="Backfill Historical Logs"
           >
             📥 Backfill
           </button>
           <button 
             @click="openEditModal(device)"
-            class="py-1.5 px-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-semibold rounded-lg border border-indigo-200 transition-colors cursor-pointer text-center truncate shadow-xs"
+            class="py-1.5 px-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-semibold rounded-lg border border-indigo-200 transition-colors cursor-pointer text-center truncate shadow-xs"
             title="Configure Device"
           >
             ⚙️ Config
@@ -157,8 +159,7 @@
     <div v-if="store.devices.length === 0" class="bg-white border border-dashed border-slate-300 rounded-2xl p-16 text-center text-slate-500 shadow-xs">
       <div class="text-4xl mb-3">📡</div>
       <div class="text-slate-900 font-semibold text-base">No Cameras Registered Yet</div>
-      <p class="text-xs text-slate-500 mt-1 max-w-sm mx-auto">Add your edge camera's LAN IP address and Device ID to begin bidirectional synchronization and telemetry streaming.</p>
-      <button @click="openCreateModal" class="mt-4 px-4 py-2 bg-indigo-600 text-white rounded-lg text-xs font-semibold cursor-pointer">Add Camera Now</button>
+      <p class="text-xs text-slate-500 mt-1 max-w-md mx-auto">Camera devices connecting over MQTT or HTTP are automatically registered when they transmit a heartbeat, online status, or vision telemetry packet.</p>
     </div>
 
     <!-- Comprehensive Camera Configuration & Edit Modal -->
@@ -628,6 +629,7 @@ import axios from 'axios';
 const store = useCameraStore();
 const testingId = ref(null);
 const deletingId = ref(null);
+const importingId = ref(null);
 const pushingMqtt = ref(false);
 const fetchingMqtt = ref(false);
 const syncingTime = ref(false);
@@ -1031,10 +1033,10 @@ async function queryLiveHardwareInfo() {
       hardwareInfo.value = info || {
         Name: deviceForm.value.name,
         DeviceID: deviceForm.value.device_id,
-        Version: 'v4.2.1 (HTTP V1.13)',
+        Version: 'v1.25 (MQTT Protocol)',
         DeviceType: deviceForm.value.device_type ?? 0,
       };
-      notify.toast('Hardware info retrieved from camera via HTTP API', 'success');
+      notify.toast('Hardware info retrieved via MQTT protocol', 'success');
     } else {
       notify.error('Query Failed', sysRes.data.error || 'Could not query camera system parameters.');
     }
@@ -1108,8 +1110,8 @@ async function testConnection(device) {
     if (res.data.success) {
       const activeHost = res.data.host || device.ip_address;
       const activePort = res.data.port || device.port;
-      const activeScheme = (res.data.scheme || device.scheme || 'http').toUpperCase();
-      notify.success('Camera API Active!', `Device responded via ${activeScheme} API (${activeHost}:${activePort}).`);
+      const topicName = device.mqtt_topic || `mqtt/face/${device.device_id}`;
+      notify.success('Camera MQTT Active!', `Device telemetry & control verified via MQTT (${topicName}).`);
     } else {
       notify.error('API Check Failed', res.data.error || 'Check camera IP, port, credentials, or network route');
     }
@@ -1146,6 +1148,24 @@ async function rebootDevice(device) {
 
 function auditCameraFaces(device) {
   auditModal.value = { show: true, device };
+}
+
+async function importPersonnelFromCamera(device) {
+  importingId.value = device.id;
+  try {
+    const res = await axios.post(`/api/devices/${device.id}/import-personnel`);
+    const data = res.data;
+    if (data.success) {
+      await store.fetchStats();
+      notify.toast(data.message || `Imported ${data.imported_count || 0} personnel from ${device.name}`, 'success');
+    } else {
+      notify.error('Import Failed', data.message || 'Unable to import personnel from camera');
+    }
+  } catch (err) {
+    notify.error('Import Error', err.response?.data?.message || err.message);
+  } finally {
+    importingId.value = null;
+  }
 }
 
 async function deleteDevice(device) {

@@ -78,6 +78,9 @@ class MqttListenCommand extends Command
                 $deviceId = $parts[2];
             }
         }
+        if ($deviceId) {
+            $deviceId = trim((string) $deviceId);
+        }
 
         $this->line("[<fg=green>" . date('H:i:s') . "</>] Operator: <fg=cyan>{$operator}</> Device: <fg=yellow>{$deviceId}</>");
 
@@ -221,11 +224,17 @@ class MqttListenCommand extends Command
             return;
         }
 
-        $device = Device::where('device_id', $deviceId)->first();
-        if ($device) {
-            $device->update(['last_heartbeat_at' => now()]);
-            broadcast(new DeviceStatusUpdated($device));
-        }
+        $device = Device::firstOrCreate(
+            ['device_id' => $deviceId],
+            [
+                'name' => $info['facesname'] ?? $info['Name'] ?? "Camera {$deviceId}",
+                'ip_address' => $info['ip'] ?? '192.168.1.100',
+                'is_active' => true,
+            ]
+        );
+
+        $device->update(['last_heartbeat_at' => now()]);
+        broadcast(new DeviceStatusUpdated($device));
     }
 
     protected function handleOnlineStatus(?string $deviceId, string $operator, array $info, MqttClient $mqtt): void

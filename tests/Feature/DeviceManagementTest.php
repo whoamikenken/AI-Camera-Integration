@@ -77,4 +77,59 @@ class DeviceManagementTest extends TestCase
                 'name' => 'Front Gate Camera',
             ]);
     }
+
+    public function test_device_counts_reflect_verifications_and_strangers(): void
+    {
+        $device = Device::create([
+            'device_id' => 'CAM-COUNTS-01',
+            'name' => 'Counts Gate Camera',
+            'ip_address' => '192.168.1.107',
+            'port' => 8080,
+            'is_active' => true,
+        ]);
+
+        AccessLog::create([
+            'device_id' => 'CAM-COUNTS-01',
+            'verify_status' => 1,
+            'captured_at' => now(),
+        ]);
+
+        \App\Models\StrangerSnap::create([
+            'device_id' => 'CAM-COUNTS-01',
+            'snap_pic_url' => '/storage/strangers/snap1.jpg',
+            'captured_at' => now(),
+        ]);
+
+        $response = $this->getJson("/api/devices/{$device->id}");
+
+        $response->assertStatus(200)
+            ->assertJson([
+                'device_id' => 'CAM-COUNTS-01',
+                'access_logs_count' => 1,
+                'stranger_snaps_count' => 1,
+            ]);
+
+        $listResponse = $this->getJson('/api/devices');
+        $listResponse->assertStatus(200)
+            ->assertJsonFragment([
+                'device_id' => 'CAM-COUNTS-01',
+                'access_logs_count' => 1,
+                'stranger_snaps_count' => 1,
+            ]);
+    }
+
+    public function test_heartbeat_auto_registers_device(): void
+    {
+        $response = $this->postJson('/api/Subscribe/heartbeat', [
+            'info' => [
+                'DeviceID' => 'CAM-AUTO-999',
+            ],
+        ]);
+
+        $response->assertStatus(200);
+
+        $this->assertDatabaseHas('devices', [
+            'device_id' => 'CAM-AUTO-999',
+        ]);
+    }
 }

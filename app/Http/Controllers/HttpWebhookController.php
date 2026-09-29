@@ -26,14 +26,19 @@ class HttpWebhookController extends Controller
     {
         $payload = $request->all();
         $info = $payload['info'] ?? [];
-        $deviceId = (string) ($info['DeviceID'] ?? $payload['DeviceID'] ?? '');
+        $deviceId = trim((string) ($info['DeviceID'] ?? $payload['DeviceID'] ?? ''));
 
         if ($deviceId) {
-            $device = Device::where('device_id', $deviceId)->first();
-            if ($device) {
-                $device->update(['last_heartbeat_at' => now()]);
-                event(new DeviceStatusUpdated($device));
-            }
+            $device = Device::firstOrCreate(
+                ['device_id' => $deviceId],
+                [
+                    'name' => $info['facesname'] ?? $info['Name'] ?? "Camera {$deviceId}",
+                    'ip_address' => $request->ip() ?: '192.168.1.100',
+                    'is_active' => true,
+                ]
+            );
+            $device->update(['last_heartbeat_at' => now()]);
+            event(new DeviceStatusUpdated($device));
         }
 
         return response()->json([
@@ -51,7 +56,7 @@ class HttpWebhookController extends Controller
         $payload = $request->all();
         $info = $payload['info'] ?? $payload;
 
-        $deviceId = (string) ($info['DeviceID'] ?? '');
+        $deviceId = trim((string) ($info['DeviceID'] ?? $payload['DeviceID'] ?? ''));
         $snapPicBase64 = $payload['SanpPic'] ?? $payload['SnapPic'] ?? $payload['Pic'] ?? $payload['pic'] ?? $payload['PlatePic'] ?? null;
         $scenePicBase64 = $payload['ScenePic'] ?? $payload['scene'] ?? $payload['TemPic'] ?? null;
 
@@ -100,7 +105,7 @@ class HttpWebhookController extends Controller
         $payload = $request->all();
         $info = $payload['info'] ?? $payload;
 
-        $deviceId = (string) ($info['DeviceID'] ?? '');
+        $deviceId = trim((string) ($info['DeviceID'] ?? $payload['DeviceID'] ?? ''));
         $snapPicBase64 = $payload['SanpPic'] ?? $payload['SnapPic'] ?? $payload['Pic'] ?? $payload['pic'] ?? $payload['PlatePic'] ?? null;
         $scenePicBase64 = $payload['ScenePic'] ?? $payload['scene'] ?? $payload['TemPic'] ?? null;
 

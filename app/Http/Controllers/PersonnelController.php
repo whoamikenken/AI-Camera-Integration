@@ -45,6 +45,7 @@ class PersonnelController extends Controller
     public function store(Request $request): JsonResponse
     {
         $validated = $request->validate([
+            'customize_id' => 'nullable|integer|unique:personnel,customize_id',
             'name' => 'required|string|max:64',
             'person_type' => 'required|integer|in:0,1',
             'gender' => 'nullable|integer|in:0,1',

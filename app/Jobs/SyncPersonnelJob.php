@@ -5,6 +5,8 @@ namespace App\Jobs;
 use App\Models\Device;
 use App\Models\Personnel;
 use App\Models\SyncTask;
+use App\Services\CameraMqttService;
+use App\Services\CameraService;
 use App\Services\CameraHttpService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -21,7 +23,7 @@ class SyncPersonnelJob implements ShouldQueue
     public int $backoff = 5;
 
     public function __construct(
-        public int $personnelId,
+        public ?int $personnelId = null,
         public string $action = 'ADD', // 'ADD', 'EDIT', 'DELETE'
         public ?int $targetDeviceId = null,
         public ?int $customizeIdToDelete = null
@@ -29,7 +31,7 @@ class SyncPersonnelJob implements ShouldQueue
         $this->onQueue('camera-sync');
     }
 
-    public function handle(CameraHttpService $cameraService): void
+    public function handle(CameraMqttService $cameraService): void
     {
         $person = Personnel::find($this->personnelId);
         $devices = $this->targetDeviceId
@@ -56,19 +58,17 @@ class SyncPersonnelJob implements ShouldQueue
             try {
                 if ($this->action === 'DELETE') {
                     $payload = [
-                        'operator' => 'DeletePerson',
+                        'operator' => 'DelPerson',
                         'info' => [
-                            'DeviceID' => $device->device_id,
-                            'TotalNum' => 1,
-                            'IdType' => 0,
+                            'facesluiceId' => $device->device_id,
+                            'customId' => (string) $cId,
                             'CustomizeID' => [$cId],
                         ],
                     ];
 
-                    Log::info("SyncPersonnelJob [SyncTask #{$task->id}]: Dispatching {$this->action} payload to device {$device->device_id} ({$device->ip_address}:{$device->port})", [
+                    Log::info("SyncPersonnelJob [SyncTask #{$task->id}]: Dispatching MQTT {$this->action} payload to device {$device->device_id}", [
                         'sync_task_id' => $task->id,
                         'device_id' => $device->device_id,
-                        'device_ip' => $device->ip_address,
                         'personnel_id' => $this->personnelId,
                         'customize_id' => $cId,
                         'action' => $this->action,
@@ -88,27 +88,20 @@ class SyncPersonnelJob implements ShouldQueue
 
                     $info = $cameraService->buildPersonnelInfo($person);
                     $payload = [
-                        'operator' => 'EditPersonNew',
+                        'operator' => 'EditPerson',
                         'info' => array_merge([
-                            'DeviceID' => $device->device_id,
+                            'facesluiceId' => $device->device_id,
                         ], $info),
                     ];
 
-                    if (!empty($person->photo_base64)) {
-                        $payload['picinfo'] = $person->photo_base64;
-                    } elseif (!empty($person->photo_path)) {
-                        $payload['picURI'] = asset('storage/' . $person->photo_path);
-                    }
-
                     $loggablePayload = $payload;
-                    if (!empty($loggablePayload['picinfo'])) {
-                        $loggablePayload['picinfo'] = '[Base64 Image: ' . strlen($loggablePayload['picinfo']) . ' chars]';
+                    if (!empty($loggablePayload['info']['pic'])) {
+                        $loggablePayload['info']['pic'] = '[Base64 Image: ' . strlen($loggablePayload['info']['pic']) . ' chars]';
                     }
 
-                    Log::info("SyncPersonnelJob [SyncTask #{$task->id}]: Dispatching {$this->action} payload to device {$device->device_id} ({$device->ip_address}:{$device->port})", [
+                    Log::info("SyncPersonnelJob [SyncTask #{$task->id}]: Dispatching MQTT {$this->action} payload to device {$device->device_id}", [
                         'sync_task_id' => $task->id,
                         'device_id' => $device->device_id,
-                        'device_ip' => $device->ip_address,
                         'personnel_id' => $this->personnelId,
                         'personnel_name' => $person->name,
                         'customize_id' => $person->customize_id,
@@ -124,23 +117,22 @@ class SyncPersonnelJob implements ShouldQueue
                         'status' => 'COMPLETED',
                         'error_message' => null,
                     ]);
-                    Log::info("SyncPersonnelJob [SyncTask #{$task->id}]: Sync successful for person {$this->personnelId} ({$person?->name}) on device {$device->device_id}", [
+                    Log::info("SyncPersonnelJob [SyncTask #{$task->id}]: MQTT sync successful for person {$this->personnelId} ({$person?->name}) on device {$device->device_id}", [
                         'sync_task_id' => $task->id,
                         'device_id' => $device->device_id,
                         'response_code' => $res['code'] ?? 200,
-                        'response_data' => $res['data'] ?? null,
+                        'message_id' => $res['message_id'] ?? null,
                     ]);
                 } else {
                     $task->update([
                         'status' => 'FAILED',
                         'error_message' => $res['error'] ?? "Error code {$res['code']}",
                     ]);
-                    Log::warning("SyncPersonnelJob [SyncTask #{$task->id}]: Sync failed for person {$this->personnelId} on device {$device->device_id}: " . ($res['error'] ?? 'Unknown'), [
+                    Log::warning("SyncPersonnelJob [SyncTask #{$task->id}]: MQTT sync failed for person {$this->personnelId} on device {$device->device_id}: " . ($res['error'] ?? 'Unknown'), [
                         'sync_task_id' => $task->id,
                         'device_id' => $device->device_id,
                         'error' => $res['error'] ?? null,
                         'response_code' => $res['code'] ?? null,
-                        'response_data' => $res['data'] ?? null,
                     ]);
                 }
             } catch (\Throwable $e) {

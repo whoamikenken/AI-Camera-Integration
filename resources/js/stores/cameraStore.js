@@ -99,6 +99,13 @@ export const useCameraStore = defineStore('camera', {
                 }
             }
 
+            if (log.device_id) {
+                const dev = this.devices.find(d => String(d.device_id) === String(log.device_id));
+                if (dev) {
+                    dev.access_logs_count = (dev.access_logs_count || 0) + 1;
+                }
+            }
+
             if (this.stats.telemetry) {
                 this.stats.telemetry.total_scans_today++;
                 if (Number(log.verify_status) === 1) {
@@ -128,6 +135,13 @@ export const useCameraStore = defineStore('camera', {
                 }
             }
 
+            if (snap.device_id) {
+                const dev = this.devices.find(d => String(d.device_id) === String(snap.device_id));
+                if (dev) {
+                    dev.stranger_snaps_count = (dev.stranger_snaps_count || 0) + 1;
+                }
+            }
+
             if (this.stats.telemetry) {
                 this.stats.telemetry.strangers_today++;
             }
@@ -139,7 +153,17 @@ export const useCameraStore = defineStore('camera', {
 
             const index = this.devices.findIndex(d => String(d.device_id) === String(deviceData.device_id));
             if (index !== -1) {
-                this.devices[index] = { ...this.devices[index], ...deviceData };
+                const existing = this.devices[index];
+                this.devices[index] = {
+                    ...existing,
+                    ...deviceData,
+                    access_logs_count: deviceData.access_logs_count !== undefined && deviceData.access_logs_count !== null 
+                        ? deviceData.access_logs_count 
+                        : (existing.access_logs_count || 0),
+                    stranger_snaps_count: deviceData.stranger_snaps_count !== undefined && deviceData.stranger_snaps_count !== null 
+                        ? deviceData.stranger_snaps_count 
+                        : (existing.stranger_snaps_count || 0),
+                };
             } else {
                 this.devices.unshift(deviceData);
             }

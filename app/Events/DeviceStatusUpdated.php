@@ -37,9 +37,13 @@ class DeviceStatusUpdated implements ShouldBroadcastNow
             'name' => $this->device->name,
             'ip_address' => $this->device->ip_address,
             'port' => $this->device->port,
+            'scheme' => $this->device->scheme ?: 'http',
+            'endpoint_url' => $this->device->endpoint_url,
             'is_active' => $this->device->is_active,
             'is_online' => $this->device->is_online,
             'last_heartbeat_at' => $this->device->last_heartbeat_at ? $this->device->last_heartbeat_at->toISOString() : null,
+            'access_logs_count' => $this->device->access_logs_count ?? $this->device->accessLogs()->count(),
+            'stranger_snaps_count' => $this->device->stranger_snaps_count ?? $this->device->strangerSnaps()->count(),
         ];
     }
 }
