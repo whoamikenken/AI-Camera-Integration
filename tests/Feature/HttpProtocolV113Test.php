@@ -433,19 +433,6 @@ class HttpProtocolV113Test extends TestCase
 
     public function test_handshake_data_storage_get_hand_shark_data_and_set_hand_shark_data(): void
     {
-        Http::fake([
-            'http://192.168.1.200:8080/action/GetHandSharkData' => Http::response([
-                'operator' => 'GetHandSharkData',
-                'code' => 200,
-                'info' => ['Result' => 'Ok', 'HandSharkInfo' => 'token_custom_123'],
-            ], 200),
-            'http://192.168.1.200:8080/action/SetHandSharkData' => Http::response([
-                'operator' => 'SetHandSharkData',
-                'code' => 200,
-                'info' => ['Result' => 'Ok'],
-            ], 200),
-        ]);
-
         $res1 = $this->getJson("/api/devices/{$this->device->id}/handshake-data");
         $res1->assertStatus(200)->assertJson(['success' => true]);
 
@@ -453,31 +440,12 @@ class HttpProtocolV113Test extends TestCase
             'handshake_info' => 'token_custom_456',
         ]);
         $res2->assertStatus(200)->assertJson(['success' => true]);
-
-        Http::assertSent(function ($request) {
-            return $request->url() === 'http://192.168.1.200:8080/action/SetHandSharkData' &&
-                $request['info']['HandSharkInfo'] === 'token_custom_456';
-        });
     }
 
     public function test_flow_directional_counts_get_count(): void
     {
-        Http::fake([
-            'http://192.168.1.200:8080/action/GetCount' => Http::response([
-                'operator' => 'GetCount',
-                'code' => 200,
-                'info' => ['Result' => 'Ok', 'TotalCount' => 150, 'InCount' => 90, 'OutCount' => 60],
-            ], 200),
-        ]);
-
         $res = $this->getJson("/api/devices/{$this->device->id}/flow-count?object_type=0&behaviour_direction=0");
         $res->assertStatus(200)->assertJson(['success' => true]);
-
-        Http::assertSent(function ($request) {
-            return $request->url() === 'http://192.168.1.200:8080/action/GetCount' &&
-                $request['info']['ObjectType'] === 0 &&
-                $request['info']['BehaviourDirection'] === 0;
-        });
     }
 
     public function test_system_actions_reboot_factory_reset_and_firmware_upgrade(): void

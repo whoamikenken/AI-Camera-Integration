@@ -173,7 +173,7 @@
 import { ref, computed, watch } from 'vue';
 import { useCameraStore } from '../stores/cameraStore';
 import notify from '../utils/notify';
-import axios from 'axios';
+import apiClient from '../api/client';
 
 const props = defineProps({
   isOpen: {
@@ -309,7 +309,7 @@ async function submitBackfill() {
     if (form.value.logType === 'both' || form.value.logType === 'records') {
       totalCalls++;
       try {
-        const res = await axios.post(`/api/devices/${dev.id}/manual-push-records`, {
+        const res = await apiClient.post(`/api/devices/${dev.id}/manual-push-records`, {
           time_s: timeSFormatted,
           time_e: timeEFormatted,
           subscribe_addr: form.value.subscribeAddr
@@ -328,7 +328,7 @@ async function submitBackfill() {
     if (form.value.logType === 'both' || form.value.logType === 'snaps') {
       totalCalls++;
       try {
-        const res = await axios.post(`/api/devices/${dev.id}/manual-push-snaps`, {
+        const res = await apiClient.post(`/api/devices/${dev.id}/manual-push-snaps`, {
           time_s: timeSFormatted,
           time_e: timeEFormatted,
           subscribe_addr: form.value.subscribeAddr

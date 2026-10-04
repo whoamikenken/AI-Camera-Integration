@@ -151,7 +151,7 @@ import { ref, onMounted } from 'vue';
 import { useCameraStore } from '../stores/cameraStore';
 import { formatDateTime } from '../utils/date';
 import HistoricalBackfillModal from '../components/HistoricalBackfillModal.vue';
-import axios from 'axios';
+import apiClient from '../api/client';
 
 const store = useCameraStore();
 const logs = ref([]);
@@ -186,7 +186,7 @@ async function fetchLogs(page = 1) {
       device_id: filters.value.deviceId,
       min_similarity: filters.value.minSimilarity,
     };
-    const res = await axios.get('/api/access-logs', { params });
+    const res = await apiClient.get('/api/access-logs', { params });
     logs.value = res.data.data;
     pagination.value = {
       current_page: res.data.current_page,

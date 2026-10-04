@@ -9,12 +9,12 @@
         </div>
         <div>
           <h2 class="text-lg font-bold text-slate-900 flex items-center gap-2">
-            Stranger &amp; AI Detection Alerts
+            Unregistered Face Captures (Strangers)
             <span class="text-xs px-2.5 py-0.5 rounded-full font-mono font-medium" :class="store.wsConnected ? 'bg-amber-50 text-amber-700 border border-amber-200' : 'bg-rose-50 text-rose-700 border border-rose-200'">
               {{ store.wsConnected ? 'Real-Time Monitoring' : 'Reconnecting...' }}
             </span>
           </h2>
-          <p class="text-xs text-slate-500">Live edge stranger snapshot captures, unidentified face detections, and alarm triggers</p>
+          <p class="text-xs text-slate-500">Live edge stranger snapshot captures, unidentified face detections, and 1-click biometric personnel enrollment</p>
         </div>
       </div>
 
@@ -571,12 +571,12 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, watch, onMounted } from 'vue';
 import { useCameraStore } from '../stores/cameraStore';
 import { formatTime, formatDateTime } from '../utils/date';
 import HistoricalBackfillModal from '../components/HistoricalBackfillModal.vue';
 import notify from '../utils/notify';
-import axios from 'axios';
+import apiClient from '../api/client';
 
 const store = useCameraStore();
 const viewMode = ref('grid');
@@ -644,7 +644,7 @@ async function fetchSnaps(page = 1) {
     if (filters.value.from) params.from = filters.value.from;
     if (filters.value.to) params.to = filters.value.to;
 
-    const res = await axios.get('/api/stranger-snaps', { params });
+    const res = await apiClient.get('/api/stranger-snaps', { params });
     snaps.value = res.data.data || [];
     pagination.value = {
       current_page: res.data.current_page || 1,
@@ -753,7 +753,7 @@ async function saveStrangerAsPersonnel() {
       }
     }
 
-    const res = await axios.post('/api/personnel', data, {
+    const res = await apiClient.post('/api/personnel', data, {
       headers: { 'Content-Type': 'multipart/form-data' }
     });
 
@@ -767,6 +767,35 @@ async function saveStrangerAsPersonnel() {
     enrollSaving.value = false;
   }
 }
+
+watch(
+  () => store.strangerSnaps,
+  (newSnaps) => {
+    if (!newSnaps || newSnaps.length === 0) return;
+    if (pagination.value.current_page !== 1) return;
+
+    const latest = newSnaps[0];
+    if (!latest) return;
+
+    if (filters.value.deviceId && String(latest.device_id) !== String(filters.value.deviceId)) return;
+
+    const index = snaps.value.findIndex(
+      s => (s.id && String(s.id) === String(latest.id)) ||
+           (s.captured_at && latest.captured_at && new Date(s.captured_at).getTime() === new Date(latest.captured_at).getTime() && String(s.device_id) === String(latest.device_id))
+    );
+
+    if (index !== -1) {
+      snaps.value[index] = { ...snaps.value[index], ...latest };
+    } else {
+      snaps.value.unshift(latest);
+      pagination.value.total = (pagination.value.total || 0) + 1;
+      if (snaps.value.length > pagination.value.per_page) {
+        snaps.value.pop();
+      }
+    }
+  },
+  { deep: true, immediate: true }
+);
 
 onMounted(() => {
   fetchSnaps(1);

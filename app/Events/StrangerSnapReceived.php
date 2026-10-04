@@ -3,8 +3,8 @@
 namespace App\Events;
 
 use App\Models\StrangerSnap;
-use Illuminate\Broadcasting\Channel;
 use Illuminate\Broadcasting\InteractsWithSockets;
+use Illuminate\Broadcasting\PrivateChannel;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
@@ -20,7 +20,7 @@ class StrangerSnapReceived implements ShouldBroadcastNow
     public function broadcastOn(): array
     {
         return [
-            new Channel('stranger-snaps'),
+            new PrivateChannel('stranger-snaps'),
         ];
     }
 

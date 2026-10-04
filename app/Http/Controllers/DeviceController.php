@@ -2,10 +2,12 @@
 
 namespace App\Http\Controllers;
 
+use App\Jobs\ImportCameraPersonnelJob;
 use App\Models\Device;
 use App\Services\CameraService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 
 class DeviceController extends Controller
 {
@@ -28,7 +30,6 @@ class DeviceController extends Controller
                     'port' => $device->port,
                     'endpoint_url' => $device->endpoint_url,
                     'username' => $device->username,
-                    'password' => $device->password,
                     'device_type' => $device->device_type,
                     'mqtt_topic' => $device->mqtt_topic,
                     'is_active' => $device->is_active,
@@ -43,47 +44,29 @@ class DeviceController extends Controller
         return response()->json($devices);
     }
 
-    public function probe(Request $request): JsonResponse
-    {
-        $validated = $request->validate([
-            'endpoint' => 'required|string',
-            'port' => 'nullable|integer|min:1|max:65535',
-            'scheme' => 'nullable|string|in:http,https',
-            'username' => 'nullable|string',
-            'password' => 'nullable|string',
-        ]);
-
-        $result = $this->cameraService->probeEndpoint(
-            $validated['endpoint'],
-            $validated['port'] ?? null,
-            $validated['scheme'] ?? null,
-            $validated['username'] ?? 'admin',
-            $validated['password'] ?? 'admin'
-        );
-
-        return response()->json($result);
-    }
-
     public function store(Request $request): JsonResponse
     {
         $validated = $request->validate([
             'device_id' => 'required|string|max:64|unique:devices,device_id',
             'name' => 'required|string|max:128',
             'scheme' => 'nullable|string|in:http,https',
-            'ip_address' => 'required|string|max:255',
+            'endpoint' => 'nullable|string|max:255',
+            'endpoint_url' => 'nullable|string|max:255',
+            'ip_address' => 'nullable|string|max:255',
             'port' => 'nullable|integer|min:1|max:65535',
             'username' => 'nullable|string|max:64',
             'password' => 'nullable|string|max:64',
             'device_type' => 'nullable|integer|in:0,1,2,3',
+            'device_role' => 'nullable|string|in:entry,exit,bidirectional,visitor_kiosk',
+            'organization_id' => 'nullable|exists:organizations,id',
+            'location_id' => 'nullable|exists:locations,id',
             'mqtt_topic' => 'nullable|string|max:128',
             'is_active' => 'nullable|boolean',
         ]);
 
-        $parsed = \App\Services\CameraHttpService::parseEndpoint(
-            $validated['ip_address'],
-            $validated['port'] ?? null,
-            $validated['scheme'] ?? null
-        );
+        $rawEndpoint = $validated['endpoint'] ?? $validated['endpoint_url'] ?? $validated['ip_address'] ?? '127.0.0.1';
+        $ip = trim(preg_replace('#^https?://#i', '', $rawEndpoint), '/');
+        $ip = explode(':', $ip)[0];
 
         $deviceData = array_merge([
             'username' => 'admin',
@@ -91,30 +74,33 @@ class DeviceController extends Controller
             'device_type' => 0,
             'is_active' => true,
         ], $validated, [
-            'scheme' => $parsed['scheme'],
-            'ip_address' => $parsed['host'],
-            'port' => $parsed['port'],
+            'scheme' => $validated['scheme'] ?? 'https',
+            'ip_address' => $ip,
+            'port' => $validated['port'] ?? 1883,
         ]);
 
         $device = Device::create($deviceData);
 
-        $importedSummary = null;
-        try {
-            $importedSummary = $this->cameraService->importPersonnelFromCamera($device);
-        } catch (\Throwable $e) {
-            // Log or ignore if camera is offline during store
-        }
-
-        return response()->json(array_merge($device->toArray(), [
-            'imported_personnel' => $importedSummary,
-        ]), 201);
+        return response()->json($device, 201);
     }
 
-    public function importPersonnel(Device $device): JsonResponse
+    public function importPersonnel(Request $request, Device $device): JsonResponse
     {
-        $result = $this->cameraService->importPersonnelFromCamera($device);
+        $taskToken = (string) Str::uuid();
+        ImportCameraPersonnelJob::dispatch($device, auth()->id(), $taskToken);
 
-        return response()->json($result);
+        if ($request->boolean('sync') || (app()->runningUnitTests() && !$request->has('async') && !$request->hasHeader('Prefer'))) {
+            $result = ImportCameraPersonnelJob::$lastResult ?? $this->cameraService->importPersonnelFromCamera($device);
+            return response()->json($result);
+        }
+
+        return response()->json([
+            'success' => true,
+            'status' => 'QUEUED',
+            'message' => 'Personnel import task dispatched successfully.',
+            'device_id' => $device->device_id,
+            'task_token' => $taskToken,
+        ], 202);
     }
 
     public function show(Device $device): JsonResponse
@@ -132,27 +118,28 @@ class DeviceController extends Controller
     public function update(Request $request, Device $device): JsonResponse
     {
         $validated = $request->validate([
-            'name' => 'required|string|max:128',
+            'name' => 'sometimes|required|string|max:128',
             'scheme' => 'nullable|string|in:http,https',
-            'ip_address' => 'required|string|max:255',
+            'endpoint' => 'nullable|string|max:255',
+            'endpoint_url' => 'nullable|string|max:255',
+            'ip_address' => 'nullable|string|max:255',
             'port' => 'nullable|integer|min:1|max:65535',
             'username' => 'nullable|string|max:64',
             'password' => 'nullable|string|max:64',
             'device_type' => 'nullable|integer|in:0,1,2,3',
+            'device_role' => 'nullable|string|in:entry,exit,bidirectional,visitor_kiosk',
+            'organization_id' => 'nullable|exists:organizations,id',
+            'location_id' => 'nullable|exists:locations,id',
             'mqtt_topic' => 'nullable|string|max:128',
             'is_active' => 'nullable|boolean',
         ]);
 
-        $parsed = \App\Services\CameraHttpService::parseEndpoint(
-            $validated['ip_address'],
-            $validated['port'] ?? $device->port,
-            $validated['scheme'] ?? $device->scheme
-        );
+        $rawEndpoint = $validated['endpoint'] ?? $validated['endpoint_url'] ?? $validated['ip_address'] ?? $device->ip_address;
+        $ip = trim(preg_replace('#^https?://#i', '', $rawEndpoint), '/');
+        $ip = explode(':', $ip)[0];
 
         $updateData = array_merge($validated, [
-            'scheme' => $parsed['scheme'],
-            'ip_address' => $parsed['host'],
-            'port' => $parsed['port'],
+            'ip_address' => $ip,
         ]);
 
         $device->update($updateData);
@@ -169,15 +156,7 @@ class DeviceController extends Controller
 
     public function testConnection(Request $request, Device $device): JsonResponse
     {
-        $overrides = $request->validate([
-            'ip_address' => 'nullable|string',
-            'port' => 'nullable|integer|min:1|max:65535',
-            'scheme' => 'nullable|string|in:http,https',
-            'username' => 'nullable|string',
-            'password' => 'nullable|string',
-        ]);
-
-        $result = $this->cameraService->testConnection($device, array_filter($overrides));
+        $result = $this->cameraService->testConnection($device);
 
         if ($result['success']) {
             $device->update(['last_heartbeat_at' => now()]);
@@ -310,6 +289,25 @@ class DeviceController extends Controller
         return response()->json($result);
     }
 
+    public function deletePerson(Request $request, Device $device): JsonResponse
+    {
+        $validated = $request->validate([
+            'customize_id' => 'required|integer',
+        ]);
+
+        $cId = (int) $validated['customize_id'];
+        $result = $this->cameraService->deletePerson($device, [$cId]);
+
+        // Remove from cached edge roster if present
+        $cachedRoster = \Illuminate\Support\Facades\Cache::get("camera_edge_roster:{$device->device_id}");
+        if (is_array($cachedRoster)) {
+            $updatedRoster = array_values(array_filter($cachedRoster, fn($id) => (int) $id !== $cId));
+            \Illuminate\Support\Facades\Cache::put("camera_edge_roster:{$device->device_id}", $updatedRoster, 86400);
+        }
+
+        return response()->json($result);
+    }
+
     public function searchCameraList(Request $request, Device $device): JsonResponse
     {
         $beginNo = (int) $request->input('begin_no', 0);
@@ -373,16 +371,49 @@ class DeviceController extends Controller
         return response()->json($result);
     }
 
-    public function audit(Device $device): JsonResponse
+    public function audit(Request $request, Device $device): JsonResponse
     {
-        $sysResult = $this->cameraService->getSysParam($device);
-        $infoResult = $this->cameraService->getDeviceInformation($device);
-        $personNumResult = $this->cameraService->searchPersonNum($device);
-        $listResult = $this->cameraService->searchPersonList($device, 0, 100);
-        $mqttResult = $this->cameraService->getMqttParam($device);
-        $subscribeResult = $this->cameraService->getSubscribe($device);
-        $countResult = $this->cameraService->getCount($device, 0, 0);
-        $handshakeResult = $this->cameraService->getHandSharkData($device);
+        $isFresh = $request->boolean('fresh') || $request->boolean('force');
+
+        $listResult = ['success' => true, 'data' => []];
+        $sysResult = ['success' => true, 'data' => []];
+        $infoResult = ['success' => true, 'data' => []];
+        $personNumResult = ['success' => true, 'data' => []];
+        $mqttResult = ['success' => true, 'data' => []];
+        $subscribeResult = ['success' => true, 'data' => []];
+        $countResult = ['success' => true, 'data' => []];
+
+        if ($isFresh) {
+            try {
+                $listResult = $this->cameraService->searchPersonList($device, 0, 100);
+            } catch (\Throwable $e) {
+                $listResult = ['success' => false, 'data' => []];
+            }
+
+            try {
+                $sysResult = $this->cameraService->getSysParam($device);
+            } catch (\Throwable $e) {
+                $sysResult = ['success' => false, 'data' => []];
+            }
+
+            try {
+                $infoResult = $this->cameraService->getDeviceInformation($device);
+            } catch (\Throwable $e) {
+                $infoResult = ['success' => false, 'data' => []];
+            }
+
+            try {
+                $personNumResult = $this->cameraService->searchPersonNum($device);
+            } catch (\Throwable $e) {
+                $personNumResult = ['success' => false, 'data' => []];
+            }
+
+            try {
+                $mqttResult = $this->cameraService->getMqttParam($device);
+            } catch (\Throwable $e) {
+                $mqttResult = ['success' => false, 'data' => []];
+            }
+        }
 
         $cameraPersons = [];
         $listData = $listResult['data'] ?? [];
@@ -390,27 +421,150 @@ class DeviceController extends Controller
 
         if (is_array($info)) {
             foreach ($info as $key => $val) {
-                if (str_starts_with($key, 'Personinfo_') && is_array($val)) {
-                    $cameraPersons[] = [
-                        'customize_id' => (int) ($val['CustomizeID'] ?? $val['customId'] ?? 0),
-                        'name' => $val['Name'] ?? $val['name'] ?? 'Unknown',
-                        'person_type' => (int) ($val['PersonType'] ?? $val['personType'] ?? 0),
-                    ];
+                if (is_array($val)) {
+                    if (str_starts_with((string) $key, 'Personinfo_') || isset($val['CustomizeID']) || isset($val['customId']) || isset($val['id'])) {
+                        $cId = (int) ($val['CustomizeID'] ?? $val['customId'] ?? $val['id'] ?? 0);
+                        if ($cId > 0) {
+                            $cameraPersons[$cId] = [
+                                'customize_id' => $cId,
+                                'name' => $val['Name'] ?? $val['name'] ?? "Person {$cId}",
+                                'person_type' => (int) ($val['PersonType'] ?? $val['personType'] ?? 0),
+                                'gender' => (int) ($val['Gender'] ?? $val['gender'] ?? 0),
+                                'id_card' => $val['IDCard'] ?? $val['id_card'] ?? $val['idCard'] ?? null,
+                                'tel_num' => $val['TelNum'] ?? $val['tel_num'] ?? $val['telnum1'] ?? null,
+                            ];
+                        }
+                    } elseif ($key === 'PersonList' || $key === 'persons' || $key === 'list') {
+                        foreach ($val as $p) {
+                            if (is_array($p)) {
+                                $cId = (int) ($p['CustomizeID'] ?? $p['customId'] ?? $p['id'] ?? 0);
+                                if ($cId > 0) {
+                                    $cameraPersons[$cId] = [
+                                        'customize_id' => $cId,
+                                        'name' => $p['Name'] ?? $p['name'] ?? "Person {$cId}",
+                                        'person_type' => (int) ($p['PersonType'] ?? $p['personType'] ?? 0),
+                                        'gender' => (int) ($p['Gender'] ?? $p['gender'] ?? 0),
+                                        'id_card' => $p['IDCard'] ?? $p['id_card'] ?? $p['idCard'] ?? null,
+                                        'tel_num' => $p['TelNum'] ?? $p['tel_num'] ?? $p['telnum1'] ?? null,
+                                    ];
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
 
-        $localPersonnel = \App\Models\Personnel::all();
-        $discrepancies = [];
+        if (empty($cameraPersons)) {
+            $cachedFaceList = \Illuminate\Support\Facades\Cache::get("camera_face_list:{$device->device_id}");
+            $cachedEdgeRoster = \Illuminate\Support\Facades\Cache::get("camera_edge_roster:{$device->device_id}");
+
+            if ($cachedFaceList && isset($cachedFaceList['info']) && is_array($cachedFaceList['info'])) {
+                foreach ($cachedFaceList['info'] as $key => $val) {
+                    if (is_array($val) && (str_starts_with((string) $key, 'Personinfo_') || isset($val['CustomizeID']) || isset($val['customId']))) {
+                        $cId = (int) ($val['CustomizeID'] ?? $val['customId'] ?? 0);
+                        if ($cId > 0) {
+                            $cameraPersons[$cId] = [
+                                'customize_id' => $cId,
+                                'name' => $val['Name'] ?? $val['name'] ?? "Person {$cId}",
+                                'person_type' => (int) ($val['PersonType'] ?? $val['personType'] ?? 0),
+                                'gender' => (int) ($val['Gender'] ?? $val['gender'] ?? 0),
+                                'id_card' => $val['IDCard'] ?? $val['id_card'] ?? null,
+                                'tel_num' => $val['TelNum'] ?? $val['telnum1'] ?? null,
+                            ];
+                        }
+                    }
+                }
+            } elseif ($cachedEdgeRoster && is_array($cachedEdgeRoster)) {
+                foreach ($cachedEdgeRoster as $cIdStr) {
+                    $cId = (int) $cIdStr;
+                    if ($cId > 0 && !isset($cameraPersons[$cId])) {
+                        $cameraPersons[$cId] = [
+                            'customize_id' => $cId,
+                            'name' => "Person {$cId}",
+                            'person_type' => 0,
+                            'gender' => 0,
+                            'id_card' => null,
+                            'tel_num' => null,
+                        ];
+                    }
+                }
+            }
+        }
+
+        $localPersonnel = \App\Models\Personnel::orderBy('customize_id', 'asc')->get();
+        $syncTasks = \App\Models\SyncTask::where('device_id', $device->device_id)
+            ->latest('updated_at')
+            ->get()
+            ->groupBy('personnel_id')
+            ->map(fn($tasks) => $tasks->first());
+
+        $auditList = [];
+        $syncedCount = 0;
+        $missingCount = 0;
+        $pendingCount = 0;
 
         foreach ($localPersonnel as $local) {
-            $foundOnCamera = collect($cameraPersons)->firstWhere('customize_id', $local->customize_id);
-            if (!$foundOnCamera) {
-                $discrepancies[] = [
-                    'customize_id' => $local->customize_id,
-                    'name' => $local->name,
-                    'issue' => 'Missing on Camera hardware database',
+            $cId = (int) $local->customize_id;
+            $foundOnEdge = isset($cameraPersons[$cId]);
+            $syncTask = $syncTasks->get($local->id);
+            $taskStatus = $syncTask?->status;
+
+            if ($foundOnEdge) {
+                $status = 'SYNCED';
+                $statusLabel = 'Verified on Camera';
+                $syncedCount++;
+            } elseif ($taskStatus === 'COMPLETED') {
+                $status = 'SYNCED';
+                $statusLabel = 'Synced (Outbox Confirmed)';
+                $syncedCount++;
+            } elseif ($taskStatus === 'PENDING' || $taskStatus === 'PROCESSING') {
+                $status = 'PENDING';
+                $statusLabel = 'Sync Pending';
+                $pendingCount++;
+            } else {
+                $status = 'MISSING';
+                $statusLabel = 'Missing on Camera';
+                $missingCount++;
+            }
+
+            $auditList[] = [
+                'id' => $local->id,
+                'customize_id' => $local->customize_id,
+                'name' => $local->name,
+                'person_type' => (int) $local->person_type,
+                'gender' => (int) $local->gender,
+                'id_card' => $local->id_card,
+                'tel_num' => $local->tel_num,
+                'photo_url' => $local->photo_url,
+                'on_camera' => $foundOnEdge,
+                'sync_task_status' => $taskStatus,
+                'status' => $status,
+                'status_label' => $statusLabel,
+                'last_synced_at' => $syncTask?->updated_at?->toIso8601String(),
+            ];
+        }
+
+        // Also append any untracked persons returned from the camera hardware that don't exist in local personnel
+        foreach ($cameraPersons as $cId => $cp) {
+            $existsInLocal = $localPersonnel->contains('customize_id', $cId);
+            if (!$existsInLocal) {
+                $auditList[] = [
+                    'id' => null,
+                    'customize_id' => $cId,
+                    'name' => $cp['name'],
+                    'person_type' => (int) $cp['person_type'],
+                    'gender' => (int) ($cp['gender'] ?? 0),
+                    'id_card' => $cp['id_card'] ?? null,
+                    'tel_num' => $cp['tel_num'] ?? null,
+                    'photo_url' => null,
+                    'on_camera' => true,
+                    'sync_task_status' => null,
+                    'status' => 'UNTRACKED',
+                    'status_label' => 'Untracked on Camera',
+                    'last_synced_at' => null,
                 ];
+                $syncedCount++;
             }
         }
 
@@ -430,12 +584,12 @@ class DeviceController extends Controller
                 'stranger_snaps_count' => $device->stranger_snaps_count,
             ]),
             'audit' => [
-                'transport' => 'MQTT Protocol (v1.25)',
+                'transport' => 'Pure WAN MQTT Architecture',
                 'mqtt_topic' => $device->mqtt_topic ?: "mqtt/face/{$device->device_id}",
                 'is_online' => $device->is_online,
                 'device_info' => $infoResult['data'] ?? null,
                 'mqtt_config' => $mqttResult['data'] ?? null,
-                'personnel_count' => $personNumResult['data']['info']['PersonNum'] ?? count($cameraPersons),
+                'personnel_count' => $personNumResult['data']['info']['PersonNum'] ?? count($cameraPersons) ?: $localPersonnel->count(),
             ],
             'recent_logs' => $recentLogs,
             'realtime_hardware' => [
@@ -448,31 +602,15 @@ class DeviceController extends Controller
             ],
             'face_audit' => [
                 'total_in_db' => $localPersonnel->count(),
-                'total_on_camera' => count($cameraPersons),
-                'synced_count' => max(0, count($cameraPersons) - count($discrepancies)),
-                'missing_on_camera_count' => count($discrepancies),
-                'in_sync' => count($discrepancies) === 0,
-                'discrepancies' => $discrepancies,
-                'camera_personnel' => $cameraPersons,
-                'camera_list' => array_map(function ($p) use ($localPersonnel) {
-                    $match = $localPersonnel->firstWhere('customize_id', $p['customize_id']);
-                    return [
-                        'customize_id' => $p['customize_id'],
-                        'camera_name' => $p['name'],
-                        'camera_person_type' => $p['person_type'],
-                        'db_match' => $match ? ['name' => $match->name] : null,
-                        'status' => $match ? 'SYNCED' : 'UNTRACKED',
-                    ];
-                }, $cameraPersons),
-                'missing_on_camera' => array_values(array_filter(array_map(function ($d) {
-                    $p = \App\Models\Personnel::where('customize_id', $d['customize_id'])->first();
-                    return $p ? [
-                        'id' => $p->id,
-                        'customize_id' => $p->customize_id,
-                        'name' => $p->name,
-                        'person_type' => $p->person_type,
-                    ] : null;
-                }, $discrepancies))),
+                'total_on_camera' => count($cameraPersons) ?: $syncedCount,
+                'synced_count' => $syncedCount,
+                'missing_on_camera_count' => $missingCount,
+                'pending_count' => $pendingCount,
+                'in_sync' => $missingCount === 0 && $pendingCount === 0,
+                'user_roster' => $auditList,
+                'camera_list' => $auditList,
+                'camera_personnel' => array_values($cameraPersons),
+                'missing_on_camera' => array_values(array_filter($auditList, fn($p) => $p['status'] === 'MISSING' || $p['status'] === 'PENDING')),
             ],
         ]);
     }

@@ -16,7 +16,15 @@ class PersonnelController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $query = Personnel::query();
+        $query = Personnel::query()
+            ->select([
+                'id', 'customize_id', 'person_uuid', 'name', 'person_type',
+                'gender', 'id_card', 'tel_num', 'address', 'native', 'notes',
+                'mj_card_no', 'mj_card_from', 'birthday', 'photo_path',
+                'temp_valid', 'valid_begin', 'valid_end', 'effect_number',
+                'created_at', 'updated_at',
+            ])
+            ->with(['employee:id,personnel_id,employee_code,first_name,last_name,department_id,designation_id']);
 
         if ($search = $request->input('search')) {
             $query->where(function ($q) use ($search) {
@@ -75,6 +83,11 @@ class PersonnelController extends Controller
             }
         } elseif (!empty($validated['photo_url']) || !empty($validated['photo_path'])) {
             $source = $validated['photo_url'] ?? $validated['photo_path'];
+            if (!empty($validated['photo_url']) && filter_var($source, FILTER_VALIDATE_URL) && !$this->storageService->isSafeUrl($source)) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'photo_url' => ['The provided photo URL points to a restricted or private network address.'],
+                ]);
+            }
             $stored = $this->storageService->storeFromUrlOrPath($source, 'personnel');
             if ($stored) {
                 $validated['photo_path'] = $stored['path'];
@@ -128,6 +141,11 @@ class PersonnelController extends Controller
             }
         } elseif ((!empty($validated['photo_url']) || !empty($validated['photo_path'])) && ($validated['photo_url'] ?? $validated['photo_path']) !== $personnel->photo_path) {
             $source = $validated['photo_url'] ?? $validated['photo_path'];
+            if (!empty($validated['photo_url']) && filter_var($source, FILTER_VALIDATE_URL) && !$this->storageService->isSafeUrl($source)) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'photo_url' => ['The provided photo URL points to a restricted or private network address.'],
+                ]);
+            }
             $stored = $this->storageService->storeFromUrlOrPath($source, 'personnel');
             if ($stored) {
                 $validated['photo_path'] = $stored['path'];
@@ -157,5 +175,44 @@ class PersonnelController extends Controller
         SyncPersonnelJob::dispatch($personnel->id, 'ADD', $targetDeviceId);
 
         return response()->json(['message' => 'Sync task dispatched successfully']);
+    }
+
+    public function convertToEmployee(Personnel $personnel): JsonResponse
+    {
+        $personnel->load('employee');
+        if ($personnel->employee) {
+            return response()->json([
+                'message' => "Personnel {$personnel->name} is already registered in the Employee Directory.",
+                'employee' => $personnel->employee,
+            ], 200);
+        }
+
+        $employeeCode = (string) $personnel->customize_id;
+
+        // Ensure unique employee_code in employees table
+        if (\App\Models\Employee::where('employee_code', $employeeCode)->exists()) {
+            $employeeCode = 'EMP-' . $personnel->customize_id;
+        }
+
+        $nameParts = explode(' ', trim($personnel->name), 2);
+        $firstName = $nameParts[0] ?: "Person {$personnel->customize_id}";
+        $lastName = $nameParts[1] ?? '';
+
+        $employee = \App\Models\Employee::create([
+            'personnel_id' => $personnel->id,
+            'employee_code' => $employeeCode,
+            'first_name' => $firstName,
+            'last_name' => $lastName,
+            'employment_type' => 'full-time',
+            'employment_status' => 'active',
+            'phone' => $personnel->tel_num,
+            'avatar' => $personnel->photo_path,
+            'date_of_joining' => now()->toDateString(),
+        ]);
+
+        return response()->json([
+            'message' => "Personnel {$personnel->name} (#{$personnel->customize_id}) added to Employee Directory as Employee #{$employee->employee_code}.",
+            'employee' => $employee,
+        ], 201);
     }
 }

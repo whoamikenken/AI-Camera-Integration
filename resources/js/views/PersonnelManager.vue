@@ -24,19 +24,20 @@
           v-model="search" 
           @input="fetchPersonnel"
           type="text" 
+          aria-label="Search personnel by name, ID number, phone, or custom ID"
           placeholder="Search by name, ID number, phone, or custom ID..."
           class="w-full bg-white border border-slate-200 rounded-lg pl-9 pr-4 py-2 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 shadow-xs"
         />
         <span class="absolute left-3 top-2.5 text-slate-400 text-xs">🔍</span>
       </div>
 
-      <select v-model="personTypeFilter" @change="fetchPersonnel" class="w-full sm:w-44 bg-white border border-slate-200 text-xs rounded-lg px-3 py-2 text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 cursor-pointer shadow-xs">
+      <select v-model="personTypeFilter" @change="fetchPersonnel" aria-label="Filter personnel by category" class="w-full sm:w-44 bg-white border border-slate-200 text-xs rounded-lg px-3 py-2 text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 cursor-pointer shadow-xs">
         <option value="">All Categories</option>
         <option value="0">Whitelist (Allow)</option>
         <option value="1">Blacklist (Block)</option>
       </select>
 
-      <select v-model="validityFilter" @change="fetchPersonnel" class="w-full sm:w-44 bg-white border border-slate-200 text-xs rounded-lg px-3 py-2 text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 cursor-pointer shadow-xs">
+      <select v-model="validityFilter" @change="fetchPersonnel" aria-label="Filter personnel by validity schedule" class="w-full sm:w-44 bg-white border border-slate-200 text-xs rounded-lg px-3 py-2 text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 cursor-pointer shadow-xs">
         <option value="">All Validity</option>
         <option value="0">Permanent</option>
         <option value="1">Temporary Schedule</option>
@@ -49,19 +50,27 @@
         <table class="w-full text-left text-xs text-slate-700">
           <thead class="bg-slate-50 text-slate-500 uppercase text-[11px] font-semibold border-b border-slate-200">
             <tr>
-              <th class="py-3 px-4">Photo</th>
-              <th class="py-3 px-4">Custom ID</th>
-              <th class="py-3 px-4">Name</th>
-              <th class="py-3 px-4">Category</th>
-              <th class="py-3 px-4">ID / Phone</th>
-              <th class="py-3 px-4">Schedule</th>
-              <th class="py-3 px-4 text-right">Actions</th>
+              <th scope="col" class="py-3 px-4">Photo</th>
+              <th scope="col" class="py-3 px-4">Custom ID</th>
+              <th scope="col" class="py-3 px-4">Name</th>
+              <th scope="col" class="py-3 px-4">Category</th>
+              <th scope="col" class="py-3 px-4">ID / Phone</th>
+              <th scope="col" class="py-3 px-4">Schedule</th>
+              <th scope="col" class="py-3 px-4 text-right">Actions</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-slate-100">
-            <tr v-if="loading">
-              <td colspan="7" class="py-12 text-center text-slate-500">Loading personnel records...</td>
-            </tr>
+            <template v-if="loading">
+              <tr v-for="i in 5" :key="i" class="animate-pulse" aria-busy="true">
+                <td class="py-3 px-4"><div class="w-10 h-10 rounded-full bg-slate-200"></div></td>
+                <td class="py-3 px-4"><div class="h-4 bg-slate-200 rounded w-16"></div></td>
+                <td class="py-3 px-4"><div class="h-4 bg-slate-200 rounded w-28"></div></td>
+                <td class="py-3 px-4"><div class="h-5 bg-slate-200 rounded-full w-20"></div></td>
+                <td class="py-3 px-4"><div class="h-4 bg-slate-200 rounded w-24"></div></td>
+                <td class="py-3 px-4"><div class="h-4 bg-slate-200 rounded w-20"></div></td>
+                <td class="py-3 px-4 text-right"><div class="h-6 bg-slate-200 rounded w-24 ml-auto"></div></td>
+              </tr>
+            </template>
             <tr v-else-if="records.length === 0">
               <td colspan="7" class="py-12 text-center text-slate-500">No personnel records found. Click "Enroll New Person" to add one.</td>
             </tr>
@@ -89,16 +98,52 @@
                   Temp ({{ formatDate(person.valid_begin) }} ~ {{ formatDate(person.valid_end) }})
                 </span>
               </td>
-              <td class="py-3 px-4 text-right space-x-2">
-                <button @click="triggerSync(person)" :disabled="syncingId === person.id" class="px-2.5 py-1 text-[11px] bg-white hover:bg-slate-50 text-indigo-600 font-semibold border border-slate-200 rounded transition-colors shadow-xs cursor-pointer disabled:opacity-50" title="Sync to cameras">
-                  {{ syncingId === person.id ? 'Syncing...' : '⚡ Sync' }}
-                </button>
-                <button @click="openEditModal(person)" class="px-2.5 py-1 text-[11px] bg-white hover:bg-slate-50 text-slate-700 font-medium border border-slate-200 rounded transition-colors shadow-xs cursor-pointer">
-                  Edit
-                </button>
-                <button @click="deletePerson(person)" class="px-2.5 py-1 text-[11px] bg-rose-50 hover:bg-rose-100 text-rose-700 font-semibold border border-rose-200 rounded transition-colors shadow-xs cursor-pointer">
-                  Delete
-                </button>
+              <td class="py-3 px-4 text-right">
+                <div class="flex items-center justify-end gap-1.5">
+                  <button 
+                    v-if="!person.employee"
+                    @click="convertToEmployee(person)" 
+                    :disabled="convertingId === person.id"
+                    :aria-label="`Add ${person.name} as employee in workforce directory`"
+                    class="px-2.5 py-1 text-[11px] bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-semibold border border-emerald-200 rounded transition-colors shadow-2xs cursor-pointer disabled:opacity-50 flex items-center gap-1"
+                    title="Add to Employee Directory using Custom ID as Employee ID"
+                  >
+                    <span>👔</span>
+                    <span>{{ convertingId === person.id ? 'Adding...' : 'Add as Employee' }}</span>
+                  </button>
+                  <span 
+                    v-else 
+                    class="px-2 py-0.5 rounded text-[10px] font-bold font-mono bg-indigo-50 text-indigo-700 border border-indigo-200 inline-flex items-center gap-1"
+                    title="Enrolled in Employee Directory"
+                  >
+                    <span>👔</span>
+                    <span>Emp #{{ person.employee.employee_code }}</span>
+                  </span>
+
+                  <button 
+                    @click="triggerSync(person)" 
+                    :disabled="syncingId === person.id" 
+                    :aria-label="`Sync ${person.name} to cameras`"
+                    class="px-2.5 py-1 text-[11px] bg-white hover:bg-slate-50 text-indigo-600 font-semibold border border-slate-200 rounded transition-colors shadow-2xs cursor-pointer disabled:opacity-50" 
+                    title="Sync to cameras"
+                  >
+                    {{ syncingId === person.id ? 'Syncing...' : '⚡ Sync' }}
+                  </button>
+                  <button 
+                    @click="openEditModal(person)" 
+                    :aria-label="`Edit personnel record for ${person.name}`"
+                    class="px-2.5 py-1 text-[11px] bg-white hover:bg-slate-50 text-slate-700 font-medium border border-slate-200 rounded transition-colors shadow-2xs cursor-pointer"
+                  >
+                    Edit
+                  </button>
+                  <button 
+                    @click="deletePerson(person)" 
+                    :aria-label="`Delete personnel record for ${person.name}`"
+                    class="px-2.5 py-1 text-[11px] bg-rose-50 hover:bg-rose-100 text-rose-700 font-semibold border border-rose-200 rounded transition-colors shadow-2xs cursor-pointer"
+                  >
+                    Delete
+                  </button>
+                </div>
               </td>
             </tr>
           </tbody>
@@ -117,25 +162,37 @@
     </div>
 
     <!-- Create / Edit Modal -->
-    <div v-if="modal.show" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm" @click.self="modal.show = false">
+    <div 
+      v-if="modal.show" 
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="personnel-modal-title"
+      @keydown.escape="modal.show = false"
+      class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm" 
+      @click.self="modal.show = false"
+    >
       <div class="bg-white border border-slate-200 rounded-2xl max-w-2xl w-full p-6 space-y-4 max-h-[90vh] overflow-y-auto shadow-2xl">
         <div class="flex items-center justify-between border-b border-slate-200 pb-3">
-          <h3 class="text-base font-bold text-slate-900">{{ modal.isEdit ? 'Edit Person Record' : 'Enroll New Person & Face' }}</h3>
-          <button @click="modal.show = false" class="text-slate-400 hover:text-slate-700 text-lg font-bold cursor-pointer">&times;</button>
+          <h3 id="personnel-modal-title" class="text-base font-bold text-slate-900">{{ modal.isEdit ? 'Edit Person Record' : 'Enroll New Person & Face' }}</h3>
+          <button 
+            @click="modal.show = false" 
+            aria-label="Close personnel modal"
+            class="text-slate-400 hover:text-slate-700 text-lg font-bold cursor-pointer p-1 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          >&times;</button>
         </div>
 
         <form @submit.prevent="savePersonnel" class="space-y-4">
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <!-- Full Name -->
             <div>
-              <label class="block text-xs font-medium text-slate-700 mb-1">Full Name *</label>
-              <input v-model="form.name" required type="text" class="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 shadow-xs" />
+              <label for="person_name" class="block text-xs font-medium text-slate-700 mb-1">Full Name *</label>
+              <input id="person_name" v-model="form.name" required type="text" class="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 shadow-xs" />
             </div>
 
             <!-- Person Type (Whitelist / Blacklist) -->
             <div>
-              <label class="block text-xs font-medium text-slate-700 mb-1">Category *</label>
-              <select v-model="form.person_type" class="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 shadow-xs cursor-pointer">
+              <label for="person_type" class="block text-xs font-medium text-slate-700 mb-1">Category *</label>
+              <select id="person_type" v-model="form.person_type" class="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 shadow-xs cursor-pointer">
                 <option :value="0">Whitelist (Allowed Access)</option>
                 <option :value="1">Blacklist (Denied / Alarm)</option>
               </select>
@@ -143,35 +200,35 @@
 
             <!-- ID Card -->
             <div>
-              <label class="block text-xs font-medium text-slate-700 mb-1">National ID / Badge Number</label>
-              <input v-model="form.id_card" type="text" class="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 shadow-xs" />
+              <label for="person_id_card" class="block text-xs font-medium text-slate-700 mb-1">National ID / Badge Number</label>
+              <input id="person_id_card" v-model="form.id_card" type="text" class="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 shadow-xs" />
             </div>
 
             <!-- Phone Number -->
             <div>
-              <label class="block text-xs font-medium text-slate-700 mb-1">Phone Number</label>
-              <input v-model="form.tel_num" type="text" class="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 shadow-xs" />
+              <label for="person_tel_num" class="block text-xs font-medium text-slate-700 mb-1">Phone Number</label>
+              <input id="person_tel_num" v-model="form.tel_num" type="text" class="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 shadow-xs" />
             </div>
 
             <!-- Gender & Birthday -->
             <div>
-              <label class="block text-xs font-medium text-slate-700 mb-1">Gender</label>
-              <select v-model="form.gender" class="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 shadow-xs cursor-pointer">
+              <label for="person_gender" class="block text-xs font-medium text-slate-700 mb-1">Gender</label>
+              <select id="person_gender" v-model="form.gender" class="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 shadow-xs cursor-pointer">
                 <option :value="0">Male</option>
                 <option :value="1">Female</option>
               </select>
             </div>
 
             <div>
-              <label class="block text-xs font-medium text-slate-700 mb-1">Birthday</label>
-              <input v-model="form.birthday" type="date" class="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 shadow-xs" />
+              <label for="person_birthday" class="block text-xs font-medium text-slate-700 mb-1">Birthday</label>
+              <input id="person_birthday" v-model="form.birthday" type="date" class="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 shadow-xs" />
             </div>
           </div>
 
           <!-- Schedule & Validity -->
           <div class="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3 shadow-xs">
             <div class="flex items-center justify-between">
-              <label class="text-xs font-semibold text-slate-700">Access Schedule & Validity</label>
+              <span class="text-xs font-semibold text-slate-700">Access Schedule & Validity</span>
               <div class="flex items-center gap-4 text-xs">
                 <label class="flex items-center gap-1.5 cursor-pointer">
                   <input type="radio" :value="0" v-model="form.temp_valid" class="text-indigo-600" />
@@ -186,26 +243,26 @@
 
             <div v-if="form.temp_valid === 1" class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
               <div>
-                <label class="block text-[11px] text-slate-500 mb-1">Valid Start Time</label>
-                <input v-model="form.valid_begin" type="datetime-local" class="w-full bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 shadow-xs" />
+                <label for="valid_begin" class="block text-[11px] text-slate-500 mb-1">Valid Start Time</label>
+                <input id="valid_begin" v-model="form.valid_begin" type="datetime-local" class="w-full bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 shadow-xs" />
               </div>
               <div>
-                <label class="block text-[11px] text-slate-500 mb-1">Valid End Time</label>
-                <input v-model="form.valid_end" type="datetime-local" class="w-full bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 shadow-xs" />
+                <label for="valid_end" class="block text-[11px] text-slate-500 mb-1">Valid End Time</label>
+                <input id="valid_end" v-model="form.valid_end" type="datetime-local" class="w-full bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 shadow-xs" />
               </div>
             </div>
           </div>
 
           <!-- Face Photo Upload & Preview -->
           <div class="space-y-2">
-            <label class="block text-xs font-medium text-slate-700">Biometric Face Image *</label>
+            <label for="person_photo" class="block text-xs font-medium text-slate-700">Biometric Face Image *</label>
             <div class="flex items-center gap-4">
               <div class="w-20 h-20 rounded-xl bg-slate-100 border border-slate-200 overflow-hidden flex items-center justify-center shrink-0">
-                <img v-if="previewPhoto" :src="previewPhoto" class="w-full h-full object-cover" />
-                <span v-else class="text-2xl text-slate-400">👤</span>
+                <img v-if="previewPhoto" :src="previewPhoto" alt="Biometric photo preview" class="w-full h-full object-cover" />
+                <span v-else class="text-2xl text-slate-400" aria-hidden="true">👤</span>
               </div>
               <div class="flex-1">
-                <input type="file" accept="image/*" @change="onFileSelected" class="text-xs text-slate-600 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-700 cursor-pointer" />
+                <input id="person_photo" type="file" accept="image/*" aria-label="Upload personnel biometric photo" @change="onFileSelected" class="text-xs text-slate-600 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-700 cursor-pointer" />
                 <p class="text-[11px] text-slate-500 mt-1">Recommended: Clear frontal facial photo (&lt; 2MB). Auto-encoded to Base64 for edge device synchronization.</p>
               </div>
             </div>
@@ -213,8 +270,13 @@
 
           <div class="flex justify-end gap-3 pt-3 border-t border-slate-200">
             <button type="button" @click="modal.show = false" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg border border-slate-300 transition-colors cursor-pointer">Cancel</button>
-            <button type="submit" :disabled="saving" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-lg shadow-sm disabled:opacity-50 transition-all cursor-pointer">
-              {{ saving ? 'Saving & Enrolling...' : (modal.isEdit ? 'Update Personnel' : 'Enroll Personnel') }}
+            <button 
+              type="submit" 
+              :disabled="saving" 
+              class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-lg shadow-sm disabled:opacity-50 transition-all cursor-pointer flex items-center gap-1.5"
+            >
+              <span v-if="saving" class="animate-spin inline-block w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full" aria-hidden="true"></span>
+              <span>{{ saving ? 'Saving & Enrolling...' : (modal.isEdit ? 'Update Personnel' : 'Enroll Personnel') }}</span>
             </button>
           </div>
         </form>
@@ -224,14 +286,16 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, onUnmounted } from 'vue';
 import notify from '../utils/notify';
-import axios from 'axios';
+import apiClient from '../api/client';
+import echo from '../echo';
 
 const records = ref([]);
 const loading = ref(false);
 const saving = ref(false);
 const syncingId = ref(null);
+const convertingId = ref(null);
 const search = ref('');
 const personTypeFilter = ref('');
 const validityFilter = ref('');
@@ -277,7 +341,7 @@ async function fetchPersonnel(page = 1) {
       person_type: personTypeFilter.value,
       temp_valid: validityFilter.value,
     };
-    const res = await axios.get('/api/personnel', { params });
+    const res = await apiClient.get('/api/personnel', { params });
     records.value = res.data.data;
     pagination.value = {
       current_page: res.data.current_page,
@@ -372,11 +436,11 @@ async function savePersonnel() {
     }
 
     if (modal.value.isEdit) {
-      await axios.post(`/api/personnel/${modal.value.id}`, data, {
+      await apiClient.post(`/api/personnel/${modal.value.id}`, data, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
     } else {
-      await axios.post('/api/personnel', data, {
+      await apiClient.post('/api/personnel', data, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
     }
@@ -403,7 +467,7 @@ async function deletePerson(person) {
   if (!confirmed) return;
 
   try {
-    await axios.delete(`/api/personnel/${person.id}`);
+    await apiClient.delete(`/api/personnel/${person.id}`);
     fetchPersonnel(pagination.value.current_page);
     notify.toast(`Removed ${person.name} successfully`, 'success');
   } catch (err) {
@@ -414,7 +478,7 @@ async function deletePerson(person) {
 async function triggerSync(person) {
   syncingId.value = person.id;
   try {
-    await axios.post(`/api/personnel/${person.id}/sync-now`);
+    await apiClient.post(`/api/personnel/${person.id}/sync-now`);
     notify.success('Sync Task Queued', `Face credentials and access rules for ${person.name} are queued on the camera-sync Redis worker.`);
   } catch (err) {
     notify.error('Sync Failed', 'Failed to dispatch camera sync job');
@@ -423,7 +487,53 @@ async function triggerSync(person) {
   }
 }
 
+async function convertToEmployee(person) {
+  const confirmed = await notify.confirm(
+    'Add to Employee Directory?',
+    `Do you want to add "${person.name}" (#${person.customize_id}) to the Employee Directory using Custom ID "${person.customize_id}" as Employee ID?`,
+    'Yes, Add to Directory',
+    'Cancel',
+    false
+  );
+
+  if (!confirmed) return;
+
+  convertingId.value = person.id;
+  try {
+    const res = await apiClient.post(`/api/personnel/${person.id}/convert-to-employee`);
+    notify.success('Added to Employee Directory', res.data.message || 'Personnel successfully added to Employee Directory.');
+    fetchPersonnel(pagination.value.current_page);
+  } catch (err) {
+    notify.error('Promotion Failed', err.response?.data?.message || 'Failed to convert personnel to employee.');
+  } finally {
+    convertingId.value = null;
+  }
+}
+
+function handleLivePersonnelUpdated(e) {
+  if (!modal.value.show) {
+    fetchPersonnel(pagination.value.current_page);
+  }
+}
+
+function handleGlobalKeydown(e) {
+  if (e.key === 'Escape' && modal.value.show) {
+    modal.value.show = false;
+  }
+}
+
 onMounted(() => {
   fetchPersonnel();
+  window.addEventListener('keydown', handleGlobalKeydown);
+  echo.channel('personnel')
+    .listen('.PersonnelUpdated', handleLivePersonnelUpdated)
+    .listen('PersonnelUpdated', handleLivePersonnelUpdated);
+});
+
+onUnmounted(() => {
+  window.removeEventListener('keydown', handleGlobalKeydown);
+  echo.channel('personnel')
+    .stopListening('.PersonnelUpdated')
+    .stopListening('PersonnelUpdated');
 });
 </script>

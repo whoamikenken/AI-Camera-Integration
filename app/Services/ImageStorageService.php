@@ -24,9 +24,12 @@ class ImageStorageService
         // Clean out possible data URI prefixes
         if (preg_match('/^data:image\/(\w+);base64,/', $base64Data, $type)) {
             $base64Data = substr($base64Data, strpos($base64Data, ',') + 1);
-            $extension = strtolower($type[1]);
-            if ($extension === 'jpeg') {
+            $rawExt = strtolower($type[1]);
+            $allowedExtensions = ['jpg', 'jpeg', 'png', 'webp', 'gif'];
+            if (! in_array($rawExt, $allowedExtensions, true)) {
                 $extension = 'jpg';
+            } else {
+                $extension = $rawExt === 'jpeg' ? 'jpg' : $rawExt;
             }
         } else {
             $extension = 'jpg';
@@ -152,8 +155,12 @@ class ImageStorageService
                 $extension = $ext === 'jpeg' ? 'jpg' : $ext;
             }
         } elseif (filter_var($urlOrPath, FILTER_VALIDATE_URL)) {
+            if (!$this->isSafeUrl($urlOrPath)) {
+                return null;
+            }
+
             try {
-                $response = \Illuminate\Support\Facades\Http::timeout(8)->get($urlOrPath);
+                $response = \Illuminate\Support\Facades\Http::withoutRedirecting()->timeout(8)->get($urlOrPath);
                 if ($response->successful()) {
                     $binary = $response->body();
                     $contentType = $response->header('Content-Type') ?? '';
@@ -182,5 +189,101 @@ class ImageStorageService
             'base64' => $base64,
             'path' => $newPath,
         ];
+    }
+
+    /**
+     * Check if a URL is safe to fetch (anti-SSRF validation).
+     */
+    public function isSafeUrl(?string $url): bool
+    {
+        if (empty($url) || !filter_var($url, FILTER_VALIDATE_URL)) {
+            return false;
+        }
+
+        $scheme = strtolower((string) parse_url($url, PHP_URL_SCHEME));
+        if (!in_array($scheme, ['http', 'https'], true)) {
+            return false;
+        }
+
+        $host = (string) parse_url($url, PHP_URL_HOST);
+        if (empty($host)) {
+            return false;
+        }
+
+        // Direct hostname checks
+        $lowHost = strtolower($host);
+        if (in_array($lowHost, ['localhost', 'localhost.localdomain', '127.0.0.1', '::1', '169.254.169.254'], true)) {
+            return false;
+        }
+
+        // Resolve DNS to IP addresses
+        $ips = filter_var($host, FILTER_VALIDATE_IP) ? [$host] : @gethostbynamel($host);
+        if (empty($ips) || !is_array($ips)) {
+            return false;
+        }
+
+        foreach ($ips as $ip) {
+            if (!$this->isPublicIp($ip)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Determine if an IP address is a public, non-private, non-reserved IP.
+     */
+    public function isPublicIp(string $ip): bool
+    {
+        // Reject private and reserved IP ranges (RFC 1918, link-local, loopback, multicast, etc.)
+        if (!filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)) {
+            return false;
+        }
+
+        // Explicitly check for 169.254.x.x link-local / cloud metadata range if not caught
+        if (str_starts_with($ip, '169.254.') || str_starts_with($ip, '127.')) {
+            return false;
+        }
+
+        // IPv6 loopback / unique local
+        if ($ip === '::1' || str_starts_with($ip, 'fc') || str_starts_with($ip, 'fd') || str_starts_with($ip, 'fe80:')) {
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * Get the configured disk for biometric media storage.
+     */
+    public function getDisk(): string
+    {
+        return config('filesystems.biometrics_disk', env('BIOMETRICS_DISK', 'public'));
+    }
+
+    /**
+     * Retrieve binary and mime type for secure serving of biometric images.
+     */
+    public function getMedia(string $path): ?array
+    {
+        $cleanPath = ltrim(preg_replace('#^.*?/storage/#', '', $path), '/');
+        $disks = array_unique([$this->getDisk(), 'public', 'local', 'biometrics']);
+
+        foreach ($disks as $disk) {
+            try {
+                if (Storage::disk($disk)->exists($cleanPath)) {
+                    $mimeType = Storage::disk($disk)->mimeType($cleanPath) ?: 'image/jpeg';
+                    return [
+                        'content' => Storage::disk($disk)->get($cleanPath),
+                        'mime_type' => $mimeType,
+                    ];
+                }
+            } catch (\Throwable $e) {
+                // fall through
+            }
+        }
+
+        return null;
     }
 }

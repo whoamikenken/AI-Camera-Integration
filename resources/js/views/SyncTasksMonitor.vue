@@ -80,10 +80,11 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, onUnmounted } from 'vue';
 import { formatDateTime } from '../utils/date';
 import notify from '../utils/notify';
-import axios from 'axios';
+import apiClient from '../api/client';
+import echo from '../echo';
 
 const tasks = ref([]);
 const loading = ref(false);
@@ -92,7 +93,7 @@ const statusFilter = ref('');
 async function fetchTasks() {
   loading.value = true;
   try {
-    const res = await axios.get('/api/sync-tasks', {
+    const res = await apiClient.get('/api/sync-tasks', {
       params: { status: statusFilter.value }
     });
     tasks.value = res.data.data;
@@ -103,9 +104,19 @@ async function fetchTasks() {
   }
 }
 
+function handleLiveSyncTaskUpdated(e) {
+  if (!e || !e.id) return;
+  const index = tasks.value.findIndex(t => String(t.id) === String(e.id));
+  if (index !== -1) {
+    tasks.value[index] = { ...tasks.value[index], ...e };
+  } else if (!statusFilter.value || statusFilter.value === e.status) {
+    tasks.value.unshift(e);
+  }
+}
+
 async function retryTask(task) {
   try {
-    await axios.post(`/api/sync-tasks/${task.id}/retry`);
+    await apiClient.post(`/api/sync-tasks/${task.id}/retry`);
     notify.success('Task Re-queued', `Sync task #${task.id} has been re-dispatched to the camera-sync queue.`);
     fetchTasks();
   } catch (err) {
@@ -133,5 +144,14 @@ function getStatusBadgeClass(status) {
 
 onMounted(() => {
   fetchTasks();
+  echo.channel('sync-tasks')
+    .listen('.SyncTaskUpdated', handleLiveSyncTaskUpdated)
+    .listen('SyncTaskUpdated', handleLiveSyncTaskUpdated);
+});
+
+onUnmounted(() => {
+  echo.channel('sync-tasks')
+    .stopListening('.SyncTaskUpdated')
+    .stopListening('SyncTaskUpdated');
 });
 </script>

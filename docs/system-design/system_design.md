@@ -1,25 +1,26 @@
 # System Design: Intelligent AI Camera Hub
 
 > **System Name:** Intelligent AI Camera Hub  
-> **Architecture Pattern:** Decoupled Hybrid Synchronous LAN Provisioning + Asynchronous WAN/MQTT Telemetry Stream  
-> **Core Stack:** Laravel 11 (PHP 8.2+), Vue 3 (Vite, Pinia, Tailwind CSS / Shadcn Vue), PostgreSQL 16, Redis, MQTT (EMQX/Mosquitto), Laravel Reverb (WebSockets)
+> **Architecture Pattern:** Pure WAN MQTT Telemetry Ingestion & Downlink Command Dispatch  
+> **Core Stack:** Laravel 11 (PHP 8.2+), Vue 3 (Vite, Pinia, Tailwind CSS), PostgreSQL 16, Redis, MQTT (EMQX/Mosquitto), Laravel Reverb (WebSockets)
 
 ---
 
 ## 1. Executive Summary & System Objectives
 
-The **Intelligent AI Camera Hub** provides a single-pane-of-glass access control, identity synchronizer, and high-throughput vision telemetry processing system for smart IP cameras and biometric edge units (such as X40Y series hardware).
+The **Intelligent AI Camera Hub** provides a single-pane-of-glass access control, identity synchronizer, and high-throughput vision telemetry processing system for smart IP cameras and biometric edge units (such as X40Y series hardware) operating over WAN networks.
 
 ### Key System Objectives
 
-1. **Biometric Face Library Sync**: Maintain master employee records in PostgreSQL and synchronize face photos/schedules to cameras via network HTTP/HTTPS REST dispatchers (`/action/EditPersonNew`, `/action/AddPersons`). Supports both HTTP and HTTPS endpoint camera devices.
-2. **Sub-second Verification Ingestion**: Ingest high-volume face verification logs (`RecPush`), stranger snapshots (`StrSnapPush`), and security alarms in real-time over MQTT.
+1. **Biometric Face Library Sync (MQTT Downlink)**: Maintain master employee records in PostgreSQL and synchronize face photos/schedules to cameras via MQTT downlink command topics (`mqtt/face/<DeviceID>`) using operators `EditPerson`, `AddPersons`, and `DelPerson`.
+2. **Sub-second Verification Ingestion (MQTT Uplink)**: Ingest high-volume face verification logs (`RecPush`), stranger snapshots (`StrSnapPush`), and security alarms in real-time over MQTT.
 3. **Live Dashboard Broadcasting**: Push biometric match results, similarity confidence scores, snapshot images, and admission states directly to the Vue 3 dashboard using WebSockets (Laravel Reverb).
 4. **Resilient Failure Recovery**: Implement transactional outbox queuing (`sync_tasks`), automatic retry policies with exponential backoff, and MQTT continuous transmission acknowledgements (`PushAck`).
+5. **Manual Device Bootstrap**: Initial MQTT broker parameters (broker host, port 1883, topics) are manually entered directly on the camera's local web configuration interface.
 
 ---
 
-## 2. Decoupled Hybrid Architecture
+## 2. Pure WAN MQTT Architecture
 
 ```
                           +-----------------------------------+
@@ -49,24 +50,23 @@ The **Intelligent AI Camera Hub** provides a single-pane-of-glass access control
                 |                             |                         |
                 v (Redis Queue)               |                         |
 +-------------------------------+             |                         |
-|     LAN Edge Sync Worker      |             |                         |
+|     WAN MQTT Sync Worker      |             |                         |
 |  (Queue: camera-sync)         |             |                         |
 +---------------+---------------+             |                         |
                 |                             |                         |
-HTTP/HTTPS POST     | Basic Auth
-/action/*       |
-                v                             |                         |
-+-------------------------------+             |                         |
-|     Edge AI Camera (X40Y)     |             |                         |
-|     Local IP: 192.168.1.100   |             |                         |
-+---------------+---------------+             |                         |
-                |                             |                         |
-                | MQTT Publish (:1883)        |                         |
-                | Topic: mqtt/face/{ID}/*     |                         |
+                | MQTT Downlink Publish       |                         |
+                | Topic: mqtt/face/{ID}       |                         |
                 v                             |                         |
 +-------------------------------+             |                         |
 |          MQTT Broker          |             |                         |
 |       (EMQX / Mosquitto)      |             |                         |
++---------------+---------------+             |                         |
+                ^                             |                         |
+                | MQTT Uplink / Downlink      |                         |
+                v                             |                         |
++-------------------------------+             |                         |
+|     Edge AI Camera (X40Y)     |             |                         |
+|     Connected via WAN         |             |                         |
 +---------------+---------------+             |                         |
                 |                             |                         |
                 | MQTT Subscribe (mqtt/face/#)|                         |
@@ -87,8 +87,8 @@ CREATE TABLE devices (
     id SERIAL PRIMARY KEY,
     device_id VARCHAR(64) UNIQUE NOT NULL,       -- e.g., '1299517' or '005a213b000b93cc'
     name VARCHAR(128) NOT NULL,
-    ip_address VARCHAR(45) NOT NULL,             -- e.g., '192.168.1.100'
-    port INT DEFAULT 8080,
+    ip_address VARCHAR(45) NOT NULL,             -- e.g., '192.168.1.100' or WAN hostname
+    port INT DEFAULT 1883,
     username VARCHAR(64) DEFAULT 'admin',
     password VARCHAR(64) DEFAULT 'admin',
     device_type INT DEFAULT 0,                   -- 0: IPC, 1: DVR, 2: NVR, 3: Panel Unit
@@ -102,21 +102,21 @@ CREATE TABLE devices (
 -- Personnel / Face Library
 CREATE TABLE personnel (
     id SERIAL PRIMARY KEY,
-    customize_id INT UNIQUE NOT NULL,            -- Custom unique ID (IdType=0)
-    person_uuid UUID DEFAULT gen_random_uuid(),  -- UUID alternative (IdType=2)
+    customize_id INT UNIQUE NOT NULL,
+    person_uuid UUID DEFAULT gen_random_uuid(),
     name VARCHAR(64) NOT NULL,
-    person_type INT DEFAULT 0,                   -- 0: Whitelist (Allow), 1: Blacklist (Block)
+    person_type INT DEFAULT 0,                   -- 0: Whitelist, 1: Blacklist
     gender INT DEFAULT 0,                        -- 0: Male, 1: Female
     id_card VARCHAR(32),
     tel_num VARCHAR(32),
     address VARCHAR(128),
     birthday DATE,
-    temp_valid INT DEFAULT 0,                    -- 0: Permanent, 1: Temporary
+    temp_valid INT DEFAULT 0,
     valid_begin TIMESTAMP WITH TIME ZONE,
     valid_end TIMESTAMP WITH TIME ZONE,
-    effect_number INT DEFAULT 1,                 -- -1: Infinite, 1-10000: Finite passes
-    photo_path VARCHAR(255),                     -- Local disk path or cloud storage URL
-    photo_base64 TEXT,                           -- Optional cached Base64 representation
+    effect_number INT DEFAULT 1,
+    photo_path VARCHAR(255),
+    photo_base64 TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
@@ -125,16 +125,16 @@ CREATE TABLE personnel (
 CREATE TABLE access_logs (
     id BIGSERIAL PRIMARY KEY,
     device_id VARCHAR(64) REFERENCES devices(device_id) ON DELETE CASCADE,
-    person_id INT,                               -- Device internal ID
+    person_id INT,
     customize_id INT,
     person_uuid UUID,
     person_name VARCHAR(64),
     verify_status INT NOT NULL,                  -- 1: Allowed, 2: Rejected, 3: Not Registered
-    verify_type INT DEFAULT 1,                   -- 1: Whitelist, 2: ID Card, 3: Card+Face
-    person_type INT DEFAULT 0,                   -- 0: Whitelist, 1: Blacklist
-    similarity NUMERIC(5, 2),                    -- Match similarity score (0.00 to 100.00)
-    snap_pic_url VARCHAR(255),                   -- Storage URL for snapshot image
-    scene_pic_url VARCHAR(255),                  -- Storage URL for context scene image
+    verify_type INT DEFAULT 1,
+    person_type INT DEFAULT 0,
+    similarity NUMERIC(5, 2),
+    snap_pic_url VARCHAR(255),
+    scene_pic_url VARCHAR(255),
     captured_at TIMESTAMP WITH TIME ZONE NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
@@ -167,7 +167,7 @@ CREATE TABLE sync_tasks (
 
 ## 4. Subsystem Components & Workflows
 
-### 4.1 LAN Provisioning & Outbox Synchronization Flow
+### 4.1 WAN MQTT Provisioning & Outbox Synchronization Flow
 
 ```mermaid
 sequenceDiagram
@@ -178,7 +178,8 @@ sequenceDiagram
     participant DB as PostgreSQL
     participant Queue as Redis (camera-sync)
     participant Worker as Sync Worker
-    participant Camera as X40Y Camera (:8080)
+    participant Broker as MQTT Broker (:1883)
+    participant Camera as Edge Camera (WAN)
 
     Admin->>UI: Upload employee photo & details
     UI->>Backend: POST /api/personnel
@@ -189,16 +190,12 @@ sequenceDiagram
 
     Queue->>Worker: Handle SyncPersonnelJob
     Worker->>DB: UPDATE sync_tasks SET status='PROCESSING'
-    Worker->>Camera: POST /action/EditPersonNew (Basic Auth, JSON + picinfo/picURI)
+    Worker->>Broker: Publish to `mqtt/face/{DeviceID}` (operator: "EditPerson")
+    Broker->>Camera: Deliver Downlink Command
 
-    alt Camera Enrolls Successfully
-        Camera-->>Worker: HTTP 200 OK {"operator":"EditPersonNew", "code":200, "info":{"Result":"Ok"}}
-        Worker->>DB: UPDATE sync_tasks SET status='COMPLETED'
-    else Camera Error (e.g. 468 Feature Extraction Error)
-        Camera-->>Worker: HTTP 200 OK {"operator":"EditPersonNew", "code":468, "info":{"Result":"Fail"}}
-        Worker->>DB: UPDATE sync_tasks SET status='FAILED', error_message='Face feature extraction failed'
-        Worker->>Queue: Release with exponential backoff (if transient)
-    end
+    Camera-->>Broker: Publish to `mqtt/face/{DeviceID}/Ack` (code: 200, result: "ok")
+    Broker-->>Worker: Deliver ACK
+    Worker->>DB: UPDATE sync_tasks SET status='COMPLETED'
 ```
 
 ---
@@ -209,7 +206,7 @@ sequenceDiagram
 sequenceDiagram
     autonumber
     actor User as Person in Front of Camera
-    participant Camera as X40Y Camera
+    participant Camera as Edge Camera (WAN)
     participant Broker as MQTT Broker (:1883)
     participant Daemon as PHP-MQTT Daemon
     participant Storage as Disk / S3 Storage
@@ -232,99 +229,56 @@ sequenceDiagram
 
 ---
 
-## 5. Protocol Command Reference Mapping
+## 5. Protocol Command Reference Mapping (Pure MQTT WAN)
 
-| System Action             | Protocol / Method | Target / Topic                                                  | Key Parameters                                                                   |
-| :------------------------ | :---------------- | :-------------------------------------------------------------- | :------------------------------------------------------------------------------- |
-| **Add / Edit Person**     | HTTP / HTTPS POST | `http://<cam_ip>:8080/action/EditPersonNew` or `https://...`    | `DeviceID`, `IdType: 0`, `CustomizeID`, `Name`, `PersonType`, `picinfo`/`picURI` |
-| **Batch Add (URI)**       | HTTP / HTTPS POST | `http://<cam_ip>:8080/action/AddPersons` or `https://...`       | `DeviceID`, `Total`, `Personinfo_0: {...}`                                       |
-| **Delete Person**         | HTTP / HTTPS POST | `http://<cam_ip>:8080/action/DeletePerson` or `https://...`     | `DeviceID`, `TotalNum`, `IdType: 0`, `CustomizeID: [id1, id2]`                   |
-| **Wipe Database**         | HTTP / HTTPS POST | `http://<cam_ip>:8080/action/DeleteAllPerson` or `https://...`  | `DeleteAllPersonCheck: 1` _(Reboots camera)_                                     |
-| **Audit Sync / Query**    | HTTP / HTTPS POST | `http://<cam_ip>:8080/action/SearchPersonList` or `https://...` | `DeviceID`, `PersonType: 2`, `BeginNO: 0`, `RequestCount: 50`                    |
-| **Push MQTT Config**      | HTTP / HTTPS POST | `http://<cam_ip>:8080/action/SetMQTTParam` or `https://...`     | `MQEnable: 1`, `MQAddr`, `MQPort`, `MQTopic`, `RecordUploadType: 1`              |
-| **Reboot Camera**         | HTTP / HTTPS POST | `http://<cam_ip>:8080/action/RebootDevice` or `https://...`     | `DeviceID`, `IsRebootDevice: 1`                                                  |
-| **Live Access Telemetry** | MQTT Ingest       | `mqtt/face/{DeviceID}/Rec`                                      | `VerifyPush` (`VerifyStatus`, `similarity1`, `pic`, `scene`)                     |
-| **Stranger Detection**    | MQTT Ingest       | `mqtt/face/{DeviceID}/Snap`                                     | `StrSnapPush` (`CreateTime`, `pic`, `scene`)                                     |
-| **Device Heartbeat**      | MQTT Ingest       | `mqtt/face/heartbeat`                                           | `HeartBeat` (`facesluiceId`, `time`)                                             |
+| System Action             | Protocol / Method | Target Topic               | Key Parameters                                                                   |
+| :------------------------ | :---------------- | :------------------------- | :------------------------------------------------------------------------------- |
+| **Add / Edit Person**     | MQTT Downlink     | `mqtt/face/{DeviceID}`     | `operator: "EditPerson"`, `facesluiceId`, `customId`, `name`, `pic` / `picURI`   |
+| **Batch Add Personnel**   | MQTT Downlink     | `mqtt/face/{DeviceID}`     | `operator: "AddPersons"`, `PersonNum`, `Personinfo_0: {...}`                     |
+| **Delete Person**         | MQTT Downlink     | `mqtt/face/{DeviceID}`     | `operator: "DelPerson"` / `"DeletePersons"`, `customId: [...]`                   |
+| **Wipe Database**         | MQTT Downlink     | `mqtt/face/{DeviceID}`     | `operator: "DeleteAllPerson"`, `deleteall: 1`                                    |
+| **Search List**           | MQTT Downlink     | `mqtt/face/{DeviceID}`     | `operator: "SearchPersonList"`, `PersonType: 2`, `BeginNO: 0`, `RequestCount: 50`|
+| **Update MQTT Settings**  | MQTT Downlink     | `mqtt/face/{DeviceID}`     | `operator: "UpMQTTconfig"`, `StrangerUploadType`, `RecordUploadType`, `KeepAlive`|
+| **Reboot Camera**         | MQTT Downlink     | `mqtt/face/{DeviceID}`     | `operator: "RebootDevice"`, `facesluiceId`                                       |
+| **Time Synchronization**  | MQTT Downlink     | `mqtt/face/{DeviceID}`     | `operator: "SetSysTime"`, `time: "YYYY-MM-DD hh:mm:ss"`                          |
+| **Device Information**    | MQTT Downlink     | `mqtt/face/{DeviceID}`     | `operator: "GetDeviceInformation"`, `facesluiceId`                               |
+| **Live Access Telemetry** | MQTT Uplink       | `mqtt/face/{DeviceID}/Rec` | `VerifyPush` (`VerifyStatus`, `similarity1`, `pic`, `scene`)                     |
+| **Stranger Detection**    | MQTT Uplink       | `mqtt/face/{DeviceID}/Snap`| `StrSnapPush` (`CreateTime`, `pic`, `scene`)                                     |
+| **Device Heartbeat**      | MQTT Uplink       | `mqtt/face/heartbeat`      | `HeartBeat` (`facesluiceId`, `time`)                                             |
+| **Online / LWT Status**   | MQTT Uplink/LWT   | `mqtt/face/basic`          | `Online` / `Offline` (`facesluiceId`, `ip`, `time`)                              |
 
 ---
 
-## 6. Execution & Deployment Runbook
-
-### Step 1: Database Setup
-
-```bash
-# Run database migrations
-php artisan migrate --force
-```
-
-### Step 2: MQTT Broker Setup
-
-Ensure EMQX or Mosquitto is active on port `1883` with standard authentication.
-
-### Step 3: Link Camera to MQTT Broker
-
-Issue a one-time provisioning HTTP or HTTPS POST request to the camera (supporting both HTTP and HTTPS endpoint camera devices):
-
-```bash
-curl -X POST http://192.168.1.100:8080/action/SetMQTTParam \
-  -u admin:admin \
-  -H "Content-Type: application/json" \
-  -d '{
-    "operator": "SetMQTTParam",
-    "info": {
-      "MQEnable": 1,
-      "MQAddr": "192.168.1.50",
-      "MQPort": 1883,
-      "MQUser": "camera_client",
-      "MQPwd": "secure_password",
-      "MQTopic": "mqtt/face/1299517",
-      "MQCloudID": "1299517",
-      "StrangerUploadType": 0,
-      "RecordUploadType": 1,
-      "KeepAliveInterval": 30,
-      "BasicTopic": "mqtt/face/basic",
-      "HeartbeatTopic": "mqtt/face/heartbeat",
-      "ResumefromBreakpoint": 1
-    }
-  }'
-```
-
-### Step 4: Supervisord Daemons
-
-Configure Supervisor configuration file `/etc/supervisor/conf.d/ai-camera-hub.conf`:
+## 6. Production Execution & Supervisord Config
 
 ```ini
-[program:camera-sync-worker]
-process_name=%(program_name)s_%(process_num)02d
-command=php /var/www/artisan queue:work redis --queue=camera-sync --sleep=3 --tries=3 --max-time=3600
+[program:camera-hub-mqtt]
+process_name=%(program_name)s
+command=php /var/www/camera_hub/artisan mqtt:listen
 autostart=true
 autorestart=true
+user=www-data
+numprocs=1
+redirect_stderr=true
+stdout_logfile=/var/log/supervisor/camera-hub-mqtt.log
+
+[program:camera-hub-sync-worker]
+process_name=%(program_name)s_%(process_num)02d
+command=php /var/www/camera_hub/artisan queue:work redis --queue=camera-sync --sleep=3 --tries=3
+autostart=true
+autorestart=true
+user=www-data
 numprocs=2
 redirect_stderr=true
-stdout_logfile=/var/log/camera-sync.log
+stdout_logfile=/var/log/supervisor/camera-hub-sync.log
 
-[program:mqtt-telemetry-daemon]
+[program:camera-hub-reverb]
 process_name=%(program_name)s
-command=php /var/www/artisan mqtt:listen
+command=php /var/www/camera_hub/artisan reverb:start --host=0.0.0.0 --port=8080
 autostart=true
 autorestart=true
+user=www-data
 numprocs=1
 redirect_stderr=true
-stdout_logfile=/var/log/mqtt-telemetry.log
-
-[program:reverb-websocket]
-process_name=%(program_name)s
-command=php /var/www/artisan reverb:start
-autostart=true
-autorestart=true
-numprocs=1
-redirect_stderr=true
-stdout_logfile=/var/log/reverb.log
-```
-
-### Step 5: Frontend Dashboard
-
-```bash
-cd frontend && npm install && npm run dev
+stdout_logfile=/var/log/supervisor/camera-hub-reverb.log
 ```

@@ -3,24 +3,34 @@
 namespace App\Events;
 
 use App\Models\AccessLog;
-use Illuminate\Broadcasting\Channel;
 use Illuminate\Broadcasting\InteractsWithSockets;
-use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
+use Illuminate\Broadcasting\PrivateChannel;
+use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
 
-class AccessLogReceived implements ShouldBroadcastNow
+class AccessLogReceived implements ShouldBroadcast
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
+    public ?string $connection = null;
+    public string $broadcastQueue = 'broadcasts';
+
     public function __construct(public AccessLog $log)
     {
+        $this->connection = app()->environment('testing') ? null : 'redis';
+        $this->broadcastQueue = 'broadcasts';
+    }
+
+    public function broadcastQueue(): string
+    {
+        return 'broadcasts';
     }
 
     public function broadcastOn(): array
     {
         return [
-            new Channel('access-logs'),
+            new PrivateChannel('access-logs'),
         ];
     }
 

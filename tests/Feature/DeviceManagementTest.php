@@ -132,4 +132,50 @@ class DeviceManagementTest extends TestCase
             'device_id' => 'CAM-AUTO-999',
         ]);
     }
+
+    public function test_device_audit_returns_unified_user_roster(): void
+    {
+        $device = Device::create([
+            'device_id' => 'CAM-AUDIT-01',
+            'name' => 'Audit Gate Camera',
+            'ip_address' => '192.168.1.108',
+            'port' => 1883,
+            'is_active' => true,
+        ]);
+
+        $person1 = \App\Models\Personnel::create([
+            'customize_id' => 9001,
+            'name' => 'Alice Auditor',
+            'person_type' => 0,
+        ]);
+
+        $person2 = \App\Models\Personnel::create([
+            'customize_id' => 9002,
+            'name' => 'Bob Blocked',
+            'person_type' => 1,
+        ]);
+
+        // Remove person2's sync task to test missing status
+        SyncTask::where('personnel_id', $person2->id)->delete();
+
+        $response = $this->getJson("/api/devices/{$device->id}/audit");
+
+        $response->assertStatus(200)
+            ->assertJson([
+                'success' => true,
+                'face_audit' => [
+                    'total_in_db' => 2,
+                    'synced_count' => 1,
+                    'missing_on_camera_count' => 1,
+                ],
+            ]);
+
+        $roster = $response->json('face_audit.user_roster');
+        $this->assertCount(2, $roster);
+        $this->assertEquals('Alice Auditor', $roster[0]['name']);
+        $this->assertEquals('SYNCED', $roster[0]['status']);
+        $this->assertEquals('Bob Blocked', $roster[1]['name']);
+        $this->assertEquals('MISSING', $roster[1]['status']);
+    }
 }
+

@@ -1,6 +1,10 @@
 <template>
   <div
     v-if="isOpen"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="camera-preview-title"
+    @keydown.escape="close"
     class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md animate-fadeIn"
     @click.self="close"
   >
@@ -8,47 +12,53 @@
       class="relative w-full max-w-5xl bg-white border border-slate-200 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]"
       :class="{ '!max-w-none !h-full !max-h-none !rounded-none': isFullscreen }"
     >
-      <!-- Modal Header -->
-      <div class="flex items-center justify-between px-6 py-4 bg-white border-b border-slate-200">
-        <div class="flex items-center space-x-3">
-          <div class="p-2 rounded-xl bg-indigo-50 border border-indigo-100 text-indigo-600">
-            <svg class="w-6 h-6 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <!-- Responsive Header <640px -->
+      <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 px-4 sm:px-6 py-3 sm:py-4 bg-white border-b border-slate-200">
+        <div class="flex items-center space-x-3 min-w-0">
+          <div class="p-2 rounded-xl bg-indigo-50 border border-indigo-100 text-indigo-600 shrink-0">
+            <svg class="w-6 h-6 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
             </svg>
           </div>
-          <div>
+          <div class="min-w-0">
             <div class="flex items-center space-x-2">
-              <h3 class="text-lg font-bold text-slate-900 tracking-wide">{{ device?.name || 'Camera Preview' }}</h3>
+              <h3 id="camera-preview-title" class="text-base sm:text-lg font-bold text-slate-900 tracking-wide truncate">
+                {{ device?.name || 'Camera Preview' }}
+              </h3>
               <span
-                class="px-2.5 py-0.5 text-xs font-semibold rounded-full flex items-center space-x-1.5"
+                class="px-2.5 py-0.5 text-xs font-semibold rounded-full flex items-center space-x-1.5 shrink-0"
                 :class="statusBadgeClass"
               >
                 <span class="w-1.5 h-1.5 rounded-full animate-ping" :class="statusDotClass"></span>
                 <span>{{ playerStatus.state || 'CONNECTING' }}</span>
               </span>
             </div>
-            <p class="text-xs text-slate-500 font-mono mt-0.5">
+            <p class="text-[11px] sm:text-xs text-slate-500 font-mono mt-0.5 truncate">
               ID: <span class="text-slate-700">{{ device?.device_id }}</span> |
-              Host: <span class="text-slate-700">{{ previewHost }}</span> |
-              WS Protocol: <span class="text-indigo-600 font-bold">{{ (device?.scheme === 'https' || window?.location?.protocol === 'https:') ? 'wss' : 'ws' }}://{{ previewHost }}/</span>
+              Endpoint: <span class="text-slate-700 font-semibold">{{ previewHost }}</span> |
+              <span class="hidden sm:inline">Stream: </span><span class="text-indigo-600 font-bold truncate">{{ wsUrlDisplay }}</span>
             </p>
           </div>
         </div>
 
-        <!-- Header Actions -->
-        <div class="flex items-center space-x-2">
-          <!-- Quality Switcher -->
-          <div class="bg-slate-100 p-1 rounded-lg border border-slate-200 flex items-center text-xs font-medium">
+        <!-- Header Actions with Quality Switcher ARIA attributes -->
+        <div class="flex items-center justify-between sm:justify-end w-full sm:w-auto gap-2 flex-wrap">
+          <!-- Quality Switcher with role="group" and aria-pressed -->
+          <div role="group" aria-label="Stream video resolution" class="bg-slate-100 p-1 rounded-lg border border-slate-200 flex items-center text-xs font-medium">
             <button
+              type="button"
               @click="switchQuality(0)"
-              class="px-2.5 py-1 rounded transition-all"
+              :aria-pressed="streamType === 0"
+              class="px-2.5 py-1 rounded transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-500"
               :class="streamType === 0 ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900'"
             >
               1080P Main
             </button>
             <button
+              type="button"
               @click="switchQuality(1)"
-              class="px-2.5 py-1 rounded transition-all"
+              :aria-pressed="streamType === 1"
+              class="px-2.5 py-1 rounded transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-500"
               :class="streamType === 1 ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900'"
             >
               720P Sub
@@ -60,34 +70,39 @@
             :href="`${previewEndpointUrl}/#/preview`"
             target="_blank"
             rel="noopener noreferrer"
-            class="p-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-900 border border-slate-200 transition"
+            aria-label="Open Camera Native Web UI in new tab"
+            class="p-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-900 border border-slate-200 transition cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-500"
             title="Open Camera Native Web UI"
           >
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
             </svg>
           </a>
 
-          <!-- Fullscreen Toggle -->
+          <!-- Fullscreen Toggle with accessible name -->
           <button
+            type="button"
             @click="toggleFullscreen"
-            class="p-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-900 border border-slate-200 transition"
+            :aria-label="isFullscreen ? 'Exit full screen video mode' : 'Toggle full screen video mode'"
+            class="p-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-900 border border-slate-200 transition cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-500"
             :title="isFullscreen ? 'Exit Fullscreen' : 'Enter Fullscreen'"
           >
-            <svg v-if="!isFullscreen" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg v-if="!isFullscreen" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
             </svg>
-            <svg v-else class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg v-else class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
 
-          <!-- Close Modal -->
+          <!-- Close Modal with accessible name -->
           <button
+            type="button"
             @click="close"
-            class="p-2 rounded-lg bg-slate-100 hover:bg-rose-50 text-slate-500 hover:text-rose-600 border border-slate-200 hover:border-rose-200 transition"
+            aria-label="Close camera preview modal"
+            class="p-2 rounded-lg bg-slate-100 hover:bg-rose-50 text-slate-500 hover:text-rose-600 border border-slate-200 hover:border-rose-200 transition cursor-pointer focus:outline-none focus:ring-2 focus:ring-rose-500"
           >
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
@@ -206,7 +221,7 @@
 </template>
 
 <script setup>
-import { ref, watch, nextTick, onBeforeUnmount, computed } from 'vue';
+import { ref, watch, nextTick, onMounted, onBeforeUnmount, computed } from 'vue';
 import { CameraHqPlayer } from '../utils/cameraHqPlayer';
 
 const props = defineProps({
@@ -232,13 +247,36 @@ const playerStatus = ref({ state: 'CONNECTING', message: 'Connecting to WebSocke
 const decodeInfo = ref({ width: 0, height: 0, fps: 0, bitrateKbps: 0 });
 
 const previewHost = computed(() => {
-  if (!props.device?.ip_address) return '';
-  return props.device.ip_address.replace(/ai-camera-api\./i, 'ai-camera.');
+  if (props.device?.endpoint_url) {
+    const clean = props.device.endpoint_url
+      .replace(/^https?:\/\//i, '')
+      .replace(/^wss?:\/\//i, '')
+      .replace(/\/.*$/, '');
+    return clean.replace(/ai-camera-api\./i, 'ai-camera.');
+  }
+  if (!props.device?.ip_address) return 'ai-camera.philyra.cloud';
+  return props.device.ip_address
+    .replace(/^https?:\/\//i, '')
+    .replace(/^wss?:\/\//i, '')
+    .replace(/\/.*$/, '')
+    .replace(/ai-camera-api\./i, 'ai-camera.');
+});
+
+const isSecure = computed(() => {
+  if (typeof window !== 'undefined' && window.location?.protocol === 'https:') return true;
+  if (props.device?.scheme === 'https') return true;
+  if (previewHost.value.includes('.cloud')) return true;
+  return false;
+});
+
+const wsUrlDisplay = computed(() => {
+  const protocol = isSecure.value ? 'wss:' : 'ws:';
+  return `${protocol}//${previewHost.value}/`;
 });
 
 const previewEndpointUrl = computed(() => {
   if (!props.device) return '';
-  const scheme = props.device.scheme || 'http';
+  const scheme = isSecure.value ? 'https' : (props.device.scheme || 'http');
   return `${scheme}://${previewHost.value}`;
 });
 
@@ -279,9 +317,9 @@ function initPlayer() {
 
   try {
     playerInstance.value = new CameraHqPlayer(videoCanvas.value, {
-      scheme: props.device.scheme || 'http',
+      scheme: isSecure.value ? 'https' : (props.device.scheme || 'http'),
       host: previewHost.value,
-      port: props.device.port || (props.device.scheme === 'https' ? 443 : 80),
+      port: (isSecure.value || previewHost.value.includes('.cloud')) ? 443 : (props.device.port || 80),
       username: props.device.username || 'admin',
       password: props.device.password || 'admin',
       streamType: streamType.value,
@@ -364,8 +402,19 @@ watch(
   }
 );
 
+function handleGlobalKeydown(e) {
+  if (e.key === 'Escape' && props.isOpen) {
+    close();
+  }
+}
+
+onMounted(() => {
+  window.addEventListener('keydown', handleGlobalKeydown);
+});
+
 onBeforeUnmount(() => {
   destroyPlayer();
+  window.removeEventListener('keydown', handleGlobalKeydown);
 });
 </script>
 

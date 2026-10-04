@@ -21,8 +21,12 @@
       <div class="flex items-center gap-3 w-full sm:w-auto flex-wrap sm:flex-nowrap justify-end">
         <!-- Audio Alert Toggle -->
         <button 
+          type="button"
+          role="switch"
+          :aria-checked="store.soundEnabled"
+          aria-label="Toggle audio alerts"
           @click="store.soundEnabled = !store.soundEnabled"
-          class="px-3 py-1.5 text-xs font-medium rounded-lg border transition-all flex items-center gap-2 cursor-pointer shadow-xs"
+          class="px-3 py-1.5 text-xs font-medium rounded-lg border transition-all flex items-center gap-2 cursor-pointer shadow-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
           :class="store.soundEnabled ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-50'"
         >
           <span v-if="store.soundEnabled">🔊 Audio Alert: ON</span>
@@ -30,7 +34,12 @@
         </button>
 
         <!-- Stream Filter -->
-        <select v-model="statusFilter" @change="onFilterChange" class="bg-white border border-slate-200 text-xs rounded-lg px-3 py-1.5 text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 shadow-xs cursor-pointer">
+        <select 
+          v-model="statusFilter" 
+          @change="onFilterChange" 
+          aria-label="Filter events by verification status"
+          class="bg-white border border-slate-200 text-xs rounded-lg px-3 py-1.5 text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 shadow-xs cursor-pointer"
+        >
           <option value="all">All Events</option>
           <option value="1">Allowed (Whitelisted)</option>
           <option value="2">Rejected / Denied</option>
@@ -40,10 +49,11 @@
         <!-- Refresh Button -->
         <button 
           @click="fetchLogs(currentPage)" 
-          class="px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-lg text-xs font-medium flex items-center gap-1 transition-colors shadow-xs cursor-pointer"
+          aria-label="Refresh telemetry logs"
+          class="px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-lg text-xs font-medium flex items-center gap-1 transition-colors shadow-xs cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-500"
           title="Refresh Logs"
         >
-          <span>🔄</span>
+          <span aria-hidden="true">🔄</span>
         </button>
       </div>
     </div>
@@ -63,9 +73,27 @@
         </div>
       </div>
 
-      <div v-if="loading" class="bg-white border border-slate-200 rounded-xl p-12 text-center text-slate-500 shadow-xs">
-        <div class="animate-spin inline-block w-6 h-6 border-2 border-indigo-600 border-t-transparent rounded-full mb-2"></div>
-        <div class="text-xs font-medium text-slate-600">Loading telemetry logs...</div>
+      <div 
+        v-if="loading" 
+        class="grid grid-cols-1 md:grid-cols-2 gap-3" 
+        aria-busy="true" 
+        aria-label="Loading telemetry logs"
+      >
+        <div 
+          v-for="i in 6" 
+          :key="i"
+          class="bg-white border border-slate-200 rounded-xl p-4 flex items-center justify-between gap-4 animate-pulse shadow-xs"
+        >
+          <div class="flex items-center gap-4 min-w-0 flex-1">
+            <div class="w-16 h-16 rounded-lg bg-slate-200 shrink-0"></div>
+            <div class="space-y-2 flex-1">
+              <div class="h-4 bg-slate-200 rounded w-1/2"></div>
+              <div class="h-3 bg-slate-100 rounded w-3/4"></div>
+              <div class="h-2 bg-slate-100 rounded w-1/3"></div>
+            </div>
+          </div>
+          <div class="h-6 w-20 bg-slate-200 rounded-full"></div>
+        </div>
       </div>
 
       <div v-else-if="sortedLogs.length === 0" class="bg-white border border-dashed border-slate-300 rounded-xl p-12 text-center text-slate-500 shadow-xs">
@@ -83,11 +111,16 @@
         >
           <div class="flex items-center gap-4 min-w-0">
             <!-- Face Thumbnail -->
-            <div class="relative w-16 h-16 rounded-lg bg-slate-100 border border-slate-200 overflow-hidden shrink-0 cursor-pointer" @click="openImageModal(log.snap_pic_url, log.scene_pic_url, log.person_name)">
-              <img v-if="log.snap_pic_url" :src="log.snap_pic_url" alt="Face Snapshot" class="w-full h-full object-cover hover:scale-105 transition-transform" />
+            <button 
+              type="button"
+              @click="openImageModal(log.snap_pic_url, log.scene_pic_url, log.person_name)"
+              :aria-label="`Inspect snapshot for ${log.person_name || 'Unregistered Person'}`"
+              class="relative w-16 h-16 rounded-lg bg-slate-100 border border-slate-200 overflow-hidden shrink-0 cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            >
+              <img v-if="log.snap_pic_url" :src="log.snap_pic_url" :alt="`Snapshot of ${log.person_name || 'person'}`" class="w-full h-full object-cover hover:scale-105 transition-transform" />
               <div v-else class="w-full h-full flex items-center justify-center text-xs text-slate-400 font-mono">NO PIC</div>
               <div v-if="log.is_no_mask === 1" class="absolute bottom-0 right-0 bg-amber-500 text-black text-[9px] px-1 font-bold rounded-tl">NO MASK</div>
-            </div>
+            </button>
 
             <!-- Details -->
             <div class="min-w-0">
@@ -127,7 +160,8 @@
             <button 
               v-if="log.scene_pic_url"
               @click="openImageModal(log.snap_pic_url, log.scene_pic_url, log.person_name)"
-              class="text-xs text-slate-600 hover:text-slate-900 bg-slate-50 hover:bg-slate-100 px-2.5 py-1 rounded border border-slate-200 transition-colors shadow-xs cursor-pointer"
+              :aria-label="`View full scene context for ${log.person_name || 'person'}`"
+              class="text-xs text-slate-600 hover:text-slate-900 bg-slate-50 hover:bg-slate-100 px-2.5 py-1 rounded border border-slate-200 transition-colors shadow-xs cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-500"
             >
               Scene
             </button>
@@ -141,7 +175,7 @@
           <span>Showing <strong class="text-slate-900 font-mono">{{ fromCount }}</strong> to <strong class="text-slate-900 font-mono">{{ toCount }}</strong> of <strong class="text-slate-900 font-mono">{{ totalLogs }}</strong> telemetry logs</span>
           <div class="flex items-center gap-1.5 text-slate-500">
             <span>Show:</span>
-            <select v-model.number="perPage" @change="onPerPageChange" class="bg-white border border-slate-200 text-xs rounded px-2 py-1 text-slate-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer">
+            <select v-model.number="perPage" @change="onPerPageChange" aria-label="Items per page" class="bg-white border border-slate-200 text-xs rounded px-2 py-1 text-slate-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer">
               <option :value="10">10</option>
               <option :value="20">20</option>
               <option :value="50">50</option>
@@ -174,24 +208,36 @@
     </div>
 
     <!-- Image Inspection Modal -->
-    <div v-if="modal.show" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm" @click.self="modal.show = false">
-      <div class="bg-white border border-slate-200 rounded-2xl max-w-3xl w-full p-6 space-y-4 max-h-[90vh] overflow-y-auto shadow-2xl">
+    <div 
+      v-if="modal.show" 
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="image-modal-title"
+      @keydown.escape="modal.show = false"
+      class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm" 
+      @click.self="modal.show = false"
+    >
+      <div class="bg-white border border-slate-200 rounded-2xl max-w-3xl w-full p-6 space-y-4 max-h-[90vh] overflow-y-auto shadow-2xl animate-in fade-in zoom-in-95 duration-150">
         <div class="flex items-center justify-between border-b border-slate-200 pb-3">
-          <h3 class="text-base font-bold text-slate-900">{{ modal.title }} - High Resolution Snapshot</h3>
-          <button @click="modal.show = false" class="text-slate-400 hover:text-slate-700 text-lg font-bold cursor-pointer">&times;</button>
+          <h3 id="image-modal-title" class="text-base font-bold text-slate-900">{{ modal.title }} - High Resolution Snapshot</h3>
+          <button 
+            @click="modal.show = false" 
+            aria-label="Close image inspection dialog"
+            class="text-slate-400 hover:text-slate-700 text-lg font-bold cursor-pointer p-1 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          >&times;</button>
         </div>
-        <div class="grid grid-cols-1">
+        <div class="grid grid-cols-1 gap-4">
           <div v-if="modal.snapUrl" class="space-y-2">
             <div class="text-xs font-semibold text-slate-500">Face Snapshot (Crop)</div>
-            <img :src="modal.snapUrl" class="rounded-xl border border-slate-200 w-full max-h-72 object-contain bg-slate-950" />
+            <img :src="modal.snapUrl" alt="High resolution facial crop" class="rounded-xl border border-slate-200 w-full max-h-72 object-contain bg-slate-950" />
           </div>
           <div v-if="modal.sceneUrl" class="space-y-2">
             <div class="text-xs font-semibold text-slate-500">Context Scene View</div>
-            <img :src="modal.sceneUrl" class="rounded-xl border border-slate-200 w-full max-h-72 object-contain bg-slate-950" />
+            <img :src="modal.sceneUrl" alt="Wide-angle scene context" class="rounded-xl border border-slate-200 w-full max-h-72 object-contain bg-slate-950" />
           </div>
         </div>
         <div class="flex justify-end pt-2">
-          <button @click="modal.show = false" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg border border-slate-300 cursor-pointer transition-colors">Close</button>
+          <button @click="modal.show = false" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg border border-slate-300 cursor-pointer transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500">Close</button>
         </div>
       </div>
     </div>
@@ -199,10 +245,10 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted } from 'vue';
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import { useCameraStore } from '../stores/cameraStore';
 import { formatTime, formatDateTime } from '../utils/date';
-import axios from 'axios';
+import apiClient from '../api/client';
 
 const store = useCameraStore();
 const statusFilter = ref('all');
@@ -213,6 +259,7 @@ const lastPage = ref(1);
 const fromCount = ref(0);
 const toCount = ref(0);
 const loading = ref(false);
+let pollTimer = null;
 
 const logs = ref([]);
 
@@ -235,8 +282,10 @@ const sortedLogs = computed(() => {
   });
 });
 
-async function fetchLogs(page = 1) {
-  loading.value = true;
+async function fetchLogs(page = 1, silent = false) {
+  if (!silent) {
+    loading.value = true;
+  }
   try {
     const params = {
       page,
@@ -246,7 +295,7 @@ async function fetchLogs(page = 1) {
       params.verify_status = statusFilter.value;
     }
 
-    const res = await axios.get('/api/access-logs', { params });
+    const res = await apiClient.get('/api/access-logs', { params });
     const fetchedLogs = res.data.data || [];
 
     if (page === 1) {
@@ -283,7 +332,9 @@ async function fetchLogs(page = 1) {
   } catch (err) {
     console.error('Failed to fetch telemetry logs:', err);
   } finally {
-    loading.value = false;
+    if (!silent) {
+      loading.value = false;
+    }
   }
 }
 
@@ -368,7 +419,25 @@ function openImageModal(snapUrl, sceneUrl, title) {
   };
 }
 
+const handleKeydown = (e) => {
+  if (e.key === 'Escape' && modal.value.show) {
+    modal.value.show = false;
+  }
+};
+
 onMounted(() => {
+  window.addEventListener('keydown', handleKeydown);
   fetchLogs(1);
+  if (pollTimer) clearInterval(pollTimer);
+  pollTimer = setInterval(() => {
+    if (currentPage.value === 1) {
+      fetchLogs(1, true);
+    }
+  }, 4000);
+});
+
+onUnmounted(() => {
+  window.removeEventListener('keydown', handleKeydown);
+  if (pollTimer) clearInterval(pollTimer);
 });
 </script>

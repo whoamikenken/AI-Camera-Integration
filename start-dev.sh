@@ -71,19 +71,23 @@ echo -e "${CYAN}→ Starting MQTT Ingestion Daemon (php artisan mqtt:listen)...$
 php artisan mqtt:listen > /dev/null 2>&1 &
 MQTT_PID=$!
 
-# C. Start bore TCP Tunnel for MQTT (using static remote port 35803)
-echo -e "${CYAN}→ Starting bore TCP Tunnel for MQTT...${NC}"
-./bore local 1883 --to bore.pub --port 35803 > /tmp/bore.log 2>&1 &
-BORE_PID=$!
-sleep 1.5
-BORE_PORT=$(grep -oP 'listening at bore.pub:\K[0-9]+' /tmp/bore.log || echo "27964")
+# C. Insecure bore TCP Tunnel for MQTT disabled for security (SEC-03)
+# To enable only for trusted testing: ENABLE_INSECURE_MQTT_TUNNEL=true ./start-dev.sh
+if [ "${ENABLE_INSECURE_MQTT_TUNNEL:-false}" = "true" ]; then
+    echo -e "${RED}⚠ WARNING: Exposing unencrypted MQTT to public bore.pub tunnel...${NC}"
+    ./bore local 1883 --to bore.pub --port 35803 > /tmp/bore.log 2>&1 &
+    BORE_PID=$!
+    sleep 1.5
+    BORE_PORT=$(grep -oP 'listening at bore.pub:\K[0-9]+' /tmp/bore.log || echo "35803")
+    echo -e "${YELLOW} Public MQTT Host: bore.pub:${BORE_PORT}${NC}"
+fi
 
 echo -e "${GREEN}=====================================================${NC}"
 echo -e "${GREEN} Dev Environment Ready!${NC}"
 echo -e "${GREEN} Local Web:        http://127.0.0.1:8000${NC}"
 echo -e "${GREEN} Local Vite:       http://localhost:5173${NC}"
 echo -e "${GREEN} Public Web:       https://camera-dev.8gategames.com${NC}"
-echo -e "${GREEN} Public MQTT Host: bore.pub:${BORE_PORT}${NC}"
+echo -e "${GREEN} Local MQTT:       127.0.0.1:1883${NC}"
 echo -e "${GREEN}=====================================================${NC}"
 echo -e "${YELLOW}Press Ctrl+C to stop all development services.${NC}\n"
 

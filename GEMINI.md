@@ -8,11 +8,12 @@ This document outlines the system architecture, component breakdown, database sc
 
 The **Intelligent AI Camera Hub** is a centralized access control, biometric identity synchronization, and real-time vision telemetry platform designed for network-based face recognition and smart AI cameras (specifically X40Y and related edge hardware).
 
-The system implements a **Decoupled Hybrid Architecture**:
+The system implements a **Pure WAN MQTT Architecture**:
 
-- **Synchronous Device Control (LAN)**: Manages personnel enrollment, whitelist/blacklist provisioning, credentials, face templates, and camera hardware settings via direct HTTP/HTTPS POST requests (`/action/<Operator>`) with HTTP Basic Authentication (`admin:admin`). Supports both HTTP and HTTPS endpoint camera devices.
-- **Asynchronous Telemetry Streaming (WAN / MQTT)**: Ingests high-frequency real-time verification logs (`VerifyPush`), stranger snapshots (`SnapPush`), behavioral infractions, and device heartbeats via an MQTT broker subscribing to camera topic streams (`mqtt/face/<DeviceID>/*`).
-- **Real-Time Client Broadcasting**: Distributes ingested telemetry events to live web dashboards via WebSockets with minimal latency.
+- **Edge Camera Bootstrap**: Initial MQTT broker parameters (Broker Host/IP, Port 1883, Topics, and Authentication) are manually configured directly on the camera device via its built-in Web interface.
+- **Asynchronous Telemetry Streaming (WAN / MQTT Uplink)**: Ingests high-frequency real-time verification logs (`VerifyPush`), stranger snapshots (`StrSnapPush`), behavioral infractions, and device heartbeats (`HeartBeat`) via an MQTT broker subscribing to camera topic streams (`mqtt/face/<DeviceID>/*`).
+- **Bidirectional WAN Command Dispatch (MQTT Downlink)**: Manages personnel enrollment, whitelist/blacklist provisioning, credentials, face templates, diagnostics, remote reboots, and camera settings via MQTT downlink commands (`mqtt/face/<DeviceID>`) with request-reply confirmation (`mqtt/face/<DeviceID>/Ack`).
+- **Real-Time Client Broadcasting**: Distributes ingested telemetry events and attendance updates to live web dashboards via WebSockets (Laravel Reverb) with minimal latency.
 
 ---
 
@@ -53,7 +54,7 @@ flowchart TD
     end
 
     subgraph Workers["Background Daemons (Supervisord)"]
-        LANWorker["LAN Edge Sync Worker\n(Queue: camera-sync)"]
+        MQTTSyncWorker["WAN MQTT Sync Worker\n(Queue: camera-sync)"]
         MQTTDaemon["MQTT Telemetry Daemon\n(php artisan mqtt:listen)"]
     end
 
@@ -61,8 +62,8 @@ flowchart TD
         MQTTBroker["MQTT Broker (EMQX / Mosquitto :1883)"]
     end
 
-    subgraph EdgeDevices["Edge Camera Infrastructure"]
-        Camera["Intelligent AI Camera (X40Y)\nIP: 192.168.1.100:8080"]
+    subgraph EdgeDevices["Edge Camera Infrastructure (WAN)"]
+        Camera["Intelligent AI Camera (X40Y)\nConnected via WAN / Cellular / Ethernet"]
     end
 
     UI <-->|HTTP REST / Auth| API
@@ -72,11 +73,12 @@ flowchart TD
 
     API -->|Dispatch Sync Jobs| RedisCache
     RedisCache --> Horizon
-    Horizon --> LANWorker
+    Horizon --> MQTTSyncWorker
 
-    LANWorker -->|HTTP / HTTPS POST /action/*\nBasic Auth| Camera
+    MQTTSyncWorker -->|MQTT Pub: mqtt/face/{ID}\nEditPerson, DelPerson, Reboot| MQTTBroker
+    MQTTBroker -->|Downlink Commands| Camera
 
-    Camera -->|MQTT Pub: mqtt/face/{ID}/*| MQTTBroker
+    Camera -->|MQTT Pub: mqtt/face/{ID}/*\nRecPush, StrSnapPush, HeartBeat| MQTTBroker
     MQTTBroker -->|Sub: mqtt/face/#| MQTTDaemon
     MQTTDaemon -->|Store Access Logs| DB
     MQTTDaemon -->|Broadcast Event| Reverb
@@ -92,8 +94,8 @@ CREATE TABLE devices (
     id SERIAL PRIMARY KEY,
     device_id VARCHAR(64) UNIQUE NOT NULL,       -- e.g., '1299517' or '005a213b000b93cc'
     name VARCHAR(128) NOT NULL,
-    ip_address VARCHAR(45) NOT NULL,             -- e.g., '192.168.1.100'
-    port INT DEFAULT 8080,
+    ip_address VARCHAR(45) NOT NULL,             -- e.g., '192.168.1.100' or domain
+    port INT DEFAULT 1883,
     username VARCHAR(64) DEFAULT 'admin',
     password VARCHAR(64) DEFAULT 'admin',
     device_type INT DEFAULT 0,                   -- 0: IPC, 1: DVR, 2: NVR, 3: Panel Unit
@@ -174,48 +176,52 @@ CREATE TABLE sync_tasks (
 
 ### A. Core Laravel Backend & API Services
 
-- **Camera Management Service (`App\Services\CameraService`)**: Formulates JSON payloads and sends HTTP/HTTPS POST requests to camera hardware endpoints (supporting both HTTP and HTTPS endpoint camera devices) using `Illuminate\Support\Facades\Http` with HTTP Basic Authentication.
-- **Personnel Sync Observer (`App\Observers\PersonnelObserver`)**: Automatically dispatches `SyncPersonnelToDeviceJob` to the `camera-sync` Redis queue whenever a personnel record or facial image is created, updated, or removed.
-- **Storage Manager (`App\Services\ImageStorageService`)**: Ingests Base64 image payloads received from MQTT/Webhooks, saves binaries to local disk or S3/R2 storage, and generates public storage URLs for the UI.
+- **Camera Management Service (`App\Services\CameraService` / `App\Services\CameraMqttService`)**: Formulates JSON payloads and dispatches downlink MQTT commands to camera hardware topics (`mqtt/face/<DeviceID>`) using `PhpMqtt\Client\MqttClient`.
+- **Personnel Sync Observer (`App\Observers\PersonnelObserver`)**: Automatically dispatches `SyncPersonnelJob` to the `camera-sync` Redis queue whenever a personnel record or facial image is created, updated, or removed.
+- **Storage Manager (`App\Services\ImageStorageService`)**: Ingests Base64 image payloads received from MQTT telemetry, saves binaries to local disk or S3/R2 storage, and generates public storage URLs for the UI.
 
-### B. LAN Dispatcher (Edge Sync Worker)
+### B. WAN MQTT Dispatcher (Edge Sync Worker)
 
 - Runs as a dedicated Redis queue worker: `php artisan queue:work redis --queue=camera-sync`
-- Dispatches personnel sync operations (`/action/EditPersonNew`, `/action/AddPersons`, `/action/DeletePerson`) to cameras on the network via HTTP or HTTPS (`http://` or `https://192.168.1.100:8080`).
-- Implements exponential backoff, rate limiting (&ge; 1s between single calls), and error logging using camera status codes.
+- Dispatches personnel sync operations (`EditPerson`, `AddPersons`, `DelPerson`, `DeletePersons`) to cameras across WAN via the MQTT broker topic `mqtt/face/<DeviceID>`.
+- Tracks acknowledgments and execution status in the `sync_tasks` table.
 
 ### C. Cloud MQTT Telemetry Daemon
 
 - Long-running Laravel CLI command: `php artisan mqtt:listen` powered by `php-mqtt/client`.
-- Subscribes to configured camera wildcard topics (e.g. `mqtt/face/+/Rec`, `mqtt/face/+/Snap`, `mqtt/face/heartbeat`).
+- Subscribes to configured camera wildcard topics (e.g. `mqtt/face/+/Rec`, `mqtt/face/+/Snap`, `mqtt/face/heartbeat`, `mqtt/face/basic`).
 - **Event Handling**:
     - `RecPush`: Extracts `customId`, `VerifyStatus`, `similarity1`, saves to `access_logs`, and fires `AccessLogReceived` event over Laravel Reverb.
     - `StrSnapPush`: Extracts snapshot images, saves to `stranger_snaps`, and notifies UI.
-    - `HeartBeat`: Updates `devices.last_heartbeat_at`.
-    - Sends MQTT `PushAck` confirmation packets when continuous transmission is enabled.
+    - `HeartBeat`: Updates `devices.last_heartbeat_at` for online presence tracking.
+    - `Online` / `Offline`: Detects hardware boots and Last Will and Testament disconnections.
+    - Sends MQTT `PushAck` confirmation packets when continuous transmission (`ResumefromBreakpoint`) is enabled.
 
 ### D. Vue 3 Real-Time Frontend
 
 - **Live Event Monitor**: Real-time access log feed displaying matched photo, employee name, similarity percentage, admission status badge (Allowed / Denied), and timestamps via WebSockets.
 - **Personnel Directory**: Manage users, upload/crop facial images, set temporary/permanent access schedules, and trigger manual syncs.
-- **Device Management Panel**: Configure camera network parameters, push MQTT settings (`SetMQTTParam`), view online/offline statuses, and trigger remote reboots (`RebootDevice`).
+- **Device Management Panel**: Configure device parameters, monitor online/offline heartbeat status, dispatch downlink commands (reboot, parameter queries, clock sync), and verify connectivity over MQTT.
 
 ---
 
-## 6. Camera Protocol Reference Mapping
+## 6. Camera Protocol Reference Mapping (Pure MQTT WAN)
 
-| Operation                    | Protocol / Endpoint             | Channel            | Key Payload Parameters                                                             |
-| :--------------------------- | :------------------------------ | :----------------- | :--------------------------------------------------------------------------------- |
-| **Add / Update Person**      | `POST /action/EditPersonNew`    | HTTP / HTTPS (LAN) | `DeviceID`, `IdType: 0`, `CustomizeID`, `Name`, `PersonType`, `picinfo` / `picURI` |
-| **Batch Add Persons**        | `POST /action/AddPersons`       | HTTP / HTTPS (LAN) | `DeviceID`, `Total`, `Personinfo_0: {...}` (up to 32 Base64 / 1000 URI)            |
-| **Delete Person**            | `POST /action/DeletePerson`     | HTTP / HTTPS (LAN) | `DeviceID`, `TotalNum`, `IdType: 0`, `CustomizeID: [id1, id2]`                     |
-| **Delete All Persons**       | `POST /action/DeleteAllPerson`  | HTTP / HTTPS (LAN) | `DeleteAllPersonCheck: 1` _(Triggers auto-reboot)_                                 |
-| **Search List**              | `POST /action/SearchPersonList` | HTTP / HTTPS (LAN) | `DeviceID`, `PersonType: 2`, `BeginNO: 0`, `RequestCount: 50`                      |
-| **Configure MQTT**           | `POST /action/SetMQTTParam`     | HTTP / HTTPS (LAN) | `MQEnable: 1`, `MQAddr`, `MQPort`, `MQTopic`, `RecordUploadType: 1`                |
-| **Reboot Camera**            | `POST /action/RebootDevice`     | HTTP / HTTPS (LAN) | `DeviceID`, `IsRebootDevice: 1`                                                    |
-| **Live Verification Stream** | `mqtt/face/{DeviceID}/Rec`      | MQTT (Broker)      | `VerifyPush` (`VerifyStatus`, `similarity1`, `pic`, `scene`)                       |
-| **Stranger Alert Stream**    | `mqtt/face/{DeviceID}/Snap`     | MQTT (Broker)      | `StrSnapPush` (`CreateTime`, `pic`, `scene`)                                       |
-| **Heartbeat Stream**         | `mqtt/face/heartbeat`           | MQTT (Broker)      | `HeartBeat` (`facesluiceId`, `time`)                                               |
+| Operation                    | Protocol / Topic                | Channel           | Key Payload Parameters                                                             |
+| :--------------------------- | :------------------------------ | :---------------- | :--------------------------------------------------------------------------------- |
+| **Add / Update Person**      | `mqtt/face/{DeviceID}`          | MQTT (Downlink)   | `operator: "EditPerson"`, `facesluiceId`, `customId`, `name`, `pic` / `picURI`    |
+| **Batch Add Persons**        | `mqtt/face/{DeviceID}`          | MQTT (Downlink)   | `operator: "AddPersons"`, `PersonNum`, `Personinfo_0: {...}`                       |
+| **Delete Person**            | `mqtt/face/{DeviceID}`          | MQTT (Downlink)   | `operator: "DelPerson"` / `"DeletePersons"`, `customId: [...]`                     |
+| **Delete All Persons**       | `mqtt/face/{DeviceID}`          | MQTT (Downlink)   | `operator: "DeleteAllPerson"`, `deleteall: 1`                                      |
+| **Search List**              | `mqtt/face/{DeviceID}`          | MQTT (Downlink)   | `operator: "SearchPersonList"`, `PersonType: 2`, `BeginNO: 0`, `RequestCount: 50`  |
+| **Update MQTT Settings**     | `mqtt/face/{DeviceID}`          | MQTT (Downlink)   | `operator: "UpMQTTconfig"`, `StrangerUploadType`, `RecordUploadType`, `KeepAlive`  |
+| **Reboot Camera**            | `mqtt/face/{DeviceID}`          | MQTT (Downlink)   | `operator: "RebootDevice"`, `facesluiceId`                                         |
+| **Time Synchronization**     | `mqtt/face/{DeviceID}`          | MQTT (Downlink)   | `operator: "SetSysTime"`, `time: "YYYY-MM-DD hh:mm:ss"`                            |
+| **Device Information**       | `mqtt/face/{DeviceID}`          | MQTT (Downlink)   | `operator: "GetDeviceInformation"`, `facesluiceId`                                 |
+| **Live Verification Stream** | `mqtt/face/{DeviceID}/Rec`      | MQTT (Uplink)     | `VerifyPush` (`VerifyStatus`, `similarity1`, `pic`, `scene`)                       |
+| **Stranger Alert Stream**    | `mqtt/face/{DeviceID}/Snap`     | MQTT (Uplink)     | `StrSnapPush` (`time`, `pic`, `scene`)                                             |
+| **Heartbeat Stream**         | `mqtt/face/heartbeat`           | MQTT (Uplink)     | `HeartBeat` (`facesluiceId`, `time`)                                               |
+| **Online / Offline Status**  | `mqtt/face/basic`               | MQTT (Uplink/LWT) | `Online` / `Offline` (`facesluiceId`, `ip`, `time`)                                |
 
 ---
 
@@ -225,13 +231,14 @@ CREATE TABLE sync_tasks (
     - Run PostgreSQL 16 migrations to establish tables: `devices`, `personnel`, `access_logs`, `stranger_snaps`, `sync_tasks`.
 2. **MQTT Broker Configuration**:
     - Launch EMQX or Mosquitto on port `1883`.
-    - Configure authentication credentials for the cameras and Laravel daemon.
-3. **Camera Initialization**:
-    - Send HTTP/HTTPS POST `/action/SetMQTTParam` to the camera (`http://` or `https://192.168.1.100:8080`) with the broker's IP, port, and topics.
+    - Configure broker credentials if authentication is enabled.
+3. **Camera Bootstrap (Manual Setup)**:
+    - Log in to each camera's local web configuration page.
+    - Configure the MQTT server settings (Host, Port 1883, Topic prefix `mqtt/face/<DeviceID>`, keepalive interval).
 4. **Daemon Deployment (Supervisord)**:
     - Configure supervisor programs for:
         - `php artisan horizon` (or `php artisan queue:work --queue=camera-sync`)
         - `php artisan mqtt:listen`
         - `php artisan reverb:start`
 5. **Frontend Launch**:
-    - Build or serve Vue 3 application with Vite and configure WebSocket connection pointing to Laravel Reverb.
+    - Build frontend application (`npm run build`) and point WebSocket connection to Laravel Reverb.

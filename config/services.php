@@ -35,4 +35,9 @@ return [
         ],
     ],
 
+    'camera' => [
+        'webhook_secret' => env('CAMERA_WEBHOOK_SECRET', null),
+        'ca_bundle' => env('CAMERA_CA_BUNDLE', null),
+    ],
+
 ];

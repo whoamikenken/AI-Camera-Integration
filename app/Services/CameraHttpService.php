@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Log;
 
 class CameraHttpService
 {
-    protected int $timeout = 10;
+    protected int $timeout = 4;
 
     /**
      * Parse endpoint URL/string into scheme, host, and port.
@@ -37,10 +37,18 @@ class CameraHttpService
             $host = 'ai-camera-api.philyra.cloud';
         }
 
+        $isCloudDomain = str_contains(strtolower($host), '.cloud')
+            || str_contains(strtolower($host), 'philyra.cloud')
+            || str_contains(strtolower($host), 'ai-camera');
+
+        if ($isCloudDomain) {
+            $detectedScheme = 'https';
+        }
+
         if (isset($parsed['port'])) {
             $detectedPort = (int) $parsed['port'];
         } elseif ($port && $port > 0) {
-            $detectedPort = $port;
+            $detectedPort = ($isCloudDomain && ($port === 8080 || $port === 80)) ? 443 : $port;
         } else {
             $detectedPort = $detectedScheme === 'https' ? 443 : 8080;
         }
@@ -119,9 +127,15 @@ class CameraHttpService
         }
 
         try {
-            $httpRequest = Http::timeout($timeout ?: $this->timeout);
+            $reqTimeout = $timeout ?: $this->timeout;
+            $httpRequest = Http::timeout($reqTimeout)->connectTimeout(min(2, $reqTimeout));
             if ($scheme === 'https') {
-                $httpRequest = $httpRequest->withoutVerifying();
+                $caBundle = config('services.camera.ca_bundle') ?: env('CAMERA_CA_BUNDLE');
+                if ($caBundle && file_exists($caBundle)) {
+                    $httpRequest = $httpRequest->withOptions(['verify' => $caBundle]);
+                } elseif (env('CAMERA_HTTP_ALLOW_SELF_SIGNED', false) && app()->environment('local', 'testing')) {
+                    $httpRequest = $httpRequest->withoutVerifying();
+                }
             }
 
             /** @var Response $response */
@@ -277,7 +291,12 @@ class CameraHttpService
             try {
                 $httpRequest = Http::timeout(3);
                 if ($curScheme === 'https') {
-                    $httpRequest = $httpRequest->withoutVerifying();
+                    $caBundle = config('services.camera.ca_bundle') ?: env('CAMERA_CA_BUNDLE');
+                    if ($caBundle && file_exists($caBundle)) {
+                        $httpRequest = $httpRequest->withOptions(['verify' => $caBundle]);
+                    } elseif (env('CAMERA_HTTP_ALLOW_SELF_SIGNED', false) && app()->environment('local', 'testing')) {
+                        $httpRequest = $httpRequest->withoutVerifying();
+                    }
                 }
 
                 /** @var Response $response */

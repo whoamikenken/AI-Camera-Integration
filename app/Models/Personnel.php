@@ -13,6 +13,14 @@ class Personnel extends Model
 
     protected $table = 'personnel';
 
+    protected $appends = [
+        'photo_url',
+    ];
+
+    protected $hidden = [
+        'photo_base64',
+    ];
+
     protected $fillable = [
         'customize_id',
         'person_uuid',
@@ -56,8 +64,12 @@ class Personnel extends Model
                 $model->person_uuid = (string) Str::uuid();
             }
             if (empty($model->customize_id)) {
-                $maxId = static::max('customize_id') ?? 100;
-                $model->customize_id = $maxId + 1;
+                if (\Illuminate\Support\Facades\DB::getDriverName() === 'pgsql') {
+                    $model->customize_id = (int) \Illuminate\Support\Facades\DB::scalar("SELECT nextval('personnel_customize_id_seq')");
+                } else {
+                    $maxId = static::max('customize_id') ?? 999;
+                    $model->customize_id = max($maxId + 1, 1000);
+                }
             }
         });
     }
@@ -70,5 +82,24 @@ class Personnel extends Model
     public function accessLogs(): HasMany
     {
         return $this->hasMany(AccessLog::class, 'customize_id', 'customize_id');
+    }
+
+    public function employee(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(Employee::class);
+    }
+
+    public function getPhotoUrlAttribute(): ?string
+    {
+        if (!empty($this->photo_path)) {
+            return asset('storage/' . ltrim($this->photo_path, '/'));
+        }
+        if (!empty($this->photo_base64)) {
+            if (str_starts_with($this->photo_base64, 'data:image')) {
+                return $this->photo_base64;
+            }
+            return 'data:image/jpeg;base64,' . $this->photo_base64;
+        }
+        return null;
     }
 }

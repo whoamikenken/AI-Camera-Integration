@@ -32,6 +32,8 @@ Route::post('/action/{operator}', function (string $operator, Request $request) 
 });
 
 // Camera HTTP Webhook Event Push Endpoints (HTTP Protocol V1.13 Section 3)
-Route::post('/Subscribe/heartbeat', [\App\Http\Controllers\HttpWebhookController::class, 'handleHeartbeat']);
-Route::post('/Subscribe/Verify', [\App\Http\Controllers\HttpWebhookController::class, 'handleVerify']);
-Route::post('/Subscribe/Snap', [\App\Http\Controllers\HttpWebhookController::class, 'handleSnap']);
+Route::middleware(['throttle:60,1'])->group(function () {
+    Route::post('/Subscribe/heartbeat', [\App\Http\Controllers\HttpWebhookController::class, 'handleHeartbeat']);
+    Route::post('/Subscribe/Verify', [\App\Http\Controllers\HttpWebhookController::class, 'handleVerify']);
+    Route::post('/Subscribe/Snap', [\App\Http\Controllers\HttpWebhookController::class, 'handleSnap']);
+});

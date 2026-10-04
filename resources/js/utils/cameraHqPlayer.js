@@ -165,12 +165,44 @@ class WebGLYUVRenderer {
 export class CameraHqPlayer {
   constructor(canvas, options = {}) {
     this.canvas = canvas;
-    this.scheme = options.scheme || (options.host && options.host.startsWith('https') ? 'https' : 'http');
-    this.host = (options.host || '192.168.1.100')
+    let rawHost = (options.host || 'ai-camera.philyra.cloud').trim();
+    let detectedScheme = options.scheme;
+
+    if (rawHost.startsWith('https://') || rawHost.startsWith('wss://')) {
+      detectedScheme = 'https';
+    } else if (rawHost.startsWith('http://') || rawHost.startsWith('ws://')) {
+      detectedScheme = detectedScheme || 'http';
+    }
+
+    if (!detectedScheme) {
+      if (typeof window !== 'undefined' && window.location?.protocol === 'https:') {
+        detectedScheme = 'https';
+      } else if (rawHost.includes('.cloud') || rawHost.includes('ai-camera')) {
+        detectedScheme = 'https';
+      } else {
+        detectedScheme = 'http';
+      }
+    }
+
+    this.scheme = detectedScheme;
+
+    // Clean up host
+    let cleanHost = rawHost
       .replace(/^https?:\/\//i, '')
+      .replace(/^wss?:\/\//i, '')
       .replace(/\/.*$/, '')
       .replace(/ai-camera-api\./i, 'ai-camera.');
-    this.port = options.port || (this.scheme === 'https' ? 443 : 80);
+
+    let parsedPort = options.port;
+    if (cleanHost.includes(':')) {
+      const parts = cleanHost.split(':');
+      cleanHost = parts[0];
+      parsedPort = parseInt(parts[1], 10);
+    }
+
+    this.host = cleanHost;
+    const isDomain = !/^(\d{1,3}\.){3}\d{1,3}$/.test(cleanHost);
+    this.port = parsedPort || (isDomain ? (this.scheme === 'https' ? 443 : 80) : (this.scheme === 'https' ? 443 : 8080));
     this.username = options.username || 'admin';
     this.password = options.password || 'admin';
     this.streamType = options.streamType || 0; // 0: Main (1080P), 1: Sub (720P/VGA)
@@ -248,9 +280,10 @@ export class CameraHqPlayer {
 
   connectWebSocket() {
     if (this.isDestroyed) return;
-    const isHttps = this.scheme === 'https' || window.location.protocol === 'https:';
+    const isHttps = this.scheme === 'https' || (typeof window !== 'undefined' && window.location?.protocol === 'https:') || this.host.includes('.cloud');
     const wsProtocol = isHttps ? 'wss:' : 'ws:';
-    const wsPortStr = (this.port && this.port !== 80 && this.port !== 443) ? `:${this.port}` : '';
+    const isDomain = !/^(\d{1,3}\.){3}\d{1,3}$/.test(this.host);
+    const wsPortStr = (this.port && this.port !== 80 && this.port !== 443 && !isDomain) ? `:${this.port}` : '';
     const wsUrl = `${wsProtocol}//${this.host}${wsPortStr}/`;
 
     this.onStatus({ state: 'CONNECTING', message: `Connecting to ${wsUrl}...` });
