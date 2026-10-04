@@ -12,7 +12,8 @@
 
     <!-- Filter Bar -->
     <div class="flex items-center gap-3 bg-white border border-slate-200 p-3 rounded-xl shadow-sm">
-      <select v-model="statusFilter" @change="fetchTasks" class="bg-slate-50 border border-slate-200 text-xs rounded-lg px-3 py-2 text-slate-700">
+      <label for="sync-status-filter" class="sr-only">Filter sync tasks by status</label>
+      <select id="sync-status-filter" v-model="statusFilter" @change="fetchTasks" aria-label="Filter sync tasks by status" class="bg-slate-50 border border-slate-200 text-xs rounded-lg px-3 py-2 text-slate-700">
         <option value="">All Task Statuses</option>
         <option value="PENDING">PENDING</option>
         <option value="PROCESSING">PROCESSING</option>
@@ -27,20 +28,34 @@
         <table class="w-full text-left text-xs text-slate-700">
           <thead class="bg-slate-50 text-slate-500 uppercase text-[11px] font-semibold border-b border-slate-200">
             <tr>
-              <th class="py-3 px-4">Task ID</th>
-              <th class="py-3 px-4">Target Camera</th>
-              <th class="py-3 px-4">Personnel</th>
-              <th class="py-3 px-4">Action</th>
-              <th class="py-3 px-4">Status</th>
-              <th class="py-3 px-4">Attempts</th>
-              <th class="py-3 px-4">Last Updated</th>
-              <th class="py-3 px-4 text-right">Action</th>
+              <th scope="col" class="py-3 px-4">Task ID</th>
+              <th scope="col" class="py-3 px-4">Target Camera</th>
+              <th scope="col" class="py-3 px-4">Personnel</th>
+              <th scope="col" class="py-3 px-4">Action</th>
+              <th scope="col" class="py-3 px-4">Status</th>
+              <th scope="col" class="py-3 px-4">Attempts</th>
+              <th scope="col" class="py-3 px-4">Last Updated</th>
+              <th scope="col" class="py-3 px-4 text-right">Action</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-slate-100">
-            <tr v-if="loading">
-              <td colspan="8" class="py-12 text-center text-slate-400">Loading sync tasks...</td>
-            </tr>
+            <template v-if="loading">
+              <tr v-for="i in 5" :key="`skel-${i}`" class="animate-pulse">
+                <td class="py-3 px-4"><div class="h-4 bg-slate-200 rounded w-12"></div></td>
+                <td class="py-3 px-4"><div class="h-4 bg-slate-200 rounded w-24"></div></td>
+                <td class="py-3 px-4">
+                  <div class="space-y-1">
+                    <div class="h-4 bg-slate-200 rounded w-32"></div>
+                    <div class="h-3 bg-slate-200 rounded w-20"></div>
+                  </div>
+                </td>
+                <td class="py-3 px-4"><div class="h-4 bg-slate-200 rounded w-16"></div></td>
+                <td class="py-3 px-4"><div class="h-4 bg-slate-200 rounded w-20"></div></td>
+                <td class="py-3 px-4"><div class="h-4 bg-slate-200 rounded w-8"></div></td>
+                <td class="py-3 px-4"><div class="h-4 bg-slate-200 rounded w-24"></div></td>
+                <td class="py-3 px-4 text-right"><div class="h-6 bg-slate-200 rounded w-16 ml-auto"></div></td>
+              </tr>
+            </template>
             <tr v-else-if="tasks.length === 0">
               <td colspan="8" class="py-12 text-center text-slate-400">No sync tasks recorded.</td>
             </tr>
@@ -66,9 +81,12 @@
                 <button 
                   v-if="task.status === 'FAILED'" 
                   @click="retryTask(task)"
-                  class="px-2.5 py-1 text-[11px] bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded transition-colors"
+                  :disabled="retryingId === task.id"
+                  :aria-label="`Retry sync task #${task.id} for ${task.personnel?.name || 'Personnel'}`"
+                  class="px-2.5 py-1 text-[11px] bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  🔁 Retry
+                  <span v-if="retryingId === task.id">⏳ Retrying...</span>
+                  <span v-else>🔁 Retry</span>
                 </button>
               </td>
             </tr>
@@ -89,6 +107,7 @@ import echo from '../echo';
 const tasks = ref([]);
 const loading = ref(false);
 const statusFilter = ref('');
+const retryingId = ref(null);
 
 async function fetchTasks() {
   loading.value = true;
@@ -115,12 +134,15 @@ function handleLiveSyncTaskUpdated(e) {
 }
 
 async function retryTask(task) {
+  retryingId.value = task.id;
   try {
     await apiClient.post(`/api/sync-tasks/${task.id}/retry`);
     notify.success('Task Re-queued', `Sync task #${task.id} has been re-dispatched to the camera-sync queue.`);
     fetchTasks();
   } catch (err) {
     notify.error('Retry Failed', 'Failed to re-dispatch sync task');
+  } finally {
+    retryingId.value = null;
   }
 }
 

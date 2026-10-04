@@ -257,25 +257,58 @@ class ShiftController extends Controller
             $prevEndDate,
             &$assignments
         ) {
-            foreach ($employeeIds as $employeeId) {
-                // Intelligent shift rotation capping: cap previous open-ended assignments
-                EmployeeShiftAssignment::where('employee_id', $employeeId)
-                    ->where('effective_from', '<=', $effectiveFrom)
-                    ->whereNull('effective_to')
-                    ->update(['effective_to' => $prevEndDate]);
+            // Intelligent shift rotation capping: cap previous open-ended assignments in bulk
+            EmployeeShiftAssignment::whereIn('employee_id', $employeeIds)
+                ->where('effective_from', '<=', $effectiveFrom)
+                ->whereNull('effective_to')
+                ->update(['effective_to' => $prevEndDate]);
 
-                $assignment = EmployeeShiftAssignment::create([
+            $rows = [];
+            $now = now();
+            $assignedDaysJson = $assignedDays !== null ? json_encode($assignedDays) : null;
+            
+            foreach ($employeeIds as $employeeId) {
+                $rows[] = [
                     'employee_id' => $employeeId,
                     'shift_id' => $shift->id,
                     'effective_from' => $effectiveFrom,
                     'effective_to' => $effectiveTo,
-                    'assigned_days' => $assignedDays,
+                    'assigned_days' => $assignedDaysJson,
                     'created_by' => $userId,
-                ]);
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ];
+            }
 
-                // Update default active shift on employee record
-                Employee::where('id', $employeeId)->update(['shift_id' => $shift->id]);
-                $assignments[] = $assignment;
+            // Bulk insert new assignments
+            EmployeeShiftAssignment::insert($rows);
+
+            // Update default active shift on employee record in bulk
+            Employee::whereIn('id', $employeeIds)->update(['shift_id' => $shift->id]);
+            
+            // Retrieve created assignments to return
+            $assignments = EmployeeShiftAssignment::where('shift_id', $shift->id)
+                ->where('effective_from', $effectiveFrom)
+                ->whereIn('employee_id', $employeeIds)
+                ->where('created_at', $now)
+                ->get()
+                ->toArray();
+
+            // Invalidate employee shift cache
+            foreach ($employeeIds as $employeeId) {
+                $cachePattern = "emp_shift:{$employeeId}:*";
+                try {
+                    if (config('cache.default') === 'redis') {
+                        $redis = \Illuminate\Support\Facades\Redis::connection();
+                        $prefix = config('database.redis.options.prefix', '');
+                        $keys = $redis->keys($prefix . $cachePattern);
+                        foreach ($keys as $key) {
+                            $redis->del(str_replace($prefix, '', $key));
+                        }
+                    }
+                } catch (\Throwable $e) {
+                    // Ignore cache errors
+                }
             }
         });
 

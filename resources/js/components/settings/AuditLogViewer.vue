@@ -4,6 +4,7 @@
     <div class="flex flex-col sm:flex-row items-center gap-3 bg-white border border-slate-200 p-3 rounded-xl shadow-xs">
       <div class="relative flex-1 w-full">
         <input
+          aria-label="Search audit logs"
           v-model="search"
           @input="debouncedFetch"
           type="text"
@@ -13,7 +14,7 @@
         <span class="absolute left-3 top-2.5 text-slate-400 text-xs">🔍</span>
       </div>
 
-      <select v-model="actionFilter" @change="fetchLogs(1)" class="w-full sm:w-40 bg-white border border-slate-200 text-xs rounded-lg px-3 py-2 text-slate-700 cursor-pointer shadow-xs">
+      <select aria-label="Filter by action" v-model="actionFilter" @change="fetchLogs(1)" class="w-full sm:w-40 bg-white border border-slate-200 text-xs rounded-lg px-3 py-2 text-slate-700 cursor-pointer shadow-xs">
         <option value="">All Actions</option>
         <option value="create">Created</option>
         <option value="update">Updated</option>
@@ -22,7 +23,7 @@
         <option value="logout">Logout</option>
       </select>
 
-      <select v-model="entityFilter" @change="fetchLogs(1)" class="w-full sm:w-44 bg-white border border-slate-200 text-xs rounded-lg px-3 py-2 text-slate-700 cursor-pointer shadow-xs">
+      <select aria-label="Filter by entity" v-model="entityFilter" @change="fetchLogs(1)" class="w-full sm:w-44 bg-white border border-slate-200 text-xs rounded-lg px-3 py-2 text-slate-700 cursor-pointer shadow-xs">
         <option value="">All Entities</option>
         <option value="Department">Department</option>
         <option value="Designation">Designation</option>
@@ -118,14 +119,14 @@
     </div>
 
     <!-- DIFF MODAL -->
-    <div v-if="selectedLog" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+    <div v-if="selectedLog" role="dialog" aria-modal="true" aria-labelledby="diff-modal-title" tabindex="-1" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4" @keydown.escape="selectedLog = null">
       <div class="bg-white rounded-2xl border border-slate-200 max-w-2xl w-full p-6 shadow-2xl max-h-[85vh] flex flex-col space-y-4">
         <div class="flex items-start justify-between border-b border-slate-100 pb-3">
           <div>
-            <h3 class="text-base font-bold text-slate-900">Audit Log Details &amp; Change Diff</h3>
+            <h3 id="diff-modal-title" class="text-base font-bold text-slate-900">Audit Log Details &amp; Change Diff</h3>
             <p class="text-xs text-slate-500 font-mono">{{ formatTimestamp(selectedLog.created_at) }} &bull; {{ selectedLog.user?.name || 'System' }}</p>
           </div>
-          <button @click="selectedLog = null" class="text-slate-400 hover:text-slate-600 text-lg font-bold cursor-pointer">&times;</button>
+          <button aria-label="Close diff modal" @click="selectedLog = null" class="text-slate-400 hover:text-slate-600 text-lg font-bold cursor-pointer">&times;</button>
         </div>
 
         <div class="flex-1 overflow-y-auto space-y-4 pr-1 text-xs">

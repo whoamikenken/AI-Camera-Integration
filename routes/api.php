@@ -44,7 +44,7 @@ Route::prefix('auth')->group(function () {
     Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:10,1');
 });
 
-Route::get('settings/public', [SettingController::class, 'publicSettings']);
+Route::get('settings/public', [SettingController::class, 'publicSettings'])->middleware('throttle:60,1');
 
 /*
 |--------------------------------------------------------------------------
@@ -65,7 +65,7 @@ Route::middleware(['auth:sanctum', 'active', 'throttle:api'])->group(function ()
     });
 
     // Dashboard Metrics
-    Route::get('/stats', [DashboardStatsController::class, 'index']);
+    Route::get('/stats', [DashboardStatsController::class, 'index'])->middleware('permission:devices.view,attendance.view');
 
     // RBAC Administration
     Route::apiResource('roles', RoleController::class)->middleware('permission:roles.manage');
@@ -155,11 +155,11 @@ Route::middleware(['auth:sanctum', 'active', 'throttle:api'])->group(function ()
     Route::post('personnel/{personnel}/convert-to-employee', [PersonnelController::class, 'convertToEmployee'])->middleware('permission:personnel.edit,employees.create');
 
     // Verification & Stranger Logs
-    Route::get('access-logs', [AccessLogController::class, 'index']);
-    Route::get('access-logs/{accessLog}', [AccessLogController::class, 'show']);
+    Route::get('access-logs', [AccessLogController::class, 'index'])->middleware('permission:attendance.view,devices.view');
+    Route::get('access-logs/{accessLog}', [AccessLogController::class, 'show'])->middleware('permission:attendance.view,devices.view');
 
-    Route::get('stranger-snaps', [StrangerSnapController::class, 'index']);
-    Route::get('stranger-snaps/{strangerSnap}', [StrangerSnapController::class, 'show']);
+    Route::get('stranger-snaps', [StrangerSnapController::class, 'index'])->middleware('permission:devices.view');
+    Route::get('stranger-snaps/{strangerSnap}', [StrangerSnapController::class, 'show'])->middleware('permission:devices.view');
 
     // AI Safety & Security Device Alerts
     Route::get('device-alerts', [\App\Http\Controllers\DeviceAlertController::class, 'index'])
@@ -293,6 +293,6 @@ Route::middleware(['auth:sanctum', 'active', 'throttle:api'])->group(function ()
     })->where('path', '.*')->middleware('permission:personnel.view,devices.view,attendance.view,visitors.view');
 
     // Sync Tasks Outbox
-    Route::get('sync-tasks', [SyncTaskController::class, 'index']);
+    Route::get('sync-tasks', [SyncTaskController::class, 'index'])->middleware('permission:devices.manage');
     Route::post('sync-tasks/{syncTask}/retry', [SyncTaskController::class, 'retry'])->middleware('permission:personnel.sync,devices.manage');
 });

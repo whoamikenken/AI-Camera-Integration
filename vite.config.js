@@ -12,6 +12,23 @@ export default defineConfig({
         vue(),
         tailwindcss(),
     ],
+    build: {
+        rollupOptions: {
+            output: {
+                manualChunks(id) {
+                    if (id.includes('node_modules/vue') || id.includes('node_modules/pinia')) {
+                        return 'vendor-vue';
+                    }
+                    if (id.includes('node_modules/laravel-echo') || id.includes('node_modules/pusher-js')) {
+                        return 'vendor-realtime';
+                    }
+                    if (id.includes('cameraHqPlayer.js') || id.includes('WebGLRenderer') || id.includes('decoder_worker')) {
+                        return 'vendor-charts-player';
+                    }
+                }
+            }
+        }
+    },
     server: {
         host: '0.0.0.0',
         port: 5173,

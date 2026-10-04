@@ -39,45 +39,64 @@ class PayrollExportController extends Controller
             ->keyBy('employee_id');
 
         if ($format === 'json') {
-            $employees = Employee::with(['department', 'designation'])
-                ->where('employment_status', 'active')
-                ->orderBy('employee_code')
-                ->get();
+            $headers = [
+                'Content-Type' => 'application/json',
+                'Content-Disposition' => 'attachment; filename="payroll_export_' . $startDate->format('Y_m') . '.json"',
+            ];
 
-            $data = $employees->map(function ($emp) use ($aggregates, $startDate) {
-                $agg = $aggregates->get($emp->id);
-                $presentDays = (int) ($agg->days_present ?? 0);
-                $halfDays = (int) ($agg->days_half_day ?? 0);
-                $leaveDays = (int) ($agg->days_on_leave ?? 0);
-                $absentDays = (int) ($agg->days_absent ?? 0);
-                $totalHours = round((float) ($agg->total_work_hours ?? 0), 2);
-                $overtimeHours = round((float) ($agg->total_overtime_hours ?? 0), 2);
-                $payableDays = $presentDays + ($halfDays * 0.5) + $leaveDays;
+            $callback = function () use ($startDate, $month, $year, $aggregates) {
+                $handle = fopen('php://output', 'w');
+                $period = $startDate->format('F Y');
+                
+                // Fast count estimate for active employees
+                $totalEmployees = Employee::where('employment_status', 'active')->count();
 
-                return [
-                    'employee_id' => $emp->id,
-                    'employee_code' => $emp->employee_code,
-                    'employee_name' => $emp->name,
-                    'department' => $emp->department?->name ?? 'General',
-                    'designation' => $emp->designation?->name ?? 'Staff',
-                    'month' => $startDate->format('Y-m'),
-                    'present_days' => $presentDays,
-                    'half_days' => $halfDays,
-                    'leave_days' => $leaveDays,
-                    'absent_days' => $absentDays,
-                    'payable_days' => $payableDays,
-                    'total_work_hours' => $totalHours,
-                    'overtime_hours' => $overtimeHours,
-                ];
-            });
+                fwrite($handle, '{"month":' . $month . ',"year":' . $year . ',"period":"' . $period . '","total_employees":' . $totalEmployees . ',"data":[');
 
-            return response()->json([
-                'month' => $month,
-                'year' => $year,
-                'period' => $startDate->format('F Y'),
-                'total_employees' => $data->count(),
-                'data' => $data,
-            ]);
+                $query = Employee::with(['department', 'designation'])
+                    ->where('employment_status', 'active')
+                    ->orderBy('employee_code');
+
+                $first = true;
+                foreach ($query->cursor() as $emp) {
+                    if (!$first) {
+                        fwrite($handle, ',');
+                    }
+                    
+                    $agg = $aggregates->get($emp->id);
+                    $presentDays = (int) ($agg->days_present ?? 0);
+                    $halfDays = (int) ($agg->days_half_day ?? 0);
+                    $leaveDays = (int) ($agg->days_on_leave ?? 0);
+                    $absentDays = (int) ($agg->days_absent ?? 0);
+                    $totalHours = round((float) ($agg->total_work_hours ?? 0), 2);
+                    $overtimeHours = round((float) ($agg->total_overtime_hours ?? 0), 2);
+                    $payableDays = $presentDays + ($halfDays * 0.5) + $leaveDays;
+
+                    $record = [
+                        'employee_id' => $emp->id,
+                        'employee_code' => $emp->employee_code,
+                        'employee_name' => $emp->name,
+                        'department' => $emp->department?->name ?? 'General',
+                        'designation' => $emp->designation?->name ?? 'Staff',
+                        'month' => $startDate->format('Y-m'),
+                        'present_days' => $presentDays,
+                        'half_days' => $halfDays,
+                        'leave_days' => $leaveDays,
+                        'absent_days' => $absentDays,
+                        'payable_days' => $payableDays,
+                        'total_work_hours' => $totalHours,
+                        'overtime_hours' => $overtimeHours,
+                    ];
+                    
+                    fwrite($handle, json_encode($record));
+                    $first = false;
+                }
+                
+                fwrite($handle, ']}');
+                fclose($handle);
+            };
+
+            return response()->stream($callback, 200, $headers);
         }
 
         $headers = [

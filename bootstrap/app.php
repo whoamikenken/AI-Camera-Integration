@@ -15,11 +15,16 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        $middleware->validateCsrfTokens(except: [
-            'action/*',
+        $csrfExcept = [
             'api/*',
             'Subscribe/*',
-        ]);
+        ];
+
+        if (env('APP_ENV') === 'local' || env('APP_ENV') === 'testing') {
+            $csrfExcept[] = 'action/*';
+        }
+
+        $middleware->validateCsrfTokens(except: $csrfExcept);
 
         $middleware->alias([
             'permission' => CheckPermission::class,

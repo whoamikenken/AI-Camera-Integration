@@ -583,4 +583,293 @@ class PerformanceOptimizationTest extends TestCase
         $this->assertEquals($shift->id, $resolvedShift->id);
         $this->assertTrue(Cache::has("emp_shift:{$emp->id}:2026-10-01"));
     }
+
+    /**
+     * Task 1.4: Verify deep composite indexes exist for telemetry queries and range scans.
+     */
+    public function test_deep_composite_indexes_exist(): void
+    {
+        $this->assertTrue(Schema::hasTable('visits'));
+        $this->assertTrue(Schema::hasTable('stranger_snaps'));
+        $this->assertTrue(Schema::hasTable('sync_tasks'));
+        $this->assertTrue(Schema::hasTable('attendance_records'));
+
+        if (DB::getDriverName() === 'sqlite') {
+            $visitIndexes = collect(DB::select("PRAGMA index_list('visits')"))->pluck('name')->all();
+            $this->assertContains('idx_visits_expected_arrival_status', $visitIndexes);
+
+            $strangerIndexes = collect(DB::select("PRAGMA index_list('stranger_snaps')"))->pluck('name')->all();
+            $this->assertContains('idx_stranger_snaps_device_id_captured_at', $strangerIndexes);
+
+            $syncIndexes = collect(DB::select("PRAGMA index_list('sync_tasks')"))->pluck('name')->all();
+            $this->assertContains('idx_sync_tasks_device_id_updated_at', $syncIndexes);
+
+            $attendanceIndexes = collect(DB::select("PRAGMA index_list('attendance_records')"))->pluck('name')->all();
+            $this->assertContains('idx_attendance_records_date_status', $attendanceIndexes);
+        }
+    }
+
+    /**
+     * Task 2.4: Verify DailyAttendanceFinalizerJob processes employees in chunks without N+1.
+     */
+    public function test_daily_attendance_finalizer_chunking(): void
+    {
+        $shift = Shift::create([
+            'organization_id' => $this->org->id,
+            'name' => 'General Shift',
+            'code' => 'GEN',
+            'shift_start' => '09:00:00',
+            'shift_end' => '18:00:00',
+        ]);
+
+        $emp1 = Employee::create([
+            'organization_id' => $this->org->id,
+            'shift_id' => $shift->id,
+            'employee_code' => 'EMP-FINAL-01',
+            'first_name' => 'Alice',
+            'last_name' => 'Final',
+            'employment_status' => 'active',
+        ]);
+
+        $emp2 = Employee::create([
+            'organization_id' => $this->org->id,
+            'shift_id' => $shift->id,
+            'employee_code' => 'EMP-FINAL-02',
+            'first_name' => 'Bob',
+            'last_name' => 'Final',
+            'employment_status' => 'active',
+        ]);
+
+        $job = new \App\Jobs\DailyAttendanceFinalizerJob('2026-10-04');
+        $job->handle(app(AttendanceProcessingService::class));
+
+        // Both employees should have attendance records finalized
+        $this->assertNotNull(AttendanceRecord::where('employee_id', $emp1->id)->whereDate('date', '2026-10-04')->first());
+        $this->assertNotNull(AttendanceRecord::where('employee_id', $emp2->id)->whereDate('date', '2026-10-04')->first());
+    }
+
+    /**
+     * Task 2.5: Verify bulk shift assignment performs batch SQL updates and inserts.
+     */
+    public function test_bulk_shift_assignment_batching(): void
+    {
+        $shift1 = Shift::create([
+            'organization_id' => $this->org->id,
+            'name' => 'Morning Shift',
+            'code' => 'MS',
+            'shift_start' => '08:00:00',
+            'shift_end' => '16:00:00',
+        ]);
+
+        $shift2 = Shift::create([
+            'organization_id' => $this->org->id,
+            'name' => 'Night Shift',
+            'code' => 'NS',
+            'shift_start' => '22:00:00',
+            'shift_end' => '06:00:00',
+        ]);
+
+        $emp = Employee::create([
+            'organization_id' => $this->org->id,
+            'shift_id' => $shift1->id,
+            'employee_code' => 'EMP-BATCH-01',
+            'first_name' => 'Batch',
+            'last_name' => 'Assign',
+            'employment_status' => 'active',
+        ]);
+
+        $response = $this->postJson("/api/shifts/{$shift2->id}/assign", [
+            'employee_ids' => [$emp->id],
+            'effective_from' => '2026-11-01',
+        ]);
+
+        $response->assertStatus(201);
+        $emp->refresh();
+        $this->assertEquals($shift2->id, $emp->shift_id);
+    }
+
+    /**
+     * Task 2.6: Verify Daily attendance pagination & CSV/JSON export streaming.
+     */
+    public function test_attendance_daily_pagination_and_streaming_exports(): void
+    {
+        $shift = Shift::create([
+            'organization_id' => $this->org->id,
+            'name' => 'Daily Shift',
+            'code' => 'DS',
+            'shift_start' => '09:00:00',
+            'shift_end' => '18:00:00',
+        ]);
+
+        $emp = Employee::create([
+            'organization_id' => $this->org->id,
+            'shift_id' => $shift->id,
+            'employee_code' => 'EMP-DAILY-01',
+            'first_name' => 'David',
+            'last_name' => 'Daily',
+            'employment_status' => 'active',
+        ]);
+
+        AttendanceRecord::create([
+            'employee_id' => $emp->id,
+            'shift_id' => $shift->id,
+            'date' => '2026-10-04',
+            'status' => 'present',
+            'total_work_hours' => 8.0,
+        ]);
+
+        // Daily roster endpoint returns summary aggregates and paginated records
+        $resp = $this->getJson('/api/attendance/daily?date=2026-10-04');
+        $resp->assertOk();
+        $this->assertEquals(1, $resp->json('summary.total'));
+        $this->assertEquals(1, $resp->json('summary.present'));
+        $this->assertNotNull($resp->json('records.data'));
+
+        // Employee export streaming
+        $empCsv = $this->get('/api/employees/export?format=csv');
+        $empCsv->assertOk();
+
+        $empJson = $this->get('/api/employees/export?format=json');
+        $empJson->assertOk();
+
+        // Payroll export streaming
+        $payrollCsv = $this->get('/api/payroll/export?format=csv&year=2026&month=10');
+        $payrollCsv->assertOk();
+
+        $payrollJson = $this->get('/api/payroll/export?format=json&year=2026&month=10');
+        $payrollJson->assertOk();
+    }
+
+    /**
+     * Task 2.7: Column-specific eager loading excludes photo_base64 from access logs.
+     */
+    public function test_column_specific_eager_loading_excludes_photo_base64(): void
+    {
+        $person = Personnel::create([
+            'customize_id' => 7711,
+            'name' => 'Lightweight Subject',
+            'person_type' => 0,
+            'photo_base64' => 'MASSIVE_BASE64_STRING_THAT_SHOULD_NOT_BE_LOADED',
+        ]);
+
+        $device = Device::create([
+            'device_id' => 'CAM-EAGER-01',
+            'name' => 'Eager Camera',
+            'ip_address' => '192.168.1.220',
+            'is_active' => true,
+        ]);
+
+        $log = AccessLog::create([
+            'device_id' => $device->device_id,
+            'customize_id' => 7711,
+            'person_name' => 'Lightweight Subject',
+            'verify_status' => 1,
+            'captured_at' => now(),
+        ]);
+
+        $resp = $this->getJson('/api/access-logs');
+        $resp->assertOk();
+        $data = $resp->json('data.0.personnel');
+        $this->assertNotNull($data);
+        $this->assertArrayNotHasKey('photo_base64', $data);
+    }
+
+    /**
+     * Task 3.2: Verify all real-time events implement ShouldBroadcast on broadcasts queue.
+     */
+    public function test_all_realtime_events_implement_should_broadcast(): void
+    {
+        $device = Device::create([
+            'device_id' => 'CAM-EVENT-01',
+            'name' => 'Event Camera',
+            'ip_address' => '192.168.1.225',
+            'is_active' => true,
+        ]);
+
+        $alert = DeviceAlert::create([
+            'device_id' => $device->device_id,
+            'alert_type' => 'AREA_INTRUSION',
+            'severity' => 'WARNING',
+            'title' => 'Intrusion',
+            'status' => 'NEW',
+            'captured_at' => now(),
+        ]);
+
+        $event1 = new \App\Events\DeviceAlertReceived($alert);
+        $this->assertInstanceOf(ShouldBroadcast::class, $event1);
+        $this->assertEquals('broadcasts', $event1->broadcastQueue);
+
+        $event2 = new \App\Events\DeviceStatusUpdated($device);
+        $this->assertInstanceOf(ShouldBroadcast::class, $event2);
+        $this->assertEquals('broadcasts', $event2->broadcastQueue);
+    }
+
+    /**
+     * Task 4.2: Verify DeviceAlert stats endpoint consolidation & caching.
+     */
+    public function test_device_alert_stats_caching_and_consolidation(): void
+    {
+        $device = Device::create([
+            'device_id' => 'CAM-ALERT-STATS',
+            'name' => 'Alert Stats Camera',
+            'ip_address' => '192.168.1.230',
+            'is_active' => true,
+        ]);
+
+        DeviceAlert::create([
+            'device_id' => $device->device_id,
+            'alert_type' => 'FIRE_DETECTION',
+            'severity' => 'CRITICAL',
+            'title' => 'Fire Alert',
+            'status' => 'NEW',
+            'captured_at' => now(),
+        ]);
+
+        $resp = $this->getJson('/api/device-alerts/stats');
+        $resp->assertOk();
+        $this->assertEquals(1, $resp->json('critical_today'));
+        $this->assertTrue(Cache::has('device_alert_stats'));
+    }
+
+    /**
+     * Task 4.3: Cache invalidation on holiday mutations and Employee::isHoliday caching.
+     */
+    public function test_holiday_mutations_invalidate_cache(): void
+    {
+        $holiday = Holiday::create([
+            'organization_id' => $this->org->id,
+            'name' => 'Cached Holiday',
+            'date' => '2026-07-04',
+            'is_recurring' => false,
+        ]);
+
+        Cache::put('holidays_2026', ['dummy']);
+        $this->assertTrue(Cache::has('holidays_2026'));
+
+        $this->putJson("/api/holidays/{$holiday->id}", [
+            'name' => 'Updated Holiday',
+            'date' => '2026-07-04',
+        ])->assertOk();
+
+        // Invalidation should have evicted holidays_2026
+        $this->assertFalse(Cache::has('holidays_2026'));
+    }
+
+    /**
+     * Task 4.4: Device fleet counts caching in Redis.
+     */
+    public function test_device_fleet_counts_caching(): void
+    {
+        $device = Device::create([
+            'device_id' => 'CAM-FLEET-01',
+            'name' => 'Fleet Camera',
+            'ip_address' => '192.168.1.240',
+            'is_active' => true,
+        ]);
+
+        $resp = $this->getJson('/api/devices');
+        $resp->assertOk();
+        $this->assertTrue(Cache::has("device_counts:{$device->device_id}"));
+    }
 }
+

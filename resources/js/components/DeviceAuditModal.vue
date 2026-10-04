@@ -1,10 +1,15 @@
 <template>
-  <div v-if="isOpen" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm" @click.self="$emit('close')">
-    <div class="bg-white border border-slate-200 rounded-2xl max-w-4xl w-full p-6 space-y-5 max-h-[90vh] overflow-y-auto shadow-2xl">
+  <div v-if="isOpen" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm" @click.self="$emit('close')" @keydown.escape="$emit('close')">
+    <div 
+      class="bg-white border border-slate-200 rounded-2xl max-w-4xl w-full p-6 space-y-5 max-h-[90vh] overflow-y-auto shadow-2xl"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="audit-modal-title"
+    >
       <!-- Modal Header -->
       <div class="flex items-center justify-between border-b border-slate-200 pb-3">
         <div>
-          <h3 class="text-base font-bold text-slate-900 flex items-center gap-2">
+          <h3 id="audit-modal-title" class="text-base font-bold text-slate-900 flex items-center gap-2">
             <span>👥 Device Audit &amp; Live Telemetry</span>
             <span v-if="device" class="text-xs px-2 py-0.5 rounded font-mono bg-indigo-50 text-indigo-700 border border-indigo-200 font-semibold">
               {{ device.name }} ({{ device.ip_address }})
@@ -14,7 +19,7 @@
             Querying on-device face database and telemetry records via MQTT Protocol (<code class="font-mono text-indigo-600 font-semibold">SearchPersonList</code> &amp; <code class="font-mono text-indigo-600 font-semibold">ManualPushRecords</code>)
           </p>
         </div>
-        <button @click="$emit('close')" class="text-slate-400 hover:text-slate-700 text-xl font-bold cursor-pointer">&times;</button>
+        <button @click="$emit('close')" aria-label="Close modal" class="text-slate-400 hover:text-slate-700 text-xl font-bold cursor-pointer">&times;</button>
       </div>
 
       <!-- Loading State -->
@@ -26,8 +31,12 @@
       <!-- Audit Results View -->
       <div v-else-if="auditData" class="space-y-5">
         <!-- Navigation Tabs -->
-        <div class="flex items-center gap-2 border-b border-slate-200 pb-1">
+        <div class="flex items-center gap-2 border-b border-slate-200 pb-1" role="tablist" aria-label="Audit Sub-Tabs">
           <button 
+            id="tab-faces"
+            role="tab"
+            :aria-selected="activeTab === 'faces'"
+            aria-controls="panel-faces"
             @click="activeTab = 'faces'"
             class="px-3.5 py-2 text-xs font-semibold rounded-t-xl transition-all cursor-pointer border-b-2"
             :class="activeTab === 'faces' ? 'text-indigo-600 border-indigo-600 bg-indigo-50/50' : 'text-slate-500 border-transparent hover:text-slate-800'"
@@ -35,6 +44,10 @@
             👥 Face Library Audit ({{ auditData.face_audit?.total_in_db || auditData.face_audit?.total_on_camera || 0 }})
           </button>
           <button 
+            id="tab-logs"
+            role="tab"
+            :aria-selected="activeTab === 'logs'"
+            aria-controls="panel-logs"
             @click="activeTab = 'logs'"
             class="px-3.5 py-2 text-xs font-semibold rounded-t-xl transition-all cursor-pointer border-b-2"
             :class="activeTab === 'logs' ? 'text-indigo-600 border-indigo-600 bg-indigo-50/50' : 'text-slate-500 border-transparent hover:text-slate-800'"
@@ -42,6 +55,10 @@
             📋 On-Device Logs &amp; Backfill ({{ auditData.recent_logs?.length || 0 }})
           </button>
           <button 
+            id="tab-diagnostics"
+            role="tab"
+            :aria-selected="activeTab === 'diagnostics'"
+            aria-controls="panel-diagnostics"
             @click="activeTab = 'diagnostics'"
             class="px-3.5 py-2 text-xs font-semibold rounded-t-xl transition-all cursor-pointer border-b-2"
             :class="activeTab === 'diagnostics' ? 'text-indigo-600 border-indigo-600 bg-indigo-50/50' : 'text-slate-500 border-transparent hover:text-slate-800'"
@@ -51,7 +68,7 @@
         </div>
 
         <!-- TAB 1: Face Library Audit -->
-        <div v-if="activeTab === 'faces'" class="space-y-4">
+        <div v-if="activeTab === 'faces'" id="panel-faces" role="tabpanel" aria-labelledby="tab-faces" class="space-y-4">
           <!-- Summary Cards -->
           <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div class="bg-slate-50 border border-slate-200 rounded-xl p-3 text-center">
@@ -80,15 +97,17 @@
                 <input 
                   v-model="userSearchQuery" 
                   type="text" 
+                  aria-label="Search user by name, Custom ID, or badge"
                   placeholder="Search user by name, Custom ID, or badge..."
                   class="w-full bg-white border border-slate-200 rounded-lg pl-8 pr-3 py-1.5 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
                 />
-                <span class="absolute left-2.5 top-2 text-slate-400 text-xs">🔍</span>
+                <span class="absolute left-2.5 top-2 text-slate-400 text-xs" aria-hidden="true">🔍</span>
               </div>
 
               <!-- Status Filter Dropdown -->
               <select 
                 v-model="userStatusFilter" 
+                aria-label="Filter by user status"
                 class="bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 cursor-pointer"
               >
                 <option value="ALL">All Users ({{ auditData.face_audit?.user_roster?.length || 0 }})</option>
@@ -135,11 +154,11 @@
               <table class="w-full text-left text-xs">
                 <thead class="bg-slate-100 text-slate-600 font-semibold uppercase text-[10px] sticky top-0 z-10 border-b border-slate-200">
                   <tr>
-                    <th class="px-3.5 py-2.5">User / Personnel</th>
-                    <th class="px-3.5 py-2.5">Custom ID</th>
-                    <th class="px-3.5 py-2.5">Access Category</th>
-                    <th class="px-3.5 py-2.5">Camera Sync Status</th>
-                    <th class="px-3.5 py-2.5 text-right">Actions</th>
+                    <th scope="col" class="px-3.5 py-2.5">User / Personnel</th>
+                    <th scope="col" class="px-3.5 py-2.5">Custom ID</th>
+                    <th scope="col" class="px-3.5 py-2.5">Access Category</th>
+                    <th scope="col" class="px-3.5 py-2.5">Camera Sync Status</th>
+                    <th scope="col" class="px-3.5 py-2.5 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-200">
@@ -231,7 +250,7 @@
         </div>
 
         <!-- TAB 2: On-Device Logs & Backfill -->
-        <div v-else-if="activeTab === 'logs'" class="space-y-4">
+        <div v-else-if="activeTab === 'logs'" id="panel-logs" role="tabpanel" aria-labelledby="tab-logs" class="space-y-4">
           <!-- Backfill Quick Controls -->
           <div class="bg-indigo-50/80 border border-indigo-200 p-4 rounded-xl space-y-3">
             <div class="flex items-center justify-between">
@@ -261,10 +280,10 @@
               <table class="w-full text-left text-xs">
                 <thead class="bg-slate-100 text-slate-600 font-semibold uppercase text-[10px] sticky top-0">
                   <tr>
-                    <th class="px-3 py-2">Captured At</th>
-                    <th class="px-3 py-2">Name / Person</th>
-                    <th class="px-3 py-2">Similarity</th>
-                    <th class="px-3 py-2">Status</th>
+                    <th scope="col" class="px-3 py-2">Captured At</th>
+                    <th scope="col" class="px-3 py-2">Name / Person</th>
+                    <th scope="col" class="px-3 py-2">Similarity</th>
+                    <th scope="col" class="px-3 py-2">Status</th>
                   </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-200">
@@ -288,7 +307,7 @@
         </div>
 
         <!-- TAB 3: Diagnostics & Telemetry -->
-        <div v-else-if="activeTab === 'diagnostics'" class="space-y-4">
+        <div v-else-if="activeTab === 'diagnostics'" id="panel-diagnostics" role="tabpanel" aria-labelledby="tab-diagnostics" class="space-y-4">
           <!-- Real-Time Hardware & System Params -->
           <div class="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
             <h4 class="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center justify-between">

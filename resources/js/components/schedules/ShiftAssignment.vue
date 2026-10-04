@@ -19,11 +19,17 @@
         <!-- Target Shift -->
         <div>
           <label class="block font-semibold text-slate-700 mb-1.5">1. Select Shift <span class="text-rose-500">*</span></label>
-          <div class="space-y-2">
+          <div class="space-y-2" role="radiogroup" aria-label="Select Shift">
             <div
               v-for="s in scheduleStore.activeShifts"
               :key="s.id"
+              role="radio"
+              :aria-checked="form.shift_id === s.id"
+              tabindex="0"
+              :aria-label="`Shift ${s.name}, from ${s.shift_start?.slice(0, 5)} to ${s.shift_end?.slice(0, 5)}`"
               @click="form.shift_id = s.id"
+              @keydown.enter="form.shift_id = s.id"
+              @keydown.space.prevent="form.shift_id = s.id"
               class="p-3 rounded-xl border transition-all cursor-pointer flex items-center justify-between"
               :class="form.shift_id === s.id ? 'border-indigo-600 bg-indigo-50/50 shadow-xs' : 'border-slate-200 hover:border-slate-300 bg-white'"
             >
@@ -37,7 +43,7 @@
                   </div>
                 </div>
               </div>
-              <input type="radio" :value="s.id" v-model="form.shift_id" class="text-indigo-600" />
+              <input type="radio" :value="s.id" v-model="form.shift_id" :aria-label="`Select ${s.name}`" class="text-indigo-600" />
             </div>
           </div>
         </div>
@@ -149,11 +155,13 @@
             </div>
           </div>
 
-          <div class="flex flex-wrap gap-2">
+          <div class="flex flex-wrap gap-2" role="group" aria-label="Assigned working days">
             <button
               v-for="day in weekDays"
               :key="day.id"
               type="button"
+              :aria-pressed="form.assigned_days.includes(day.id)"
+              :aria-label="`Toggle ${day.name || day.label}`"
               @click="toggleDay(day.id)"
               class="px-3 py-2 rounded-xl border text-xs font-bold transition-all cursor-pointer"
               :class="form.assigned_days.includes(day.id) ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'"

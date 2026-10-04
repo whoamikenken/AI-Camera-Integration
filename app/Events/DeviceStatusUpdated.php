@@ -5,13 +5,14 @@ namespace App\Events;
 use App\Models\Device;
 use Illuminate\Broadcasting\InteractsWithSockets;
 use Illuminate\Broadcasting\PrivateChannel;
-use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
+use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
 
-class DeviceStatusUpdated implements ShouldBroadcastNow
+class DeviceStatusUpdated implements ShouldBroadcast
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
+    public string $broadcastQueue = 'broadcasts';
 
     public function __construct(public Device $device)
     {
@@ -42,8 +43,8 @@ class DeviceStatusUpdated implements ShouldBroadcastNow
             'is_active' => $this->device->is_active,
             'is_online' => $this->device->is_online,
             'last_heartbeat_at' => $this->device->last_heartbeat_at ? $this->device->last_heartbeat_at->toISOString() : null,
-            'access_logs_count' => $this->device->access_logs_count ?? $this->device->accessLogs()->count(),
-            'stranger_snaps_count' => $this->device->stranger_snaps_count ?? $this->device->strangerSnaps()->count(),
+            'access_logs_count' => $this->device->access_logs_count ?? 0,
+            'stranger_snaps_count' => $this->device->stranger_snaps_count ?? 0,
         ];
     }
 }

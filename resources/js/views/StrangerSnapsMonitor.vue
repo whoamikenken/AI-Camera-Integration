@@ -60,8 +60,9 @@
       <div class="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-4 gap-3">
         <!-- Camera Filter -->
         <div>
-          <label class="block text-[11px] font-medium text-slate-500 mb-1">Camera Device</label>
+          <label for="stranger-filter-device" class="block text-[11px] font-medium text-slate-500 mb-1">Camera Device</label>
           <select 
+            id="stranger-filter-device"
             v-model="filters.deviceId" 
             @change="applyFilters" 
             class="w-full bg-white border border-slate-200 text-xs rounded-lg px-3 py-2 text-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 cursor-pointer shadow-xs"
@@ -75,8 +76,9 @@
 
         <!-- Date From -->
         <div>
-          <label class="block text-[11px] font-medium text-slate-500 mb-1">From Date</label>
+          <label for="stranger-filter-from" class="block text-[11px] font-medium text-slate-500 mb-1">From Date</label>
           <input 
+            id="stranger-filter-from"
             type="date" 
             v-model="filters.from" 
             @change="applyFilters"
@@ -86,8 +88,9 @@
 
         <!-- Date To -->
         <div>
-          <label class="block text-[11px] font-medium text-slate-500 mb-1">To Date</label>
+          <label for="stranger-filter-to" class="block text-[11px] font-medium text-slate-500 mb-1">To Date</label>
           <input 
+            id="stranger-filter-to"
             type="date" 
             v-model="filters.to" 
             @change="applyFilters"
@@ -123,8 +126,12 @@
         <div 
           v-for="snap in store.strangerSnaps.slice(0, 10)" 
           :key="'live-' + (snap.id || snap.captured_at)"
+          role="button"
+          tabindex="0"
+          :aria-label="'Inspect stranger face snapshot captured by camera ' + snap.device_id"
           class="shrink-0 w-36 bg-white border border-amber-300 rounded-xl p-2 cursor-pointer hover:border-amber-500 transition-all group shadow-xs hover:shadow-md"
           @click="openImageModal(snap.snap_pic_url, snap.scene_pic_url, snap.device_id, snap.captured_at, snap.alarm_action)"
+          @keydown.enter="openImageModal(snap.snap_pic_url, snap.scene_pic_url, snap.device_id, snap.captured_at, snap.alarm_action)"
         >
           <div class="w-full h-24 rounded-lg bg-slate-100 overflow-hidden relative border border-slate-200">
             <img v-if="snap.snap_pic_url" :src="snap.snap_pic_url" alt="Stranger Crop" class="w-full h-full object-cover group-hover:scale-105 transition-transform" />
@@ -148,8 +155,8 @@
         <span class="text-xs text-slate-500">Page {{ pagination.current_page }} of {{ pagination.last_page || 1 }}</span>
       </div>
 
-      <div v-if="loading" class="bg-white border border-slate-200 rounded-xl p-12 text-center text-slate-500 shadow-xs">
-        Loading stranger snapshots...
+      <div v-if="loading" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+        <div v-for="i in 8" :key="'skel-card-' + i" class="bg-white border border-slate-200 rounded-xl h-64 animate-pulse shadow-xs"></div>
       </div>
 
       <div v-else-if="snaps.length === 0" class="bg-white border border-dashed border-slate-300 rounded-xl p-12 text-center text-slate-500 shadow-xs">
@@ -162,6 +169,10 @@
         <div 
           v-for="snap in snaps" 
           :key="snap.id"
+          role="button"
+          tabindex="0"
+          :aria-label="'Inspect stranger face snapshot captured by ' + (snap.device?.name || 'Camera ' + snap.device_id)"
+          @keydown.enter="openImageModal(snap.snap_pic_url, snap.scene_pic_url, snap.device?.name || snap.device_id, snap.captured_at, snap.alarm_action)"
           class="bg-white border border-slate-200/80 rounded-xl overflow-hidden hover:border-amber-400 transition-all flex flex-col justify-between shadow-xs hover:shadow-md"
         >
           <!-- Image Section -->
@@ -240,18 +251,19 @@
             </tr>
           </thead>
           <tbody class="divide-y divide-slate-100">
-            <tr v-if="loading">
-              <td colspan="5" class="py-12 text-center text-slate-500">Loading stranger captures...</td>
+            <tr v-if="loading" v-for="i in 5" :key="'skel-row-' + i" class="animate-pulse">
+              <td class="py-3 px-4"><div class="w-12 h-12 bg-slate-200 rounded-lg"></div></td>
+              <td class="py-3 px-4"><div class="h-4 bg-slate-200 rounded w-24"></div></td>
+              <td class="py-3 px-4"><div class="h-4 bg-slate-200 rounded w-32"></div></td>
+              <td class="py-3 px-4"><div class="h-4 bg-slate-200 rounded w-16"></div></td>
+              <td class="py-3 px-4 text-right"><div class="h-4 bg-slate-200 rounded w-12 ml-auto"></div></td>
             </tr>
             <tr v-else-if="snaps.length === 0">
               <td colspan="5" class="py-12 text-center text-slate-500">No stranger snapshots recorded.</td>
             </tr>
-            <tr v-for="snap in snaps" :key="snap.id" class="hover:bg-slate-50 transition-colors">
+            <tr v-for="snap in snaps" :key="snap.id" role="button" tabindex="0" :aria-label="'Inspect stranger face snapshot captured by ' + (snap.device?.name || 'Camera')" class="hover:bg-slate-50 transition-colors cursor-pointer group" @click="openImageModal(snap.snap_pic_url, snap.scene_pic_url, snap.device?.name || snap.device_id, snap.captured_at, snap.alarm_action)" @keydown.enter="openImageModal(snap.snap_pic_url, snap.scene_pic_url, snap.device?.name || snap.device_id, snap.captured_at, snap.alarm_action)">
               <td class="py-3 px-4">
-                <div 
-                  class="w-12 h-12 rounded-lg bg-slate-100 border border-slate-200 overflow-hidden shrink-0 cursor-pointer" 
-                  @click="openImageModal(snap.snap_pic_url, snap.scene_pic_url, snap.device?.name || snap.device_id, snap.captured_at, snap.alarm_action)"
-                >
+                <div class="w-12 h-12 rounded-lg bg-slate-100 border border-slate-200 overflow-hidden shrink-0">
                   <img v-if="snap.snap_pic_url" :src="snap.snap_pic_url" class="w-full h-full object-cover" />
                   <span v-else class="w-full h-full flex items-center justify-center text-[10px] text-slate-400">No Pic</span>
                 </div>
@@ -314,17 +326,17 @@
     </div>
 
     <!-- Image Inspection Modal -->
-    <div v-if="modal.show" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm" @click.self="modal.show = false">
-      <div class="bg-white border border-slate-200 rounded-2xl max-w-3xl w-full p-6 space-y-4 max-h-[90vh] overflow-y-auto shadow-2xl">
+    <div v-if="modal.show" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm" @click.self="modal.show = false" @keydown.escape="modal.show = false" tabindex="-1">
+      <div class="bg-white border border-slate-200 rounded-2xl max-w-3xl w-full p-6 space-y-4 max-h-[90vh] overflow-y-auto shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="stranger-inspect-title">
         <div class="flex items-center justify-between border-b border-slate-200 pb-3">
           <div>
-            <h3 class="text-base font-bold text-slate-900 flex items-center gap-2">
+            <h3 id="stranger-inspect-title" class="text-base font-bold text-slate-900 flex items-center gap-2">
               <span>🎭 Stranger Detection Snapshot</span>
               <span class="text-xs px-2 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200 font-semibold">Unregistered Face</span>
             </h3>
             <p class="text-xs text-slate-500 mt-0.5">Camera: <strong class="text-slate-800">{{ modal.cameraName }}</strong> &bull; Time: <span class="font-mono text-slate-700 font-medium">{{ formatDateTime(modal.capturedAt) }}</span></p>
           </div>
-          <button @click="modal.show = false" class="text-slate-400 hover:text-slate-700 text-xl font-bold cursor-pointer">&times;</button>
+          <button @click="modal.show = false" aria-label="Close dialog" class="text-slate-400 hover:text-slate-700 text-xl font-bold cursor-pointer">&times;</button>
         </div>
 
         <div class="grid grid-cols-1">
@@ -389,11 +401,11 @@
     </div>
 
     <!-- Enroll Stranger as Personnel Modal -->
-    <div v-if="enrollModal.show" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm" @click.self="enrollModal.show = false">
-      <div class="bg-white border border-slate-200 rounded-2xl max-w-2xl w-full p-6 space-y-4 max-h-[90vh] overflow-y-auto shadow-2xl">
+    <div v-if="enrollModal.show" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm" @click.self="enrollModal.show = false" @keydown.escape="enrollModal.show = false" tabindex="-1">
+      <div class="bg-white border border-slate-200 rounded-2xl max-w-2xl w-full p-6 space-y-4 max-h-[90vh] overflow-y-auto shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="stranger-enroll-title">
         <div class="flex items-center justify-between border-b border-slate-200 pb-3">
           <div>
-            <h3 class="text-base font-bold text-slate-900 flex items-center gap-2">
+            <h3 id="stranger-enroll-title" class="text-base font-bold text-slate-900 flex items-center gap-2">
               <span>👤 Enroll Stranger as Personnel</span>
               <span class="text-xs px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-200 font-semibold">Biometric Enrollment</span>
             </h3>
@@ -401,7 +413,7 @@
               Convert stranger detection snapshot into an authorized personnel record and sync to edge cameras
             </p>
           </div>
-          <button @click="enrollModal.show = false" class="text-slate-400 hover:text-slate-700 text-xl font-bold cursor-pointer">&times;</button>
+          <button @click="enrollModal.show = false" aria-label="Close dialog" class="text-slate-400 hover:text-slate-700 text-xl font-bold cursor-pointer">&times;</button>
         </div>
 
         <form @submit.prevent="saveStrangerAsPersonnel" class="space-y-4">
@@ -445,10 +457,12 @@
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <!-- Full Name -->
             <div>
-              <label class="block text-xs font-medium text-slate-700 mb-1">Full Name *</label>
+              <label for="enroll-name" class="block text-xs font-medium text-slate-700 mb-1">Full Name *</label>
               <input 
+                id="enroll-name"
                 v-model="enrollForm.name" 
                 required 
+                aria-required="true"
                 type="text" 
                 placeholder="e.g., Jane Doe / Visitor 01"
                 class="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 shadow-xs" 
@@ -457,8 +471,8 @@
 
             <!-- Category (Whitelist / Blacklist) -->
             <div>
-              <label class="block text-xs font-medium text-slate-700 mb-1">Access Category *</label>
-              <select v-model="enrollForm.person_type" class="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 shadow-xs cursor-pointer">
+              <label for="enroll-person-type" class="block text-xs font-medium text-slate-700 mb-1">Access Category *</label>
+              <select id="enroll-person-type" v-model="enrollForm.person_type" class="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 shadow-xs cursor-pointer">
                 <option :value="0">Whitelist (Allowed Access)</option>
                 <option :value="1">Blacklist (Denied / Trigger Alarm)</option>
               </select>
@@ -466,8 +480,9 @@
 
             <!-- ID Card -->
             <div>
-              <label class="block text-xs font-medium text-slate-700 mb-1">National ID / Badge Number</label>
+              <label for="enroll-id-card" class="block text-xs font-medium text-slate-700 mb-1">National ID / Badge Number</label>
               <input 
+                id="enroll-id-card"
                 v-model="enrollForm.id_card" 
                 type="text" 
                 placeholder="e.g., ID-90823"
@@ -477,8 +492,9 @@
 
             <!-- Phone Number -->
             <div>
-              <label class="block text-xs font-medium text-slate-700 mb-1">Phone Number</label>
+              <label for="enroll-tel-num" class="block text-xs font-medium text-slate-700 mb-1">Phone Number</label>
               <input 
+                id="enroll-tel-num"
                 v-model="enrollForm.tel_num" 
                 type="text" 
                 placeholder="e.g., +1 234 567 890"
@@ -488,16 +504,17 @@
 
             <!-- Gender & Birthday -->
             <div>
-              <label class="block text-xs font-medium text-slate-700 mb-1">Gender</label>
-              <select v-model="enrollForm.gender" class="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 shadow-xs cursor-pointer">
+              <label for="enroll-gender" class="block text-xs font-medium text-slate-700 mb-1">Gender</label>
+              <select id="enroll-gender" v-model="enrollForm.gender" class="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 shadow-xs cursor-pointer">
                 <option :value="0">Male</option>
                 <option :value="1">Female</option>
               </select>
             </div>
 
             <div>
-              <label class="block text-xs font-medium text-slate-700 mb-1">Birthday</label>
+              <label for="enroll-birthday" class="block text-xs font-medium text-slate-700 mb-1">Birthday</label>
               <input 
+                id="enroll-birthday"
                 v-model="enrollForm.birthday" 
                 type="date" 
                 class="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 shadow-xs" 
@@ -510,12 +527,12 @@
             <div class="flex items-center justify-between">
               <label class="text-xs font-semibold text-slate-700">Access Schedule & Validity</label>
               <div class="flex items-center gap-4 text-xs">
-                <label class="flex items-center gap-1.5 cursor-pointer">
-                  <input type="radio" :value="0" v-model="enrollForm.temp_valid" class="text-indigo-600" />
+                <label for="enroll-temp-valid-perm" class="flex items-center gap-1.5 cursor-pointer">
+                  <input id="enroll-temp-valid-perm" type="radio" :value="0" v-model="enrollForm.temp_valid" class="text-indigo-600" />
                   <span class="text-slate-800 font-medium">Permanent</span>
                 </label>
-                <label class="flex items-center gap-1.5 cursor-pointer">
-                  <input type="radio" :value="1" v-model="enrollForm.temp_valid" class="text-indigo-600" />
+                <label for="enroll-temp-valid-temp" class="flex items-center gap-1.5 cursor-pointer">
+                  <input id="enroll-temp-valid-temp" type="radio" :value="1" v-model="enrollForm.temp_valid" class="text-indigo-600" />
                   <span class="text-slate-800 font-medium">Temporary Period</span>
                 </label>
               </div>
@@ -523,16 +540,18 @@
 
             <div v-if="enrollForm.temp_valid === 1" class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
               <div>
-                <label class="block text-[11px] text-slate-500 mb-1">Valid Start Time</label>
+                <label for="enroll-valid-begin" class="block text-[11px] text-slate-500 mb-1">Valid Start Time</label>
                 <input 
+                  id="enroll-valid-begin"
                   v-model="enrollForm.valid_begin" 
                   type="datetime-local" 
                   class="w-full bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 shadow-xs" 
                 />
               </div>
               <div>
-                <label class="block text-[11px] text-slate-500 mb-1">Valid End Time</label>
+                <label for="enroll-valid-end" class="block text-[11px] text-slate-500 mb-1">Valid End Time</label>
                 <input 
+                  id="enroll-valid-end"
                   v-model="enrollForm.valid_end" 
                   type="datetime-local" 
                   class="w-full bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 shadow-xs" 

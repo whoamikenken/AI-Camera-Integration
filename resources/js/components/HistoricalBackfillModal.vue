@@ -1,17 +1,22 @@
 <template>
-  <div v-if="isOpen" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm" @click.self="close">
-    <div class="bg-white border border-slate-200 rounded-2xl max-w-xl w-full p-6 space-y-5 shadow-2xl">
+  <div v-if="isOpen" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm" @click.self="close" @keydown.escape="close">
+    <div 
+      class="bg-white border border-slate-200 rounded-2xl max-w-xl w-full p-6 space-y-5 shadow-2xl"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="backfill-modal-title"
+    >
       <!-- Modal Header -->
       <div class="flex items-center justify-between border-b border-slate-200 pb-3.5">
         <div>
-          <h3 class="text-base font-bold text-slate-900 flex items-center gap-2">
+          <h3 id="backfill-modal-title" class="text-base font-bold text-slate-900 flex items-center gap-2">
             <span>📥 Camera Log Historical Backfill</span>
           </h3>
           <p class="text-xs text-slate-500 mt-0.5">
             Retrieve missing camera verification logs or stranger captures from onboard flash storage for selected date ranges
           </p>
         </div>
-        <button @click="close" class="text-slate-400 hover:text-slate-700 text-xl font-bold cursor-pointer">&times;</button>
+        <button @click="close" aria-label="Close modal" class="text-slate-400 hover:text-slate-700 text-xl font-bold cursor-pointer">&times;</button>
       </div>
 
       <!-- Form Content -->
@@ -26,8 +31,9 @@
 
         <!-- Target Camera Selection -->
         <div>
-          <label class="block font-semibold text-slate-700 mb-1">Target Camera Device *</label>
+          <label for="backfill-device" class="block font-semibold text-slate-700 mb-1">Target Camera Device *</label>
           <select 
+            id="backfill-device"
             v-model="form.deviceId" 
             class="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 cursor-pointer shadow-xs font-mono"
           >
@@ -41,9 +47,11 @@
         <!-- Log Type Selection -->
         <div>
           <label class="block font-semibold text-slate-700 mb-1.5">Log Type to Backfill *</label>
-          <div class="grid grid-cols-3 gap-2">
+          <div class="grid grid-cols-3 gap-2" role="radiogroup" aria-label="Log Type">
             <button 
               type="button" 
+              role="radio"
+              :aria-checked="form.logType === 'both'"
               @click="form.logType = 'both'"
               class="py-2 px-3 rounded-xl border text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer"
               :class="form.logType === 'both' ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs' : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'"
@@ -52,6 +60,8 @@
             </button>
             <button 
               type="button" 
+              role="radio"
+              :aria-checked="form.logType === 'records'"
               @click="form.logType = 'records'"
               class="py-2 px-3 rounded-xl border text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer"
               :class="form.logType === 'records' ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs' : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'"
@@ -60,6 +70,8 @@
             </button>
             <button 
               type="button" 
+              role="radio"
+              :aria-checked="form.logType === 'snaps'"
               @click="form.logType = 'snaps'"
               class="py-2 px-3 rounded-xl border text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer"
               :class="form.logType === 'snaps' ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs' : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'"
@@ -110,16 +122,18 @@
         <!-- Date & Time Inputs -->
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-slate-50 border border-slate-200 p-3.5 rounded-xl">
           <div>
-            <label class="block font-semibold text-slate-700 mb-1">Start Date &amp; Time (TimeS) *</label>
+            <label for="backfill-start-time" class="block font-semibold text-slate-700 mb-1">Start Date &amp; Time (TimeS) *</label>
             <input 
+              id="backfill-start-time"
               v-model="form.timeS" 
               type="datetime-local" 
               class="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-900 font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 shadow-xs" 
             />
           </div>
           <div>
-            <label class="block font-semibold text-slate-700 mb-1">End Date &amp; Time (TimeE) *</label>
+            <label for="backfill-end-time" class="block font-semibold text-slate-700 mb-1">End Date &amp; Time (TimeE) *</label>
             <input 
+              id="backfill-end-time"
               v-model="form.timeE" 
               type="datetime-local" 
               class="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-900 font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 shadow-xs" 
@@ -129,8 +143,9 @@
 
         <!-- Webhook Callback Address Field -->
         <div>
-          <label class="block font-semibold text-slate-700 mb-1">Webhook Callback Address (SubscribeAddr)</label>
+          <label for="backfill-callback" class="block font-semibold text-slate-700 mb-1">Webhook Callback Address (SubscribeAddr)</label>
           <input 
+            id="backfill-callback"
             v-model="form.subscribeAddr" 
             type="text" 
             placeholder="e.g. http://192.168.1.50:8080 or http://192.168.1.8:8085"

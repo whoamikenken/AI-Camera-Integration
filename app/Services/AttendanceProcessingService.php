@@ -139,7 +139,7 @@ class AttendanceProcessingService
     /**
      * Check if a given date is a holiday (cached per year).
      */
-    public function isHoliday(Carbon $date): bool
+    public function isHoliday(Carbon $date, ?Employee $employee = null): bool
     {
         $year = $date->year;
         $holidays = Cache::remember("holidays_{$year}", 3600, function () use ($year) {
@@ -147,7 +147,14 @@ class AttendanceProcessingService
         });
 
         $dateStr = $date->format('Y-m-d');
-        return $holidays->contains(function ($h) use ($date, $dateStr) {
+        return $holidays->contains(function ($h) use ($date, $dateStr, $employee) {
+            if ($employee && $h->organization_id && $h->organization_id !== $employee->organization_id) {
+                return false;
+            }
+            if ($employee && !$h->appliesToEmployee($employee)) {
+                return false;
+            }
+
             $hDate = $h->date instanceof Carbon ? $h->date : Carbon::parse($h->date);
             if ($hDate->format('Y-m-d') === $dateStr) {
                 return true;
@@ -179,7 +186,7 @@ class AttendanceProcessingService
             ->get();
 
         // Check Holiday with cache
-        $isHoliday = $this->isHoliday($dateObj);
+        $isHoliday = $this->isHoliday($dateObj, $employee);
 
         $existing = AttendanceRecord::where('employee_id', $employee->id)
             ->whereDate('date', $dateStr)

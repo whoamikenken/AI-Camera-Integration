@@ -20,6 +20,14 @@ class RegularizationController extends Controller
     {
         $query = RegularizationRequest::with(['employee.department', 'approver']);
 
+        $user = $request->user();
+        if ($user) {
+            $canManageAttendance = $user->hasRole(['super-admin', 'admin', 'hr-manager']) || $user->hasPermission('attendance.manage');
+            if (!$canManageAttendance) {
+                $query->where('employee_id', $user->employee?->id);
+            }
+        }
+
         if ($request->filled('employee_id')) {
             $query->where('employee_id', $request->query('employee_id'));
         }

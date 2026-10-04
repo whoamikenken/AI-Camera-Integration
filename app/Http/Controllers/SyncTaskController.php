@@ -11,7 +11,7 @@ class SyncTaskController extends Controller
 {
     public function index(Request $request): JsonResponse
     {
-        $query = SyncTask::with(['device', 'personnel']);
+        $query = SyncTask::with(['device', 'personnel:id,customize_id,name,person_type,photo_path']);
 
         if ($status = $request->input('status')) {
             $query->where('status', $status);

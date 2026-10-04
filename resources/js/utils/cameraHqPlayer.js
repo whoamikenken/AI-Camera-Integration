@@ -49,6 +49,8 @@ class WebGLYUVRenderer {
     const program = gl.createProgram();
     const vs = this.compileShader(gl.VERTEX_SHADER, vertexShaderSource);
     const fs = this.compileShader(gl.FRAGMENT_SHADER, fragmentShaderSource);
+    this.vs = vs;
+    this.fs = fs;
 
     gl.attachShader(program, vs);
     gl.attachShader(program, fs);
@@ -78,6 +80,7 @@ class WebGLYUVRenderer {
     gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
     gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW);
     gl.vertexAttribPointer(vertexPositionAttribute, 3, gl.FLOAT, false, 0, 0);
+    this.vertexBuffer = vertexBuffer;
 
     const textureCoords = new Float32Array([
       0.0, 1.0,
@@ -90,6 +93,7 @@ class WebGLYUVRenderer {
     gl.bindBuffer(gl.ARRAY_BUFFER, textureCoordBuffer);
     gl.bufferData(gl.ARRAY_BUFFER, textureCoords, gl.STATIC_DRAW);
     gl.vertexAttribPointer(textureCoordAttribute, 2, gl.FLOAT, false, 0, 0);
+    this.textureCoordBuffer = textureCoordBuffer;
 
     this.yTexture = this.createTexture(0, 'YTexture');
     this.uTexture = this.createTexture(1, 'UTexture');
@@ -149,6 +153,18 @@ class WebGLYUVRenderer {
   destroy() {
     if (this.gl) {
       try {
+        const gl = this.gl;
+        if (this.yTexture) gl.deleteTexture(this.yTexture);
+        if (this.uTexture) gl.deleteTexture(this.uTexture);
+        if (this.vTexture) gl.deleteTexture(this.vTexture);
+        if (this.vertexBuffer) gl.deleteBuffer(this.vertexBuffer);
+        if (this.textureCoordBuffer) gl.deleteBuffer(this.textureCoordBuffer);
+        if (this.program) {
+            gl.deleteProgram(this.program);
+        }
+        if (this.vs) gl.deleteShader(this.vs);
+        if (this.fs) gl.deleteShader(this.fs);
+        
         const ext = this.gl.getExtension('WEBGL_lose_context');
         if (ext) ext.loseContext();
       } catch (e) {

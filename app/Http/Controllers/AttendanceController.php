@@ -25,7 +25,7 @@ class AttendanceController extends Controller
         $date = $request->query('date', Carbon::today()->toDateString());
 
         $query = AttendanceRecord::with(['employee.department', 'employee.designation', 'employee.location', 'shift'])
-            ->where('date', $date);
+            ->whereDate('date', $date);
 
         if ($request->filled('department_id')) {
             $query->whereHas('employee', fn($q) => $q->where('department_id', $request->query('department_id')));
@@ -35,24 +35,42 @@ class AttendanceController extends Controller
             $query->where('status', $request->query('status'));
         }
 
-        $records = $query->get();
+        $perPage = (int) $request->query('per_page', 50);
+        $paginated = $query->paginate($perPage);
 
-        // Count summary metrics
+        // Count summary metrics via a single SQL conditional aggregation query
+        $summaryQuery = AttendanceRecord::whereDate('date', $date);
+        if ($request->filled('department_id')) {
+            $summaryQuery->whereHas('employee', fn($q) => $q->where('department_id', $request->query('department_id')));
+        }
+
+        $summaryRecord = $summaryQuery->selectRaw("
+            COUNT(*) as total,
+            COUNT(CASE WHEN status IN ('present', 'late', 'early_out', 'late_and_early_out') THEN 1 END) as present,
+            COUNT(CASE WHEN status IN ('late', 'late_and_early_out') THEN 1 END) as late,
+            COUNT(CASE WHEN status IN ('early_out', 'late_and_early_out') THEN 1 END) as early_out,
+            COUNT(CASE WHEN status = 'absent' THEN 1 END) as absent,
+            COUNT(CASE WHEN status = 'half_day' THEN 1 END) as half_day,
+            COUNT(CASE WHEN status = 'on_leave' THEN 1 END) as on_leave,
+            COUNT(CASE WHEN status = 'holiday' THEN 1 END) as holiday
+        ")->first();
+
         $summary = [
-            'total' => $records->count(),
-            'present' => $records->whereIn('status', ['present', 'late', 'early_out', 'late_and_early_out'])->count(),
-            'late' => $records->whereIn('status', ['late', 'late_and_early_out'])->count(),
-            'early_out' => $records->whereIn('status', ['early_out', 'late_and_early_out'])->count(),
-            'absent' => $records->where('status', 'absent')->count(),
-            'half_day' => $records->where('status', 'half_day')->count(),
-            'on_leave' => $records->where('status', 'on_leave')->count(),
-            'holiday' => $records->where('status', 'holiday')->count(),
+            'total' => (int) $summaryRecord->total,
+            'present' => (int) $summaryRecord->present,
+            'late' => (int) $summaryRecord->late,
+            'early_out' => (int) $summaryRecord->early_out,
+            'absent' => (int) $summaryRecord->absent,
+            'half_day' => (int) $summaryRecord->half_day,
+            'on_leave' => (int) $summaryRecord->on_leave,
+            'holiday' => (int) $summaryRecord->holiday,
         ];
 
         return response()->json([
             'date' => $date,
             'summary' => $summary,
-            'records' => $records,
+            'records' => $paginated,
+            'data' => $paginated->items(),
         ]);
     }
 

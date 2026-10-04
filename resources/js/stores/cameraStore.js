@@ -1,6 +1,8 @@
 import { defineStore } from 'pinia';
 import apiClient from '../api/client';
 
+let audioContextSingleton = null;
+
 function normalizePayload(e) {
     if (!e) return null;
     let data = e;
@@ -420,7 +422,13 @@ export const useCameraStore = defineStore('camera', {
 
         playAlertSound() {
             try {
-                const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                if (!audioContextSingleton) {
+                    audioContextSingleton = new (window.AudioContext || window.webkitAudioContext)();
+                }
+                const ctx = audioContextSingleton;
+                if (ctx.state === 'suspended') {
+                    ctx.resume();
+                }
                 const osc = ctx.createOscillator();
                 const gain = ctx.createGain();
                 osc.type = 'sawtooth';

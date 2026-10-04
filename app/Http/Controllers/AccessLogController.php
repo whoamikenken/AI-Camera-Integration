@@ -10,7 +10,7 @@ class AccessLogController extends Controller
 {
     public function index(Request $request): JsonResponse
     {
-        $query = AccessLog::with(['device', 'personnel']);
+        $query = AccessLog::with(['device', 'personnel:id,customize_id,name,person_type,photo_path']);
 
         if ($deviceId = $request->input('device_id')) {
             $query->where('device_id', $deviceId);
@@ -53,6 +53,6 @@ class AccessLogController extends Controller
 
     public function show(AccessLog $accessLog): JsonResponse
     {
-        return response()->json($accessLog->load(['device', 'personnel']));
+        return response()->json($accessLog->load(['device', 'personnel:id,customize_id,name,person_type,photo_path']));
     }
 }

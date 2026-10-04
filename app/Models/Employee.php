@@ -186,23 +186,8 @@ class Employee extends Model
     public function isHoliday(Carbon|string $date): bool
     {
         $carbon = is_string($date) ? Carbon::parse($date) : $date->copy();
-
-        $holidays = Holiday::query()
-            ->where(function ($query) {
-                if ($this->organization_id) {
-                    $query->where('organization_id', $this->organization_id)
-                          ->orWhereNull('organization_id');
-                }
-            })
-            ->get();
-
-        foreach ($holidays as $holiday) {
-            if ($holiday->isHolidayOn($carbon) && $holiday->appliesToEmployee($this)) {
-                return true;
-            }
-        }
-
-        return false;
+        
+        return app(\App\Services\AttendanceProcessingService::class)->isHoliday($carbon, $this);
     }
 
     /**

@@ -7,16 +7,16 @@
 
 ## Task Overview & Progress Tracker
 
-- [ ] **SEC-01 (High):** Remove Hardcoded Backdoor Secret & Enforce Mandatory Authentication in Camera Webhooks
-- [ ] **SEC-02 (High):** Add Permission Middleware to Telemetry Endpoints (`access-logs`, `stranger-snaps`, `sync-tasks`)
-- [ ] **SEC-03 (High):** Enforce Tenant/User Scoping on Leave and Regularization Listing (BOLA/IDOR)
-- [ ] **SEC-04 (High):** Migrate Biometric Image Ingestion from Public Disk to Private Biometrics Storage
-- [ ] **SEC-05 (Medium):** Remove Mock Entity Auto-Creation from `VisitorController::block`
-- [ ] **SEC-06 (Medium):** Revoke Active Bearer Tokens on User Password Change
-- [ ] **SEC-07 (Medium):** Constrain Media Route Path Traversal and Directory Scope in `/api/media/{path}`
-- [ ] **SEC-08 (Medium):** Remove Unauthenticated Mock Endpoint `/action/{operator}` from Production Web Routes
-- [ ] **SEC-09 (Medium):** Patch High & Moderate Vulnerabilities in NPM and Composer Dependencies (`axios`, `league/commonmark`)
-- [ ] **SEC-10 (Low):** Apply Rate Limiting to Unrestricted Public Endpoints (`/api/settings/public`)
+- [x] **SEC-01 (High):** Remove Hardcoded Backdoor Secret & Enforce Mandatory Authentication in Camera Webhooks `[ARCHIVED · Jules 10878193843185705609]`
+- [x] **SEC-02 (High):** Add Permission Middleware to Telemetry Endpoints (`access-logs`, `stranger-snaps`, `sync-tasks`) `[ARCHIVED · Jules 9638457024983864081]`
+- [x] **SEC-03 (High):** Enforce Tenant/User Scoping on Leave and Regularization Listing (BOLA/IDOR) `[ARCHIVED · Jules 14557360042084046356]`
+- [x] **SEC-04 (High):** Migrate Biometric Image Ingestion from Public Disk to Private Biometrics Storage `[ARCHIVED · Jules 9808187318662239942]`
+- [x] **SEC-05 (Medium):** Remove Mock Entity Auto-Creation from `VisitorController::block` `[ARCHIVED · Jules 17649228985988439228]`
+- [x] **SEC-06 (Medium):** Revoke Active Bearer Tokens on User Password Change `[ARCHIVED · Jules 17649228985988439228]`
+- [x] **SEC-07 (Medium):** Constrain Media Route Path Traversal and Directory Scope in `/api/media/{path}` `[ARCHIVED · Jules 9808187318662239942]`
+- [x] **SEC-08 (Medium):** Remove Unauthenticated Mock Endpoint `/action/{operator}` from Production Web Routes `[ARCHIVED · Jules 17649228985988439228]`
+- [x] **SEC-09 (Medium):** Patch High & Moderate Vulnerabilities in NPM and Composer Dependencies (`axios`, `league/commonmark`) `[ARCHIVED · Jules 9441031566168839526]`
+- [x] **SEC-10 (Low):** Apply Rate Limiting to Unrestricted Public Endpoints (`/api/settings/public`) `[ARCHIVED · Jules 9638457024983864081]`
 
 ---
 

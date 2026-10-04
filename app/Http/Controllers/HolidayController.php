@@ -60,6 +60,9 @@ class HolidayController extends Controller
 
         $holiday = Holiday::create($validated);
 
+        $year = \Carbon\Carbon::parse($holiday->date)->year;
+        \Illuminate\Support\Facades\Cache::forget("holidays_{$year}");
+
         return response()->json([
             'message' => 'Holiday created successfully.',
             'data' => $holiday,
@@ -86,7 +89,13 @@ class HolidayController extends Controller
             'applies_to' => 'nullable|array',
         ]);
 
+        $year = \Carbon\Carbon::parse($holiday->date)->year;
+        \Illuminate\Support\Facades\Cache::forget("holidays_{$year}");
         $holiday->update($validated);
+        $newYear = \Carbon\Carbon::parse($holiday->date)->year;
+        if ($newYear !== $year) {
+            \Illuminate\Support\Facades\Cache::forget("holidays_{$newYear}");
+        }
 
         return response()->json([
             'message' => 'Holiday updated successfully.',
@@ -97,6 +106,9 @@ class HolidayController extends Controller
     public function destroy(int $id): JsonResponse
     {
         $holiday = Holiday::findOrFail($id);
+        $year = \Carbon\Carbon::parse($holiday->date)->year;
+        \Illuminate\Support\Facades\Cache::forget("holidays_{$year}");
+        
         $holiday->delete();
 
         return response()->json([

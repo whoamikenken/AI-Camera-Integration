@@ -862,6 +862,8 @@ class Tier1FeatureCoverageTest extends E2ETestCase
 
         $this->actingAsAdmin();
 
+        \App\Models\Visitor::firstOrCreate(['id' => 1], ['first_name' => 'Watchlist', 'last_name' => 'Target']);
+
         $response = $this->postJson('/api/visitors/1/block', [
             'is_blocked' => true,
             'block_reason' => 'Security infraction in prior visit',

@@ -817,36 +817,26 @@ const initTelemetry = () => {
     notificationStore.fetchNotifications();
 
     echo.private("access-logs")
-        .listen(".AccessLogReceived", (e) => store.addLiveLog(e))
-        .listen("AccessLogReceived", (e) => store.addLiveLog(e));
+        .listen(".AccessLogReceived", (e) => store.addLiveLog(e));
 
     echo.private("stranger-snaps")
-        .listen(".StrangerSnapReceived", (e) => store.addStrangerSnap(e))
-        .listen("StrangerSnapReceived", (e) => store.addStrangerSnap(e));
+        .listen(".StrangerSnapReceived", (e) => store.addStrangerSnap(e));
 
     echo.private("device-alerts")
         .listen(".DeviceAlertReceived", (e) => store.addDeviceAlert(e))
-        .listen("DeviceAlertReceived", (e) => store.addDeviceAlert(e))
-        .listen(".DeviceAlertUpdated", (e) => store.updateAlertStatus(e))
-        .listen("DeviceAlertUpdated", (e) => store.updateAlertStatus(e));
+        .listen(".DeviceAlertUpdated", (e) => store.updateAlertStatus(e));
 
     echo.private("device-status")
-        .listen(".DeviceStatusUpdated", (e) => store.updateDeviceStatus(e))
-        .listen("DeviceStatusUpdated", (e) => store.updateDeviceStatus(e));
+        .listen(".DeviceStatusUpdated", (e) => store.updateDeviceStatus(e));
 
     echo.private("personnel")
-        .listen(".PersonnelUpdated", (e) => store.handlePersonnelUpdated(e))
-        .listen("PersonnelUpdated", (e) => store.handlePersonnelUpdated(e));
+        .listen(".PersonnelUpdated", (e) => store.handlePersonnelUpdated(e));
 
     echo.private("sync-tasks")
-        .listen(".SyncTaskUpdated", (e) => store.handleSyncTaskUpdated(e))
-        .listen("SyncTaskUpdated", (e) => store.handleSyncTaskUpdated(e));
+        .listen(".SyncTaskUpdated", (e) => store.handleSyncTaskUpdated(e));
 
     echo.private("attendance")
         .listen(".AttendancePunchReceived", (e) =>
-            attendanceStore.handleLivePunch(e),
-        )
-        .listen("AttendancePunchReceived", (e) =>
             attendanceStore.handleLivePunch(e),
         );
 
@@ -854,34 +844,25 @@ const initTelemetry = () => {
         .listen(".VisitorCheckedIn", (e) =>
             visitorStore.handleLiveVisitorCheckIn(e),
         )
-        .listen("VisitorCheckedIn", (e) =>
-            visitorStore.handleLiveVisitorCheckIn(e),
-        )
         .listen(".VisitorCheckedOut", (e) =>
-            visitorStore.handleLiveVisitorCheckOut(e),
-        )
-        .listen("VisitorCheckedOut", (e) =>
             visitorStore.handleLiveVisitorCheckOut(e),
         );
 
     echo.private("notifications")
         .listen(".NotificationCreated", (e) =>
             notificationStore.handleLiveNotification(e),
-        )
-        .listen("NotificationCreated", (e) =>
-            notificationStore.handleLiveNotification(e),
         );
 
     if (echo.connector?.pusher?.connection) {
-        echo.connector.pusher.connection.bind("connected", () => {
-            store.wsConnected = true;
-        });
-        echo.connector.pusher.connection.bind("disconnected", () => {
-            store.wsConnected = false;
-        });
-        echo.connector.pusher.connection.bind("connecting", () => {
-            store.wsConnected = false;
-        });
+        if (!window.onEchoConnected) {
+            window.onEchoConnected = () => { store.wsConnected = true; };
+            window.onEchoDisconnected = () => { store.wsConnected = false; };
+            window.onEchoConnecting = () => { store.wsConnected = false; };
+        }
+        echo.connector.pusher.connection.bind("connected", window.onEchoConnected);
+        echo.connector.pusher.connection.bind("disconnected", window.onEchoDisconnected);
+        echo.connector.pusher.connection.bind("connecting", window.onEchoConnecting);
+        
         if (echo.connector.pusher.connection.state === "connected") {
             store.wsConnected = true;
         }
@@ -891,6 +872,12 @@ const initTelemetry = () => {
 const cleanupTelemetry = () => {
     if (!isTelemetryInitialized) return;
     isTelemetryInitialized = false;
+
+    if (echo.connector?.pusher?.connection) {
+        if (window.onEchoConnected) echo.connector.pusher.connection.unbind("connected", window.onEchoConnected);
+        if (window.onEchoDisconnected) echo.connector.pusher.connection.unbind("disconnected", window.onEchoDisconnected);
+        if (window.onEchoConnecting) echo.connector.pusher.connection.unbind("connecting", window.onEchoConnecting);
+    }
 
     echo.leave("access-logs");
     echo.leave("stranger-snaps");

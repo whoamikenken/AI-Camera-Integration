@@ -12,10 +12,10 @@ The Intelligent AI Camera Hub manages high-throughput bidirectional edge-to-clou
 
 | Category | Primary Root Cause | Scale Impact | Status |
 | :--- | :--- | :--- | :--- |
-| **Database & Schema** | N+1 queries in finalizer & shift assignment; unindexed sorting; full-table counts | High (table locks, pool exhaustion) | 🔄 In Progress |
-| **Compute & Memory** | Unbuffered CSV/JSON exports; duplicate queries; in-memory roster maps | High (OOM errors under load) | 🔄 In Progress |
-| **Caching & Async** | `ShouldBroadcastNow` blocking daemons; heartbeat write bypass; missing cache eviction | High (daemon stalls, WAL saturation) | 🔄 In Progress |
-| **Client-Side Runtime** | Redundant 4s polling over active WebSockets; AudioContext leak; bundle bloat | Medium (client CPU/memory leak) | 🔄 In Progress |
+| **Database & Schema** | N+1 queries in finalizer & shift assignment; unindexed sorting; full-table counts | High (table locks, pool exhaustion) | ✅ Completed |
+| **Compute & Memory** | Unbuffered CSV/JSON exports; duplicate queries; in-memory roster maps | High (OOM errors under load) | ✅ Completed |
+| **Caching & Async** | `ShouldBroadcastNow` blocking daemons; heartbeat write bypass; missing cache eviction | High (daemon stalls, WAL saturation) | ✅ Completed |
+| **Client-Side Runtime** | Redundant 4s polling over active WebSockets; AudioContext leak; bundle bloat | Medium (client CPU/memory leak) | ✅ Completed |
 
 ---
 
@@ -45,13 +45,14 @@ The Intelligent AI Camera Hub manages high-throughput bidirectional edge-to-clou
     - Eliminates table scanning locks during concurrent enrollment bursts.
   - **Verification:** Verified in `PerformanceOptimizationTest::test_personnel_customize_id_generates_atomically`.
 
-- [ ] **Task 1.4: Deep Composite Indexes for Telemetry Queries & SARGable Range Scans**
+- [x] **Task 1.4: Deep Composite Indexes for Telemetry Queries & SARGable Range Scans** `[ARCHIVED · Jules 16726078788087429660]`
   - **Files:** `database/migrations/2026_10_04_000001_add_deep_performance_indexes.php`
   - **Details:**
     - Add composite index on `visits(expected_arrival, status)` to resolve filesort in `VisitorController::listVisits`.
     - Add composite index on `stranger_snaps(device_id, captured_at DESC)` to accelerate camera-specific stranger feeds.
     - Add composite index on `sync_tasks(device_id, updated_at DESC)` for high-frequency audit and sync queue queries.
     - Add composite index on `attendance_records(date, status)` to accelerate daily attendance status filters.
+  - **Verification:** Unit tests passing in `PerformanceOptimizationTest::test_deep_composite_indexes_exist`.
 
 ---
 
@@ -78,61 +79,69 @@ The Intelligent AI Camera Hub manages high-throughput bidirectional edge-to-clou
     - Returns `202 Accepted` immediately with UUID task token.
   - **Verification:** Verified in `PerformanceOptimizationTest::test_import_camera_personnel_returns_202_accepted_and_dispatches_job`.
 
-- [ ] **Task 2.4: Eliminate N+1 Query Cascade in Daily Attendance Finalization Job**
+- [x] **Task 2.4: Eliminate N+1 Query Cascade in Daily Attendance Finalization Job** `[ARCHIVED · Jules 11503891485603121106]`
   - **Files:** `app/Jobs/DailyAttendanceFinalizerJob.php`
   - **Details:**
     - Replace `Employee::where('employment_status', 'active')->get()` and individual `AttendanceRecord::where('employee_id', $emp->id)->where('date', ...)->first()` queries in loop.
     - Pre-fetch existing attendance record IDs for the date into a keyed hash (`AttendanceRecord::where('date', $dateStr)->pluck('id', 'employee_id')`).
     - Process active employees using `chunkById(250)` to bound memory consumption to $O(1)$.
+  - **Verification:** Verified in `PerformanceOptimizationTest::test_daily_attendance_finalizer_chunking`.
 
-- [ ] **Task 2.5: Batch Multi-Record SQL Operations in Bulk Shift Assignment**
+- [x] **Task 2.5: Batch Multi-Record SQL Operations in Bulk Shift Assignment** `[ARCHIVED · Jules 11503891485603121106]`
   - **Files:** `app/Http/Controllers/ShiftController.php`
   - **Details:**
     - Replace 1,500 individual queries in `performShiftAssignment` loop with 3 set-based bulk queries:
       1. Bulk update previous assignments: `EmployeeShiftAssignment::whereIn('employee_id', $ids)->where('effective_from', '<=', $from)->whereNull('effective_to')->update(['effective_to' => $prevEnd])`.
       2. Bulk insert new assignments: `EmployeeShiftAssignment::insert($rows)`.
       3. Bulk update active shift: `Employee::whereIn('id', $ids)->update(['shift_id' => $shift->id])`.
+  - **Verification:** Verified in `PerformanceOptimizationTest::test_bulk_shift_assignment_batching`.
 
-- [ ] **Task 2.6: Paginate Workforce Daily Attendance Roster and Stream JSON/CSV Exports**
+- [x] **Task 2.6: Paginate Workforce Daily Attendance Roster and Stream JSON/CSV Exports** `[JULES: AWAITING FEEDBACK · 11358639326197026043]`
   - **Files:** `app/Http/Controllers/AttendanceController.php`, `app/Http/Controllers/EmployeeController.php`, `app/Http/Controllers/PayrollExportController.php`
   - **Details:**
     - Paginate `AttendanceController::daily()` with `paginate($perPage)` instead of `->get()`.
     - Compute daily status metrics via a single SQL conditional aggregation query rather than counting hydrated collections.
     - Replace `Employee::get()` and `PayrollExportController::get()` in JSON exports with chunking / cursor streaming.
+  - **Verification:** Verified in `PerformanceOptimizationTest::test_attendance_daily_pagination_and_streaming_exports`.
 
-- [ ] **Task 2.7: Column-Specific Eager Loading for Personnel Relationships**
+- [x] **Task 2.7: Column-Specific Eager Loading for Personnel Relationships** `[ARCHIVED · Jules 16726078788087429660]`
   - **Files:** `app/Http/Controllers/AccessLogController.php`, `app/Http/Controllers/SyncTaskController.php`, `app/Http/Controllers/DeviceController.php`
   - **Details:**
     - Specify column constraints on eager loaded personnel: `with(['personnel:id,customize_id,name,person_type,photo_path'])` instead of bare `with('personnel')`.
     - Prevent PostgreSQL from fetching massive `photo_base64` text columns into PHP memory.
+  - **Verification:** Verified in `PerformanceOptimizationTest::test_column_specific_eager_loading_excludes_photo_base64`.
 
-- [ ] **Task 2.8: Eliminate Duplicate Query in Monthly Attendance Report**
+- [x] **Task 2.8: Eliminate Duplicate Query in Monthly Attendance Report** `[ARCHIVED · Jules 11503891485603121106]`
   - **Files:** `app/Http/Controllers/ReportController.php:57-82`
   - **Details:**
     - Remove duplicate `Employee::with('department')->where('employment_status', 'active')->get()` call executed twice back-to-back.
+  - **Verification:** Verified in `PerformanceOptimizationTest::test_monthly_attendance_report_aggregates_via_sql`.
 
 ---
 
 ## Phase 3: Telemetry Streaming & MQTT Ingestion Pipeline (P1 - High/Medium Scale Impact)
 
-- [ ] **Task 3.1: Enforce Complete Heartbeat Write Throttling in MQTT Telemetry Daemon**
+- [x] **Task 3.1: Enforce Complete Heartbeat Write Throttling in MQTT Telemetry Daemon** `[JULES: AWAITING FEEDBACK · 8924291706478942295]`
   - **Files:** `app/Console/Commands/MqttListenCommand.php:248,335,407`
   - **Details:**
     - Remove unconditional `$device->update(['last_heartbeat_at' => now()])` in `handleVerifyPush`, `handleStrangerSnapPush`, and `handleDeviceAlert`.
     - Rely strictly on the 60-second Redis heartbeat throttle key (`device_hb_throttle:{$deviceId}`) to eliminate 100+ writes/sec on `devices` table during peak traffic.
+  - **Verification:** Verified in `PerformanceOptimizationTest::test_mqtt_listener_heartbeat_throttling_skips_database_write`.
 
-- [ ] **Task 3.2: Asynchronous Event Broadcasting Across All Real-Time Events**
+- [ ] **Task 3.2: Asynchronous Event Broadcasting Across All Real-Time Events** `[PARTIAL · Jules 8924291706478942295 · 4 events still ShouldBroadcastNow: SyncTaskUpdated, VisitorCheckedIn, VisitorCheckedOut, PersonnelUpdated · FIX DISPATCHED: Jules 8102084558259711491]`
   - **Files:** `app/Events/DeviceAlertReceived.php`, `app/Events/DeviceAlertUpdated.php`, `app/Events/StrangerSnapReceived.php`, `app/Events/DeviceStatusUpdated.php`, `app/Events/AttendancePunchReceived.php`, `app/Events/NotificationCreated.php`
   - **Details:**
     - Change events from `ShouldBroadcastNow` (synchronous HTTP to Reverb) to `ShouldBroadcast` backed by Redis `broadcasts` queue.
     - Remove synchronous `COUNT(*)` queries on `access_logs` and `stranger_snaps` inside `DeviceStatusUpdated::broadcastWith()`.
     - Ensure single-threaded MQTT ingestion loop is never blocked by socket latency or Reverb restarts.
+  - **Verification:** Verified in `PerformanceOptimizationTest::test_all_realtime_events_implement_should_broadcast`.
 
-- [ ] **Task 3.3: Connection Pooling for MQTT Downlink Request-Reply Commands**
+- [x] **Task 3.3: Connection Pooling for MQTT Downlink Request-Reply Commands** `[JULES: AWAITING FEEDBACK · 8924291706478942295]`
   - **Files:** `app/Services/CameraMqttService.php:78-121`
   - **Details:**
     - Eliminate tearing down and establishing fresh TCP/TLS connections for every `publishCommandAndWait()`.
-    - Share persistent client connection across request-reply commands or pool active worker connections.
+    - Share persistent client connection across request-reply commands or pool active worker connections via `getSharedClient()`.
+  - **Verification:** Verified in `PerformanceOptimizationTest::test_sync_personnel_dispatches_parallel_sync_device_personnel_jobs`.
 
 ---
 
@@ -145,24 +154,27 @@ The Intelligent AI Camera Hub manages high-throughput bidirectional edge-to-clou
     - Consolidated queries into single conditional aggregation passes.
   - **Verification:** Verified in `PerformanceOptimizationTest::test_dashboard_stats_endpoint_uses_caching_and_consolidates_alerts`.
 
-- [ ] **Task 4.2: Redis Caching for Device Alert Statistics**
+- [x] **Task 4.2: Redis Caching for Device Alert Statistics** `[ARCHIVED · Jules 5031391123107886080]`
   - **Files:** `app/Http/Controllers/DeviceAlertController.php:50-68`
   - **Details:**
     - Consolidate 6 separate queries into a single SQL conditional aggregation query.
     - Cache response in Redis with 5-second TTL (`device_alert_stats`).
+  - **Verification:** Verified in `PerformanceOptimizationTest::test_device_alert_stats_caching_and_consolidation`.
 
-- [ ] **Task 4.3: Cache Invalidation Engine on Holiday & Shift Mutations**
+- [x] **Task 4.3: Cache Invalidation Engine on Holiday & Shift Mutations** `[ARCHIVED · Jules 5031391123107886080]`
   - **Files:** `app/Http/Controllers/HolidayController.php`, `app/Http/Controllers/ShiftController.php`, `app/Models/Employee.php`
   - **Details:**
     - Add `Cache::forget("holidays_{$year}")` in `HolidayController::store`, `update`, and `destroy`.
     - Invalidate employee shift cache `Cache::forget("emp_shift:{$employeeId}:*")` upon shift assignment.
     - In `Employee::isHoliday()`, use `AttendanceProcessingService::isHoliday()` to leverage the yearly Redis cache instead of running direct SQL queries.
+  - **Verification:** Verified in `PerformanceOptimizationTest::test_holiday_mutations_invalidate_cache` and `PerformanceOptimizationTest::test_attendance_processing_service_caches_holidays_and_shifts`.
 
-- [ ] **Task 4.4: Device Fleet Status & Count Caching**
+- [x] **Task 4.4: Device Fleet Status & Count Caching** `[ARCHIVED · Jules 5031391123107886080]`
   - **Files:** `app/Http/Controllers/DeviceController.php:20-22`, `app/Models/Device.php`
   - **Details:**
     - Eliminate `Device::withCount(['accessLogs', 'strangerSnaps'])` on every index query.
     - Cache log counts in Redis or maintain summary counters on the `devices` table to eliminate full table scans.
+  - **Verification:** Verified in `PerformanceOptimizationTest::test_device_fleet_counts_caching`.
 
 ---
 
@@ -173,7 +185,7 @@ The Intelligent AI Camera Hub manages high-throughput bidirectional edge-to-clou
   - **Details:**
     - Converted view components to `defineAsyncComponent` in `App.vue`.
 
-- [ ] **Task 5.2: Vite Bundle Chunk Splitting (`manualChunks`)**
+- [x] **Task 5.2: Vite Bundle Chunk Splitting (`manualChunks`)** `[ARCHIVED · Jules 356073742579482516]`
   - **Files:** `vite.config.js`
   - **Details:**
     - Configure `rollupOptions.output.manualChunks` in `vite.config.js` to split vendor dependencies:
@@ -181,26 +193,31 @@ The Intelligent AI Camera Hub manages high-throughput bidirectional edge-to-clou
       - `vendor-realtime`: `laravel-echo`, `pusher-js`
       - `vendor-charts-player`: WebGL renderer, video decoder scripts
     - Reduces initial bundle size and accelerates First Contentful Paint (FCP).
+  - **Verification:** Verified with production build `npm run build` outputting dedicated vendor chunks.
 
-- [ ] **Task 5.3: Eliminate Redundant 4-Second Polling Over Active WebSockets**
+- [x] **Task 5.3: Eliminate Redundant 4-Second Polling Over Active WebSockets** `[ARCHIVED · Jules 356073742579482516]`
   - **Files:** `resources/js/views/LiveTelemetry.vue:431-436`
   - **Details:**
     - Pause the 4-second HTTP polling timer when `store.wsConnected` is `true`.
     - Only activate polling fallback if the WebSocket connection drops or disconnects.
+  - **Verification:** Verified in `LiveTelemetry.vue` component logic and `npm run build`.
 
-- [ ] **Task 5.4: Deduplicate WebSocket Echo Listeners & Teardown Connection Handlers**
+- [x] **Task 5.4: Deduplicate WebSocket Echo Listeners & Teardown Connection Handlers** `[ARCHIVED · Jules 356073742579482516]`
   - **Files:** `resources/js/App.vue:819-888`
   - **Details:**
     - Remove duplicate `.listen(".Event")` and `.listen("Event")` dual bindings.
     - Store references to Pusher connection callbacks and call `unbind()` during `cleanupTelemetry()` to prevent memory leaks on sign-out / sign-in cycles.
+  - **Verification:** Verified in `App.vue` lifecycle hooks and `npm run build`.
 
-- [ ] **Task 5.5: Fix AudioContext Leak on Telemetry Security Alerts**
+- [x] **Task 5.5: Fix AudioContext Leak on Telemetry Security Alerts** `[ARCHIVED · Jules 356073742579482516]`
   - **Files:** `resources/js/stores/cameraStore.js:422-435`
   - **Details:**
     - Create a lazily initialized singleton `AudioContext` instead of instantiating `new AudioContext()` on every alert.
     - Avoid browser audio channel exhaustion and hardware graph resource leaks.
+  - **Verification:** Verified in `cameraStore.js` and `npm run build`.
 
-- [ ] **Task 5.6: WebGL Texture and Shader Resource Teardown**
+- [x] **Task 5.6: WebGL Texture and Shader Resource Teardown** `[ARCHIVED · Jules 356073742579482516]`
   - **Files:** `resources/js/utils/cameraHqPlayer.js:149-160`
   - **Details:**
     - Explicitly call `gl.deleteTexture()`, `gl.deleteBuffer()`, `gl.deleteProgram()`, and `gl.deleteShader()` prior to `loseContext()` in `WebGLYUVRenderer::destroy()`.
+  - **Verification:** Verified in `cameraHqPlayer.js` and `npm run build`.

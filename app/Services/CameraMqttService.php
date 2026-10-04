@@ -75,12 +75,7 @@ class CameraMqttService
         $response = null;
 
         try {
-            $clientId = 'camera_hub_cmd_wait_' . uniqid();
-            $mqtt = new MqttClient($this->host, $this->port, $clientId);
-
-            $settings = $this->createConnectionSettings(10, 3);
-
-            $mqtt->connect($settings, true);
+            $mqtt = $this->getSharedClient();
 
             $mqtt->subscribe($ackTopic, function (string $subTopic, string $message) use (&$response, $messageId, $operator, $mqtt) {
                 $decoded = json_decode($message, true);
@@ -91,7 +86,7 @@ class CameraMqttService
 
                     if ($matchesMessageId || $matchesOperator) {
                         $response = $decoded;
-                        $mqtt->interrupt();
+                        
                     }
                 }
             }, 0);
@@ -118,7 +113,7 @@ class CameraMqttService
                 usleep(25000);
             }
 
-            $mqtt->disconnect();
+            $mqtt->unsubscribe($ackTopic);
 
             if ($response !== null) {
                 if ($device->exists) {

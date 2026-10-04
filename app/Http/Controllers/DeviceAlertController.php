@@ -45,27 +45,33 @@ class DeviceAlertController extends Controller
 
     public function stats(Request $request): JsonResponse
     {
-        $today = Carbon::today();
+        $stats = \Illuminate\Support\Facades\Cache::remember('device_alert_stats', 5, function () {
+            $today = Carbon::today();
 
-        $totalToday = DeviceAlert::where('captured_at', '>=', $today)->count();
-        $criticalToday = DeviceAlert::where('captured_at', '>=', $today)->where('severity', 'CRITICAL')->count();
-        $warningToday = DeviceAlert::where('captured_at', '>=', $today)->where('severity', 'WARNING')->count();
-        $unacknowledged = DeviceAlert::where('status', 'NEW')->count();
-        $resolvedToday = DeviceAlert::where('captured_at', '>=', $today)->where('status', 'RESOLVED')->count();
+            $aggregates = DeviceAlert::selectRaw("
+                SUM(CASE WHEN captured_at >= ? THEN 1 ELSE 0 END) as total_today,
+                SUM(CASE WHEN captured_at >= ? AND severity = 'CRITICAL' THEN 1 ELSE 0 END) as critical_today,
+                SUM(CASE WHEN captured_at >= ? AND severity = 'WARNING' THEN 1 ELSE 0 END) as warning_today,
+                SUM(CASE WHEN status = 'NEW' THEN 1 ELSE 0 END) as unacknowledged,
+                SUM(CASE WHEN captured_at >= ? AND status = 'RESOLVED' THEN 1 ELSE 0 END) as resolved_today
+            ", [$today, $today, $today, $today])->first();
 
-        $byType = DeviceAlert::where('captured_at', '>=', $today)
-            ->selectRaw('alert_type, count(*) as count')
-            ->groupBy('alert_type')
-            ->pluck('count', 'alert_type');
+            $byType = DeviceAlert::where('captured_at', '>=', $today)
+                ->selectRaw('alert_type, count(*) as count')
+                ->groupBy('alert_type')
+                ->pluck('count', 'alert_type');
 
-        return response()->json([
-            'total_today' => $totalToday,
-            'critical_today' => $criticalToday,
-            'warning_today' => $warningToday,
-            'unacknowledged' => $unacknowledged,
-            'resolved_today' => $resolvedToday,
-            'by_type' => $byType,
-        ]);
+            return [
+                'total_today' => (int) ($aggregates->total_today ?? 0),
+                'critical_today' => (int) ($aggregates->critical_today ?? 0),
+                'warning_today' => (int) ($aggregates->warning_today ?? 0),
+                'unacknowledged' => (int) ($aggregates->unacknowledged ?? 0),
+                'resolved_today' => (int) ($aggregates->resolved_today ?? 0),
+                'by_type' => $byType,
+            ];
+        });
+
+        return response()->json($stats);
     }
 
     public function show(DeviceAlert $deviceAlert): JsonResponse

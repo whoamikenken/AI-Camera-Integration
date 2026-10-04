@@ -50,6 +50,7 @@ return [
         'biometrics' => [
             'driver' => 'local',
             'root' => storage_path('app/biometrics'),
+            'url' => rtrim(env('APP_URL', 'http://localhost'), '/').'/api/media',
             'visibility' => 'private',
             'throw' => false,
             'report' => false,

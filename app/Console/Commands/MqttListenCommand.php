@@ -245,7 +245,11 @@ class MqttListenCommand extends Command
             ['name' => "Camera {$deviceId}", 'ip_address' => '192.168.1.100', 'is_active' => true]
         );
 
-        $device->update(['last_heartbeat_at' => now()]);
+        $throttleKey = "device_hb_throttle:{$deviceId}";
+        if (!Cache::has($throttleKey)) {
+            $device->update(['last_heartbeat_at' => now(), 'is_active' => true]);
+            Cache::put($throttleKey, true, 60);
+        }
 
         // Decode Base64 pictures
         $rawPic = $data['SanpPic'] ?? $info['pic'] ?? $data['pic'] ?? null;
@@ -331,7 +335,11 @@ class MqttListenCommand extends Command
             ['name' => "Camera {$deviceId}", 'ip_address' => '192.168.1.100', 'is_active' => true]
         );
 
-        $device->update(['last_heartbeat_at' => now()]);
+        $throttleKey = "device_hb_throttle:{$deviceId}";
+        if (!Cache::has($throttleKey)) {
+            $device->update(['last_heartbeat_at' => now(), 'is_active' => true]);
+            Cache::put($throttleKey, true, 60);
+        }
 
         $rawPic = $data['SanpPic'] ?? $info['pic'] ?? $data['pic'] ?? null;
         $rawScene = $data['ScenePic'] ?? $info['scene'] ?? $data['scene'] ?? null;
@@ -404,7 +412,11 @@ class MqttListenCommand extends Command
             ['name' => "Camera {$deviceId}", 'ip_address' => '192.168.1.100', 'is_active' => true]
         );
 
-        $device->update(['last_heartbeat_at' => now()]);
+        $throttleKey = "device_hb_throttle:{$deviceId}";
+        if (!Cache::has($throttleKey)) {
+            $device->update(['last_heartbeat_at' => now(), 'is_active' => true]);
+            Cache::put($throttleKey, true, 60);
+        }
 
         $rawPic = $data['SanpPic'] ?? $info['pic'] ?? $data['pic'] ?? $data['Pic'] ?? $info['Pic'] ?? null;
         $rawScene = $data['ScenePic'] ?? $info['scene'] ?? $data['scene'] ?? $data['TemPic'] ?? null;

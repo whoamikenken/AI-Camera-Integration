@@ -17,10 +17,16 @@ class DeviceController extends Controller
 
     public function index(): JsonResponse
     {
-        $devices = Device::withCount(['accessLogs', 'strangerSnaps'])
-            ->orderBy('id', 'desc')
+        $devices = Device::orderBy('id', 'desc')
             ->get()
             ->map(function ($device) {
+                $counts = \Illuminate\Support\Facades\Cache::remember("device_counts:{$device->device_id}", 30, function () use ($device) {
+                    return [
+                        'access_logs_count' => $device->accessLogs()->count(),
+                        'stranger_snaps_count' => $device->strangerSnaps()->count(),
+                    ];
+                });
+
                 return [
                     'id' => $device->id,
                     'device_id' => $device->device_id,
@@ -35,8 +41,8 @@ class DeviceController extends Controller
                     'is_active' => $device->is_active,
                     'is_online' => $device->is_online,
                     'last_heartbeat_at' => $device->last_heartbeat_at ? $device->last_heartbeat_at->toIso8601String() : null,
-                    'access_logs_count' => $device->access_logs_count,
-                    'stranger_snaps_count' => $device->stranger_snaps_count,
+                    'access_logs_count' => $counts['access_logs_count'],
+                    'stranger_snaps_count' => $counts['stranger_snaps_count'],
                     'created_at' => $device->created_at->toIso8601String(),
                 ];
             });
@@ -105,13 +111,18 @@ class DeviceController extends Controller
 
     public function show(Device $device): JsonResponse
     {
-        $device->loadCount(['accessLogs', 'strangerSnaps']);
+        $counts = \Illuminate\Support\Facades\Cache::remember("device_counts:{$device->device_id}", 30, function () use ($device) {
+            return [
+                'access_logs_count' => $device->accessLogs()->count(),
+                'stranger_snaps_count' => $device->strangerSnaps()->count(),
+            ];
+        });
 
         return response()->json(array_merge($device->toArray(), [
             'endpoint_url' => $device->endpoint_url,
             'is_online' => $device->is_online,
-            'access_logs_count' => $device->access_logs_count,
-            'stranger_snaps_count' => $device->stranger_snaps_count,
+            'access_logs_count' => $counts['access_logs_count'],
+            'stranger_snaps_count' => $counts['stranger_snaps_count'],
         ]));
     }
 
@@ -492,7 +503,9 @@ class DeviceController extends Controller
             }
         }
 
-        $localPersonnel = \App\Models\Personnel::orderBy('customize_id', 'asc')->get();
+        $localPersonnel = \App\Models\Personnel::select(['id', 'customize_id', 'name', 'person_type', 'gender', 'id_card', 'tel_num', 'photo_path'])
+            ->orderBy('customize_id', 'asc')
+            ->get();
         $syncTasks = \App\Models\SyncTask::where('device_id', $device->device_id)
             ->latest('updated_at')
             ->get()
@@ -568,7 +581,13 @@ class DeviceController extends Controller
             }
         }
 
-        $device->loadCount(['accessLogs', 'strangerSnaps']);
+        $counts = \Illuminate\Support\Facades\Cache::remember("device_counts:{$device->device_id}", 30, function () use ($device) {
+            return [
+                'access_logs_count' => $device->accessLogs()->count(),
+                'stranger_snaps_count' => $device->strangerSnaps()->count(),
+            ];
+        });
+
         $recentLogs = \App\Models\AccessLog::where('device_id', $device->device_id)
             ->orderBy('captured_at', 'desc')
             ->take(20)
@@ -580,8 +599,8 @@ class DeviceController extends Controller
             'device' => array_merge($device->toArray(), [
                 'endpoint_url' => $device->endpoint_url,
                 'is_online' => $device->is_online,
-                'access_logs_count' => $device->access_logs_count,
-                'stranger_snaps_count' => $device->stranger_snaps_count,
+                'access_logs_count' => $counts['access_logs_count'],
+                'stranger_snaps_count' => $counts['stranger_snaps_count'],
             ]),
             'audit' => [
                 'transport' => 'Pure WAN MQTT Architecture',

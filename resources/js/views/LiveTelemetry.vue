@@ -430,6 +430,7 @@ onMounted(() => {
   fetchLogs(1);
   if (pollTimer) clearInterval(pollTimer);
   pollTimer = setInterval(() => {
+    if (store.wsConnected) return;
     if (currentPage.value === 1) {
       fetchLogs(1, true);
     }

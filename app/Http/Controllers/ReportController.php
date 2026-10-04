@@ -76,10 +76,6 @@ class ReportController extends Controller
             ->get()
             ->keyBy('employee_id');
 
-        $employees = Employee::with('department')
-            ->where('employment_status', 'active')
-            ->get();
-
         $data = $employees->map(function ($emp) use ($aggregates) {
             $agg = $aggregates->get($emp->id);
 

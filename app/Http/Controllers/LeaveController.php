@@ -100,6 +100,14 @@ class LeaveController extends Controller
     {
         $query = LeaveBalance::with(['employee', 'leaveType']);
 
+        $user = $request->user();
+        if ($user) {
+            $canManageLeaves = $user->hasRole(['super-admin', 'admin', 'hr-manager']) || $user->hasPermission('leaves.manage');
+            if (!$canManageLeaves) {
+                $query->where('employee_id', $user->employee?->id);
+            }
+        }
+
         if ($request->filled('employee_id')) {
             $query->where('employee_id', $request->query('employee_id'));
         }
@@ -143,6 +151,14 @@ class LeaveController extends Controller
     public function listRequests(Request $request): JsonResponse
     {
         $query = LeaveRequest::with(['employee', 'leaveType', 'approver']);
+
+        $user = $request->user();
+        if ($user) {
+            $canManageLeaves = $user->hasRole(['super-admin', 'admin', 'hr-manager']) || $user->hasPermission('leaves.manage');
+            if (!$canManageLeaves) {
+                $query->where('employee_id', $user->employee?->id);
+            }
+        }
 
         if ($request->filled('employee_id')) {
             $query->where('employee_id', $request->query('employee_id'));

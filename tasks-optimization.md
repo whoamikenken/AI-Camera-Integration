@@ -72,66 +72,66 @@ This optimization roadmap documents all audit findings, UX friction points, acce
 ---
 
 ### 11. Stranger Snapshot Monitor (`StrangerSnapsMonitor.vue`)
-- [ ] **STR-01 (a11y):** Associate filter labels (`Camera Device`, `From Date`, `To Date`) with form controls using explicit `for` and `id` attributes in `resources/js/views/StrangerSnapsMonitor.vue:61-96`.
-- [ ] **STR-02 (a11y & Semantics):** Replace interactive `<div>` containers in the live incoming stream carousel (`line 127`), card grid (`line 168`), and table rows (`line 252`) with semantic `<button>` elements, or equip them with `role="button"`, `tabindex="0"`, descriptive `aria-label`, and `@keydown.enter` handlers.
-- [ ] **STR-03 (CLS & States):** Replace plain text loading placeholders (`"Loading stranger snapshots..."` lines 151, 243) with an 8-card skeleton grid and 5 animated skeleton table rows to prevent Cumulative Layout Shift (CLS).
-- [ ] **STR-04 (a11y):** Upgrade Image Inspection Modal and Enroll Stranger Modal (`lines 320, 392`) to fully compliant dialogs (`role="dialog"`, `aria-modal="true"`, `aria-labelledby`, `@keydown.escape`, and descriptive close button `aria-label="Close dialog"`).
-- [ ] **STR-05 (Forms & a11y):** Bind all inputs in the stranger enrollment modal (`lines 448-520`) with associated `<label for="...">` and `<input id="...">` attributes and add `aria-required="true"`.
+- [x] **STR-01 (a11y):** Associate filter labels (`Camera Device`, `From Date`, `To Date`) with form controls using explicit `for` and `id` attributes in `resources/js/views/StrangerSnapsMonitor.vue:61-96`. `[ARCHIVED · Jules 11004211380295526672]`
+- [x] **STR-02 (a11y & Semantics):** Replace interactive `<div>` containers in the live incoming stream carousel (`line 127`), card grid (`line 168`), and table rows (`line 252`) with semantic `<button>` elements, or equip them with `role="button"`, `tabindex="0"`, descriptive `aria-label`, and `@keydown.enter` handlers. `[ARCHIVED · Jules 11004211380295526672]`
+- [x] **STR-03 (CLS & States):** Replace plain text loading placeholders (`"Loading stranger snapshots..."` lines 151, 243) with an 8-card skeleton grid and 5 animated skeleton table rows to prevent Cumulative Layout Shift (CLS). `[ARCHIVED · Jules 11004211380295526672]`
+- [x] **STR-04 (a11y):** Upgrade Image Inspection Modal and Enroll Stranger Modal (`lines 320, 392`) to fully compliant dialogs (`role="dialog"`, `aria-modal="true"`, `aria-labelledby`, `@keydown.escape`, and descriptive close button `aria-label="Close dialog"`). `[ARCHIVED · Jules 11004211380295526672]`
+- [x] **STR-05 (Forms & a11y):** Bind all inputs in the stranger enrollment modal (`lines 448-520`) with associated `<label for="...">` and `<input id="...">` attributes and add `aria-required="true"`. `[ARCHIVED · Jules 11004211380295526672]`
 
 ### 12. AI Safety & Security Alerts Center (`DeviceAlertsCenter.vue`)
-- [ ] **ALT-01 (a11y):** Associate severity, status, and camera filter labels with select elements via explicit `for` and `id` attributes in `resources/js/views/DeviceAlertsCenter.vue:100-140`.
-- [ ] **ALT-02 (a11y):** Convert interactive incident card media containers (`line 178`) and table thumbnails/titles (`lines 292, 296`) to keyboard-accessible `<button>` triggers with descriptive `aria-label="Inspect incident for [Title]"`.
-- [ ] **ALT-03 (a11y):** Add `scope="col"` to all table header `<th>` cells in `resources/js/views/DeviceAlertsCenter.vue:265-271`.
-- [ ] **ALT-04 (CLS & States):** Replace single text row (`"Loading alerts..."` line 276) with 5 animated skeleton table rows matching the 7-column layout.
-- [ ] **ALT-05 (a11y):** Upgrade Incident Detail Modal (`line 369`) with `role="dialog"`, `aria-modal="true"`, `aria-labelledby="incident-modal-title"`, Escape key dismiss, and an accessible close button name.
+- [x] **ALT-01 (a11y):** Associate severity, status, and camera filter labels with select elements via explicit `for` and `id` attributes in `resources/js/views/DeviceAlertsCenter.vue:100-140`. `[ARCHIVED · Jules 9134677463384687766]`
+- [x] **ALT-02 (a11y):** Convert interactive incident card media containers (`line 178`) and table thumbnails/titles (`lines 292, 296`) to keyboard-accessible `<button>` triggers with descriptive `aria-label="Inspect incident for [Title]"`. `[ARCHIVED · Jules 9134677463384687766]`
+- [x] **ALT-03 (a11y):** Add `scope="col"` to all table header `<th>` cells in `resources/js/views/DeviceAlertsCenter.vue:265-271`. `[ARCHIVED · Jules 9134677463384687766]`
+- [x] **ALT-04 (CLS & States):** Replace single text row (`"Loading alerts..."` line 276) with 5 animated skeleton table rows matching the 7-column layout. `[ARCHIVED · Jules 9134677463384687766]`
+- [x] **ALT-05 (a11y):** Upgrade Incident Detail Modal (`line 369`) with `role="dialog"`, `aria-modal="true"`, `aria-labelledby="incident-modal-title"`, Escape key dismiss, and an accessible close button name. `[ARCHIVED · Jules 9134677463384687766]`
 
 ### 13. Access Telemetry & Audit Logs History (`AccessLogsHistory.vue`)
-- [ ] **LOG-01 (a11y):** Add explicit `aria-label` or `<label>` tags to search, status, camera, and minimum match percentage filter inputs in `resources/js/views/AccessLogsHistory.vue:21-50`.
-- [ ] **LOG-02 (a11y):** Add `scope="col"` to all table header `<th>` elements in `resources/js/views/AccessLogsHistory.vue:58-64`.
-- [ ] **LOG-03 (CLS & States):** Replace single cell loading text (`line 69`) with 6 animated skeleton rows matching table geometry.
-- [ ] **LOG-04 (a11y):** Convert thumbnail preview `<div>` (`line 76`) to a semantic `<button>` with descriptive `aria-label` and keyboard interaction.
-- [ ] **LOG-05 (a11y):** Upgrade Snapshot Inspection Modal (`line 121`) with `role="dialog"`, `aria-modal="true"`, `aria-labelledby`, Escape listener, and accessible close button.
+- [x] **LOG-01 (a11y):** Add explicit `aria-label` or `<label>` tags to search, status, camera, and minimum match percentage filter inputs in `resources/js/views/AccessLogsHistory.vue:21-50`. `[ARCHIVED · Jules 11004211380295526672]`
+- [x] **LOG-02 (a11y):** Add `scope="col"` to all table header `<th>` elements in `resources/js/views/AccessLogsHistory.vue:58-64`. `[ARCHIVED · Jules 11004211380295526672]`
+- [x] **LOG-03 (CLS & States):** Replace single cell loading text (`line 69`) with 6 animated skeleton rows matching table geometry. `[ARCHIVED · Jules 11004211380295526672]`
+- [x] **LOG-04 (a11y):** Convert thumbnail preview `<div>` (`line 76`) to a semantic `<button>` with descriptive `aria-label` and keyboard interaction. `[ARCHIVED · Jules 11004211380295526672]`
+- [x] **LOG-05 (a11y):** Upgrade Snapshot Inspection Modal (`line 121`) with `role="dialog"`, `aria-modal="true"`, `aria-labelledby`, Escape listener, and accessible close button. `[ARCHIVED · Jules 11004211380295526672]`
 
 ### 14. Edge Device Sync Outbox Queue (`SyncTasksMonitor.vue`)
-- [ ] **SYN-01 (a11y):** Add explicit `aria-label="Filter sync tasks by status"` or visible `<label>` to status dropdown in `resources/js/views/SyncTasksMonitor.vue:15`.
-- [ ] **SYN-02 (a11y):** Add `scope="col"` to all table header `<th>` elements in `resources/js/views/SyncTasksMonitor.vue:30-37`.
-- [ ] **SYN-03 (CLS & States):** Replace plain text loader (`line 42`) with animated skeleton table rows.
-- [ ] **SYN-04 (Interaction & a11y):** Add contextual `aria-label="Retry sync task #[ID] for [Name]"` and disabled/loading spinner state (`retryingId === task.id`) to task retry buttons in `resources/js/views/SyncTasksMonitor.vue:68-72`.
+- [x] **SYN-01 (a11y):** Add explicit `aria-label="Filter sync tasks by status"` or visible `<label>` to status dropdown in `resources/js/views/SyncTasksMonitor.vue:15`. `[ARCHIVED · Jules 9134677463384687766]`
+- [x] **SYN-02 (a11y):** Add `scope="col"` to all table header `<th>` elements in `resources/js/views/SyncTasksMonitor.vue:30-37`. `[ARCHIVED · Jules 9134677463384687766]`
+- [x] **SYN-03 (CLS & States):** Replace plain text loader (`line 42`) with animated skeleton table rows. `[ARCHIVED · Jules 9134677463384687766]`
+- [x] **SYN-04 (Interaction & a11y):** Add contextual `aria-label="Retry sync task #[ID] for [Name]"` and disabled/loading spinner state (`retryingId === task.id`) to task retry buttons in `resources/js/views/SyncTasksMonitor.vue:68-72`. `[ARCHIVED · Jules 9134677463384687766]`
 
 ### 15. Hardware Diagnostics & Historical Backfill Modals (`HistoricalBackfillModal.vue` & `DeviceAuditModal.vue`)
-- [ ] **AUD-01 (a11y):** Convert `HistoricalBackfillModal.vue:2` and `DeviceAuditModal.vue:2` outer containers into semantic dialogs (`role="dialog"`, `aria-modal="true"`, `aria-labelledby`, `@keydown.escape`, and close button `aria-label`).
-- [ ] **AUD-02 (a11y):** Bind all form labels in `HistoricalBackfillModal.vue:29-138` with target controls using `for` and `id` attributes.
-- [ ] **AUD-03 (a11y):** Implement `role="radiogroup"` and `role="radio"` with `aria-checked` on the log type segmented buttons in `HistoricalBackfillModal.vue:44-69`.
-- [ ] **AUD-04 (a11y):** Implement ARIA tabs pattern (`role="tablist"`, `role="tab"`, `aria-selected`, `aria-controls`) for sub-tabs in `DeviceAuditModal.vue:29-51`.
-- [ ] **AUD-05 (a11y):** Add `scope="col"` to roster table header cells in `DeviceAuditModal.vue:136-140` and provide explicit `aria-label`s on search and status filters.
+- [x] **AUD-01 (a11y):** Convert `HistoricalBackfillModal.vue:2` and `DeviceAuditModal.vue:2` outer containers into semantic dialogs (`role="dialog"`, `aria-modal="true"`, `aria-labelledby`, `@keydown.escape`, and close button `aria-label`). `[ARCHIVED · Jules 13893614969077389184]`
+- [x] **AUD-02 (a11y):** Bind all form labels in `HistoricalBackfillModal.vue:29-138` with target controls using `for` and `id` attributes. `[ARCHIVED · Jules 13893614969077389184]`
+- [x] **AUD-03 (a11y):** Implement `role="radiogroup"` and `role="radio"` with `aria-checked` on the log type segmented buttons in `HistoricalBackfillModal.vue:44-69`. `[ARCHIVED · Jules 13893614969077389184]`
+- [x] **AUD-04 (a11y):** Implement ARIA tabs pattern (`role="tablist"`, `role="tab"`, `aria-selected`, `aria-controls`) for sub-tabs in `DeviceAuditModal.vue:29-51`. `[ARCHIVED · Jules 13893614969077389184]`
+- [x] **AUD-05 (a11y):** Add `scope="col"` to roster table header cells in `DeviceAuditModal.vue:136-140` and provide explicit `aria-label`s on search and status filters. `[ARCHIVED · Jules 13893614969077389184]`
 
 ### 16. Workforce Leave & Quota Management (`LeaveHub.vue`, `LeaveRequestForm.vue`, `LeaveApprovalQueue.vue`, `LeaveBalanceWidget.vue`)
-- [ ] **LVE-01 (a11y & Forms):** Wrap `LeaveRequestForm.vue:2-10` in accessible dialog attributes (`role="dialog"`, `aria-modal="true"`, `aria-labelledby`, Escape key handling) and bind all form inputs with explicit `<label for="...">` and `<input id="...">` attributes.
-- [ ] **LVE-02 (Interaction):** Replace emoji spinner `⏳` with an accessible SVG spinner during active submission in `LeaveRequestForm.vue:52`.
-- [ ] **LVE-03 (a11y):** Add `aria-label` to filter dropdowns and `scope="col"` to table header cells in `LeaveApprovalQueue.vue:5-17, 30-36`.
-- [ ] **LVE-04 (Interaction & a11y):** Add contextual `aria-label`s and loading/disabled states to Approve and Reject buttons during async API mutations in `LeaveApprovalQueue.vue:72-77`.
-- [ ] **LVE-05 (a11y & CLS):** Add `role="progressbar"`, `aria-valuenow`, `aria-valuemin="0"`, `aria-valuemax`, and accessible name to the visual quota meter in `LeaveBalanceWidget.vue:21-23`, and provide skeleton cards during async balance queries.
+- [x] **LVE-01 (a11y & Forms):** Wrap `LeaveRequestForm.vue:2-10` in accessible dialog attributes (`role="dialog"`, `aria-modal="true"`, `aria-labelledby`, Escape key handling) and bind all form inputs with explicit `<label for="...">` and `<input id="...">` attributes. `[ARCHIVED · Jules 10038488321736153251]`
+- [x] **LVE-02 (Interaction):** Replace emoji spinner `⏳` with an accessible SVG spinner during active submission in `LeaveRequestForm.vue:52`. `[ARCHIVED · Jules 10038488321736153251]`
+- [x] **LVE-03 (a11y):** Add `aria-label` to filter dropdowns and `scope="col"` to table header cells in `LeaveApprovalQueue.vue:5-17, 30-36`. `[ARCHIVED · Jules 10038488321736153251]`
+- [x] **LVE-04 (Interaction & a11y):** Add contextual `aria-label`s and loading/disabled states to Approve and Reject buttons during async API mutations in `LeaveApprovalQueue.vue:72-77`. `[ARCHIVED · Jules 10038488321736153251]`
+- [x] **LVE-05 (a11y & CLS):** Add `role="progressbar"`, `aria-valuenow`, `aria-valuemin="0"`, `aria-valuemax`, and accessible name to the visual quota meter in `LeaveBalanceWidget.vue:21-23`, and provide skeleton cards during async balance queries. `[ARCHIVED · Jules 10038488321736153251]`
 
 ### 17. Shift & Schedule Management (`ShiftManager.vue`, `ShiftAssignment.vue`, `HolidayCalendar.vue`)
-- [ ] **SCH-01 (Zero-State & a11y):** Add an empty-state illustration/card when `store.shifts` has no records, and add contextual `aria-label`s to shift Edit/Delete buttons in `resources/js/components/schedules/ShiftManager.vue`.
-- [ ] **SCH-02 (a11y & Forms):** Wrap Shift modal (`ShiftManager.vue:109`) in dialog semantics, associate all labels with inputs via `for` and `id`, and enclose in semantic `<form @submit.prevent>`.
-- [ ] **SCH-03 (a11y):** Replace clickable `<div>` shift selection cards in `ShiftAssignment.vue:26-41` with accessible radio group elements (`role="radiogroup"`, `role="radio"`, `aria-checked`, keyboard arrow navigation).
-- [ ] **SCH-04 (a11y):** Add `role="group"` and `aria-pressed="form.assigned_days.includes(day.id)"` to assigned working days toggle buttons in `ShiftAssignment.vue:153-163`.
-- [ ] **SCH-05 (a11y):** Add accessible labels (`aria-label="Previous month"`, `aria-label="Next month"`) to month navigation buttons, and convert clickable holiday chips (`HolidayCalendar.vue:121-131`) into accessible `<button>` triggers.
+- [x] **SCH-01 (Zero-State & a11y):** Add an empty-state illustration/card when `store.shifts` has no records, and add contextual `aria-label`s to shift Edit/Delete buttons in `resources/js/components/schedules/ShiftManager.vue`. `[JULES: AWAITING FEEDBACK · 3874137239943605297]`
+- [x] **SCH-02 (a11y & Forms):** Wrap Shift modal (`ShiftManager.vue:109`) in dialog semantics, associate all labels with inputs via `for` and `id`, and enclose in semantic `<form @submit.prevent>`. `[JULES: AWAITING FEEDBACK · 3874137239943605297]`
+- [x] **SCH-03 (a11y):** Replace clickable `<div>` shift selection cards in `ShiftAssignment.vue:26-41` with accessible radio group elements (`role="radiogroup"`, `role="radio"`, `aria-checked`, keyboard arrow navigation). `[JULES: AWAITING FEEDBACK · 3874137239943605297]`
+- [x] **SCH-04 (a11y):** Add `role="group"` and `aria-pressed="form.assigned_days.includes(day.id)"` to assigned working days toggle buttons in `ShiftAssignment.vue:153-163`. `[JULES: AWAITING FEEDBACK · 3874137239943605297]`
+- [x] **SCH-05 (a11y):** Add accessible labels (`aria-label="Previous month"`, `aria-label="Next month"`) to month navigation buttons, and convert clickable holiday chips (`HolidayCalendar.vue:121-131`) into accessible `<button>` triggers. `[JULES: AWAITING FEEDBACK · 3874137239943605297]`
 
 ### 18. Visitor & Watchlist Management (`VisitorDashboard.vue`, `VisitorBadge.vue`, `WatchlistManager.vue`)
-- [ ] **VIS-05 (a11y & UX):** Replace native browser `window.confirm()` in `VisitorDashboard.vue:130` and `WatchlistManager.vue:64` with accessible confirmation modal dialogs.
-- [ ] **VIS-06 (a11y):** Add `aria-label` to visit filter select and refresh button, and add `scope="col"` to table header cells in `VisitorDashboard.vue:37-60`.
-- [ ] **VIS-07 (a11y):** Add contextual `aria-label`s to "Pass", "Check Out", and "Check In" action buttons in `VisitorDashboard.vue:87-95`.
-- [ ] **VIS-08 (a11y):** Upgrade `VisitorBadge.vue:2-7` modal with `role="dialog"`, `aria-modal="true"`, `aria-labelledby`, Escape listener, and accessible close button name.
+- [x] **VIS-05 (a11y & UX):** Replace native browser `window.confirm()` in `VisitorDashboard.vue:130` and `WatchlistManager.vue:64` with accessible confirmation modal dialogs. `[ARCHIVED · Jules 13610617331227140394]`
+- [x] **VIS-06 (a11y):** Add `aria-label` to visit filter select and refresh button, and add `scope="col"` to table header cells in `VisitorDashboard.vue:37-60`. `[ARCHIVED · Jules 13610617331227140394]`
+- [x] **VIS-07 (a11y):** Add contextual `aria-label`s to "Pass", "Check Out", and "Check In" action buttons in `VisitorDashboard.vue:87-95`. `[ARCHIVED · Jules 13610617331227140394]`
+- [x] **VIS-08 (a11y):** Upgrade `VisitorBadge.vue:2-7` modal with `role="dialog"`, `aria-modal="true"`, `aria-labelledby`, Escape listener, and accessible close button name. `[ARCHIVED · Jules 13610617331227140394]`
 
 ### 19. Organization & System Settings (`DepartmentManager.vue`, `SystemSettings.vue`, `AuditLogViewer.vue`)
-- [ ] **SET-01 (a11y):** Implement ARIA tabs pattern (`role="tablist"`, `role="tab"`, `aria-selected`, `aria-controls`) on navigation bars in `DepartmentManager.vue:38-51`.
-- [ ] **SET-02 (a11y & Forms):** Ensure all Department, Designation, and Location modals in `DepartmentManager.vue` include `role="dialog"`, `aria-modal="true"`, `aria-labelledby`, Escape listeners, and explicit `for` / `id` label mappings.
-- [ ] **SET-03 (a11y):** Add `role="switch"`, `aria-checked`, and explicit `aria-label`s to custom toggle switches in `resources/js/components/settings/SystemSettings.vue:45-56, 128-136`.
-- [ ] **SET-04 (a11y):** Associate number inputs in `SystemSettings.vue:60-91` with `<label for="...">` and `<input id="...">` attributes.
-- [ ] **SET-05 (a11y):** Add explicit `aria-label` or `<label>` tags to search and filter dropdowns in `AuditLogViewer.vue:6-34`.
-- [ ] **SET-06 (a11y):** Upgrade Change Diff modal (`AuditLogViewer.vue:121-129`) with dialog semantics, Escape key listener, and accessible close button name.
+- [x] **SET-01 (a11y):** Implement ARIA tabs pattern (`role="tablist"`, `role="tab"`, `aria-selected`, `aria-controls`) on navigation bars in `DepartmentManager.vue:38-51`. `[ARCHIVED · Jules 13610617331227140394]`
+- [x] **SET-02 (a11y & Forms):** Ensure all Department, Designation, and Location modals in `DepartmentManager.vue` include `role="dialog"`, `aria-modal="true"`, `aria-labelledby`, Escape listeners, and explicit `for` / `id` label mappings. `[ARCHIVED · Jules 13610617331227140394]`
+- [x] **SET-03 (a11y):** Add `role="switch"`, `aria-checked`, and explicit `aria-label`s to custom toggle switches in `resources/js/components/settings/SystemSettings.vue:45-56, 128-136`. `[ARCHIVED · Jules 13610617331227140394]`
+- [x] **SET-04 (a11y):** Associate number inputs in `SystemSettings.vue:60-91` with `<label for="...">` and `<input id="...">` attributes. `[ARCHIVED · Jules 13610617331227140394]`
+- [x] **SET-05 (a11y):** Add explicit `aria-label` or `<label>` tags to search and filter dropdowns in `AuditLogViewer.vue:6-34`. `[ARCHIVED · Jules 13610617331227140394]`
+- [x] **SET-06 (a11y):** Upgrade Change Diff modal (`AuditLogViewer.vue:121-129`) with dialog semantics, Escape key listener, and accessible close button name. `[ARCHIVED · Jules 13610617331227140394]`
 
 ---
 

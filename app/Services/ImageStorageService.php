@@ -43,9 +43,10 @@ class ImageStorageService
         $datePath = date('Y/m/d');
         $fileName = "{$folder}/{$datePath}/" . Str::random(24) . ".{$extension}";
 
-        Storage::disk('public')->put($fileName, $decodedBinary);
+        $disk = $this->getDisk();
+        Storage::disk($disk)->put($fileName, $decodedBinary);
 
-        return Storage::disk('public')->url($fileName);
+        return Storage::disk($disk)->url($fileName);
     }
 
     /**
@@ -87,8 +88,9 @@ class ImageStorageService
         $datePath = date('Y/m');
         $path = "{$folder}/{$datePath}/" . Str::random(24) . ".{$extension}";
 
-        Storage::disk('public')->put($path, $decodedBinary);
-        $url = Storage::disk('public')->url($path);
+        $disk = $this->getDisk();
+        Storage::disk($disk)->put($path, $decodedBinary);
+        $url = Storage::disk($disk)->url($path);
 
         $formattedBase64 = 'data:' . $mimeType . ';base64,' . base64_encode($decodedBinary);
 
@@ -108,8 +110,9 @@ class ImageStorageService
      */
     public function storeUploadedImage(UploadedFile $file, string $folder = 'personnel'): array
     {
-        $path = $file->store("{$folder}/" . date('Y/m'), 'public');
-        $url = Storage::disk('public')->url($path);
+        $disk = $this->getDisk();
+        $path = $file->store("{$folder}/" . date('Y/m'), $disk);
+        $url = Storage::disk($disk)->url($path);
         $binary = file_get_contents($file->getRealPath());
         $base64 = 'data:' . $file->getMimeType() . ';base64,' . base64_encode($binary);
 
@@ -143,12 +146,22 @@ class ImageStorageService
 
         // Check if it's a local storage URL or relative path
         $relativePath = $urlOrPath;
-        if (str_contains($relativePath, '/storage/')) {
+        if (str_contains($relativePath, '/api/media/')) {
+            $relativePath = preg_replace('#^.*?/api/media/#', '', $relativePath);
+        } elseif (str_contains($relativePath, '/storage/')) {
             $relativePath = preg_replace('#^.*?/storage/#', '', $relativePath);
         }
         $relativePath = ltrim($relativePath, '/');
 
-        if (Storage::disk('public')->exists($relativePath)) {
+        $disk = $this->getDisk();
+
+        if (Storage::disk($disk)->exists($relativePath)) {
+            $binary = Storage::disk($disk)->get($relativePath);
+            $ext = strtolower(pathinfo($relativePath, PATHINFO_EXTENSION));
+            if (in_array($ext, ['jpg', 'jpeg', 'png', 'webp'])) {
+                $extension = $ext === 'jpeg' ? 'jpg' : $ext;
+            }
+        } elseif (Storage::disk('public')->exists($relativePath)) {
             $binary = Storage::disk('public')->get($relativePath);
             $ext = strtolower(pathinfo($relativePath, PATHINFO_EXTENSION));
             if (in_array($ext, ['jpg', 'jpeg', 'png', 'webp'])) {
@@ -180,8 +193,8 @@ class ImageStorageService
         $mimeType = $extension === 'png' ? 'image/png' : 'image/jpeg';
         $newPath = "{$folder}/" . date('Y/m') . '/' . Str::random(24) . ".{$extension}";
 
-        Storage::disk('public')->put($newPath, $binary);
-        $url = Storage::disk('public')->url($newPath);
+        Storage::disk($disk)->put($newPath, $binary);
+        $url = Storage::disk($disk)->url($newPath);
         $base64 = 'data:' . $mimeType . ';base64,' . base64_encode($binary);
 
         return [
@@ -259,7 +272,7 @@ class ImageStorageService
      */
     public function getDisk(): string
     {
-        return config('filesystems.biometrics_disk', env('BIOMETRICS_DISK', 'public'));
+        return config('filesystems.biometrics_disk', env('BIOMETRICS_DISK', 'biometrics'));
     }
 
     /**
@@ -267,7 +280,25 @@ class ImageStorageService
      */
     public function getMedia(string $path): ?array
     {
-        $cleanPath = ltrim(preg_replace('#^.*?/storage/#', '', $path), '/');
+        if (str_contains($path, '..')) {
+            return null;
+        }
+
+        $cleanPath = ltrim(preg_replace('#^.*?/api/media/#', '', preg_replace('#^.*?/storage/#', '', $path)), '/');
+
+        $allowedPrefixes = ['personnel/', 'snaps/', 'scenes/', 'verification_snaps/', 'verification_scenes/', 'visitors/'];
+        $allowed = false;
+        foreach ($allowedPrefixes as $prefix) {
+            if (str_starts_with($cleanPath, $prefix)) {
+                $allowed = true;
+                break;
+            }
+        }
+
+        if (!$allowed) {
+            return null;
+        }
+
         $disks = array_unique([$this->getDisk(), 'public', 'local', 'biometrics']);
 
         foreach ($disks as $disk) {

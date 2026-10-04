@@ -45,6 +45,7 @@
       <div class="flex items-center gap-2">
         <button
           @click="store.navigateMonth(-1)"
+          aria-label="Previous month"
           class="p-2 text-slate-600 hover:bg-slate-100 rounded-xl cursor-pointer transition-colors"
           title="Previous Month"
         >
@@ -55,6 +56,7 @@
         </span>
         <button
           @click="store.navigateMonth(1)"
+          aria-label="Next month"
           class="p-2 text-slate-600 hover:bg-slate-100 rounded-xl cursor-pointer transition-colors"
           title="Next Month"
         >
@@ -118,16 +120,18 @@
 
           <!-- Holiday Chips on this date -->
           <div class="space-y-1 mt-1 flex-1 overflow-y-auto max-h-16">
-            <div
+            <button
               v-for="h in day.holidays"
               :key="h.id"
+              type="button"
               @click="editHoliday(h)"
-              class="p-1 rounded-md text-[10px] font-bold border truncate cursor-pointer transition-transform hover:scale-[1.02]"
+              :aria-label="`Edit holiday ${h.name}`"
+              class="w-full text-left p-1 rounded-md text-[10px] font-bold border truncate cursor-pointer transition-transform hover:scale-[1.02]"
               :class="holidayChipClass(h.type)"
               :title="h.name + (h.is_recurring ? ' (Annual Recurring)' : '')"
             >
               {{ h.name }}
-            </div>
+            </button>
           </div>
         </div>
       </div>

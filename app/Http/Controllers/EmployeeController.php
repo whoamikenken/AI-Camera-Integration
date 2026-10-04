@@ -385,12 +385,33 @@ class EmployeeController extends Controller
     {
         $format = $request->query('format', 'csv');
 
-        $employees = Employee::with(['department', 'designation', 'location', 'shift'])
-            ->orderBy('employee_code')
-            ->get();
+        $query = Employee::with(['department', 'designation', 'location', 'shift'])
+            ->orderBy('employee_code');
 
         if ($format === 'json') {
-            return response()->json(['data' => $employees]);
+            $headers = [
+                'Content-Type' => 'application/json',
+                'Content-Disposition' => 'attachment; filename="employees_export_' . date('Y-m-d') . '.json"',
+            ];
+
+            $callback = function () use ($query) {
+                $handle = fopen('php://output', 'w');
+                fwrite($handle, '{"data":[');
+                
+                $first = true;
+                foreach ($query->cursor() as $emp) {
+                    if (!$first) {
+                        fwrite($handle, ',');
+                    }
+                    fwrite($handle, json_encode($emp));
+                    $first = false;
+                }
+                
+                fwrite($handle, ']}');
+                fclose($handle);
+            };
+
+            return response()->stream($callback, 200, $headers);
         }
 
         $headers = [
@@ -398,7 +419,7 @@ class EmployeeController extends Controller
             'Content-Disposition' => 'attachment; filename="employees_export_' . date('Y-m-d') . '.csv"',
         ];
 
-        $callback = function () use ($employees) {
+        $callback = function () use ($query) {
             $handle = fopen('php://output', 'w');
             fputcsv($handle, [
                 'Employee Code',
@@ -414,7 +435,7 @@ class EmployeeController extends Controller
                 'Date of Joining',
             ]);
 
-            foreach ($employees as $emp) {
+            foreach ($query->cursor() as $emp) {
                 fputcsv($handle, \App\Support\CsvSanitizer::sanitizeRow([
                     $emp->employee_code,
                     $emp->first_name,

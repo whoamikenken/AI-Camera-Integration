@@ -97,8 +97,9 @@
 
       <div class="grid grid-cols-1 sm:grid-cols-4 gap-3 pt-2 border-t border-slate-100">
         <div>
-          <label class="block text-[11px] font-bold text-slate-500 uppercase mb-1">Severity</label>
+          <label for="alert-filter-severity" class="block text-[11px] font-bold text-slate-500 uppercase mb-1">Severity</label>
           <select 
+            id="alert-filter-severity"
             v-model="selectedSeverity" 
             @change="fetchAlerts(1)"
             class="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 font-medium focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
@@ -111,8 +112,9 @@
         </div>
 
         <div>
-          <label class="block text-[11px] font-bold text-slate-500 uppercase mb-1">Status</label>
+          <label for="alert-filter-status" class="block text-[11px] font-bold text-slate-500 uppercase mb-1">Status</label>
           <select 
+            id="alert-filter-status"
             v-model="selectedStatus" 
             @change="fetchAlerts(1)"
             class="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 font-medium focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
@@ -126,8 +128,9 @@
         </div>
 
         <div>
-          <label class="block text-[11px] font-bold text-slate-500 uppercase mb-1">Camera Device</label>
+          <label for="alert-filter-camera" class="block text-[11px] font-bold text-slate-500 uppercase mb-1">Camera Device</label>
           <select 
+            id="alert-filter-camera"
             v-model="selectedDevice" 
             @change="fetchAlerts(1)"
             class="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 font-medium focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
@@ -175,7 +178,11 @@
         >
           <div>
             <!-- Image & Severity Tag -->
-            <div class="relative bg-slate-900 h-44 flex items-center justify-center overflow-hidden group cursor-pointer" @click="openDetailModal(alert)">
+            <button 
+              class="w-full relative bg-slate-900 h-44 flex items-center justify-center overflow-hidden group cursor-pointer block border-0 p-0 text-left" 
+              @click="openDetailModal(alert)"
+              :aria-label="`Inspect incident for ${alert.title}`"
+            >
               <img 
                 v-if="alert.snap_pic_url || alert.scene_pic_url" 
                 :src="alert.snap_pic_url || alert.scene_pic_url" 
@@ -210,7 +217,7 @@
               <div class="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
                 <span class="px-3 py-1.5 bg-white text-slate-900 rounded-lg text-xs font-bold shadow-lg">🔍 Inspect Incident</span>
               </div>
-            </div>
+            </button>
 
             <!-- Content Details -->
             <div class="p-4 space-y-2">
@@ -262,19 +269,35 @@
         <table class="w-full text-left border-collapse text-xs">
           <thead>
             <tr class="bg-slate-50 border-b border-slate-200 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-              <th class="py-3 px-4">Alert Details</th>
-              <th class="py-3 px-4">Category</th>
-              <th class="py-3 px-4">Severity</th>
-              <th class="py-3 px-4">Camera Source</th>
-              <th class="py-3 px-4">Captured Time</th>
-              <th class="py-3 px-4">Status</th>
-              <th class="py-3 px-4 text-right">Actions</th>
+              <th scope="col" class="py-3 px-4">Alert Details</th>
+              <th scope="col" class="py-3 px-4">Category</th>
+              <th scope="col" class="py-3 px-4">Severity</th>
+              <th scope="col" class="py-3 px-4">Camera Source</th>
+              <th scope="col" class="py-3 px-4">Captured Time</th>
+              <th scope="col" class="py-3 px-4">Status</th>
+              <th scope="col" class="py-3 px-4 text-right">Actions</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-slate-100">
-            <tr v-if="loading">
-              <td colspan="7" class="py-8 text-center text-slate-400">Loading alerts...</td>
-            </tr>
+            <template v-if="loading">
+              <tr v-for="i in 5" :key="`skel-${i}`" class="animate-pulse">
+                <td class="py-3 px-4">
+                  <div class="flex items-center gap-2.5">
+                    <div class="w-9 h-9 bg-slate-200 rounded-lg"></div>
+                    <div class="space-y-1">
+                      <div class="h-4 bg-slate-200 rounded w-24"></div>
+                      <div class="h-3 bg-slate-200 rounded w-32"></div>
+                    </div>
+                  </div>
+                </td>
+                <td class="py-3 px-4"><div class="h-4 bg-slate-200 rounded w-16"></div></td>
+                <td class="py-3 px-4"><div class="h-4 bg-slate-200 rounded w-16"></div></td>
+                <td class="py-3 px-4"><div class="h-4 bg-slate-200 rounded w-20"></div></td>
+                <td class="py-3 px-4"><div class="h-4 bg-slate-200 rounded w-24"></div></td>
+                <td class="py-3 px-4"><div class="h-4 bg-slate-200 rounded w-16"></div></td>
+                <td class="py-3 px-4 text-right"><div class="h-6 bg-slate-200 rounded w-12 ml-auto"></div></td>
+              </tr>
+            </template>
             <tr v-else-if="alerts.length === 0">
               <td colspan="7" class="py-8 text-center text-slate-400">No alerts found matching current filters.</td>
             </tr>
@@ -285,17 +308,26 @@
             >
               <td class="py-3 px-4">
                 <div class="flex items-center gap-2.5">
-                  <img 
+                  <button 
                     v-if="alert.snap_pic_url || alert.scene_pic_url"
-                    :src="alert.snap_pic_url || alert.scene_pic_url"
-                    alt="Thumbnail"
-                    class="w-9 h-9 rounded-lg object-cover border border-slate-200 cursor-pointer"
+                    class="border-0 p-0 bg-transparent cursor-pointer"
                     @click="openDetailModal(alert)"
-                  />
+                    :aria-label="`Inspect incident for ${alert.title}`"
+                  >
+                    <img 
+                      :src="alert.snap_pic_url || alert.scene_pic_url"
+                      alt="Thumbnail"
+                      class="w-9 h-9 rounded-lg object-cover border border-slate-200 block"
+                    />
+                  </button>
                   <div>
-                    <div class="font-bold text-slate-900 cursor-pointer hover:text-indigo-600" @click="openDetailModal(alert)">
+                    <button 
+                      class="font-bold text-slate-900 cursor-pointer hover:text-indigo-600 bg-transparent border-0 p-0 text-left" 
+                      @click="openDetailModal(alert)" 
+                      :aria-label="`Inspect incident for ${alert.title}`"
+                    >
                       {{ alert.title }}
-                    </div>
+                    </button>
                     <div class="text-[10px] text-slate-500 truncate max-w-xs">{{ alert.description || 'Edge detection event' }}</div>
                   </div>
                 </div>
@@ -366,18 +398,23 @@
     </div>
 
     <!-- Detailed Incident Modal -->
-    <div v-if="selectedAlertModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
-      <div class="bg-white rounded-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto shadow-2xl border border-slate-200 flex flex-col">
+    <div v-if="selectedAlertModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs" @keydown.escape="selectedAlertModal = null">
+      <div 
+        class="bg-white rounded-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto shadow-2xl border border-slate-200 flex flex-col"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="incident-modal-title"
+      >
         <!-- Modal Header -->
         <div class="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between sticky top-0 bg-white z-10">
           <div class="flex items-center gap-3">
             <span class="text-2xl">{{ getAlertIcon(selectedAlertModal.alert_type) }}</span>
             <div>
-              <h3 class="text-base font-bold text-slate-900">{{ selectedAlertModal.title }}</h3>
+              <h3 id="incident-modal-title" class="text-base font-bold text-slate-900">{{ selectedAlertModal.title }}</h3>
               <div class="text-xs text-slate-500 font-mono">Incident #{{ selectedAlertModal.id }} &bull; {{ formatDateTime(selectedAlertModal.captured_at) }}</div>
             </div>
           </div>
-          <button @click="selectedAlertModal = null" class="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg cursor-pointer">
+          <button @click="selectedAlertModal = null" aria-label="Close dialog" class="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg cursor-pointer">
             ✕
           </button>
         </div>

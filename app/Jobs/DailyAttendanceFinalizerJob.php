@@ -31,17 +31,20 @@ class DailyAttendanceFinalizerJob implements ShouldQueue
 
     public function handle(AttendanceProcessingService $service): void
     {
-        $employees = Employee::where('employment_status', 'active')->get();
+        $dateStr = $this->date->toDateString();
+        $existingRecords = AttendanceRecord::where('date', $dateStr)
+            ->get(['id', 'employee_id', 'first_clock_in', 'status'])
+            ->keyBy('employee_id');
 
-        foreach ($employees as $employee) {
-            $existing = AttendanceRecord::where('employee_id', $employee->id)
-                ->where('date', $this->date->toDateString())
-                ->first();
+        Employee::where('employment_status', 'active')->chunkById(250, function ($employees) use ($service, $existingRecords) {
+            foreach ($employees as $employee) {
+                $existing = $existingRecords->get($employee->id);
 
-            // If no record exists or record has no clock-in, calculate status
-            if (!$existing || (!$existing->first_clock_in && $existing->status === 'present')) {
-                $service->recalculateDailyAttendance($employee, $this->date);
+                // If no record exists or record has no clock-in, calculate status
+                if (!$existing || (!$existing->first_clock_in && $existing->status === 'present')) {
+                    $service->recalculateDailyAttendance($employee, $this->date);
+                }
             }
-        }
+        });
     }
 }

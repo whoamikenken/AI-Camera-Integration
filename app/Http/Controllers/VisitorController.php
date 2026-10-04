@@ -103,15 +103,7 @@ class VisitorController extends Controller
 
     public function block(Request $request, int $id): JsonResponse
     {
-        $visitor = Visitor::find($id);
-        if (!$visitor) {
-            $visitor = Visitor::create([
-                'id' => $id,
-                'first_name' => 'Watchlist',
-                'last_name' => 'Person',
-                'is_blocked' => true,
-            ]);
-        }
+        $visitor = Visitor::findOrFail($id);
 
         $validated = $request->validate([
             'is_blocked' => 'required|boolean',

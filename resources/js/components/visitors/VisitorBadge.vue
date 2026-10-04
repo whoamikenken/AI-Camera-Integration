@@ -1,9 +1,9 @@
 <template>
-    <div v-if="isOpen" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm" @click.self="close">
-        <div class="bg-white border border-slate-200 rounded-2xl max-w-sm w-full p-6 shadow-2xl space-y-5">
+    <div v-if="isOpen" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm" @click.self="close" @keydown.escape="close" tabindex="-1">
+        <div class="bg-white border border-slate-200 rounded-2xl max-w-sm w-full p-6 shadow-2xl space-y-5" role="dialog" aria-modal="true" aria-labelledby="visitor-badge-modal-title">
             <div class="flex items-center justify-between border-b border-slate-100 pb-3">
-                <h3 class="font-bold text-slate-900 text-base">Visitor Badge Pass</h3>
-                <button @click="close" class="text-slate-400 hover:text-slate-700 font-bold p-1 cursor-pointer">✕</button>
+                <h3 id="visitor-badge-modal-title" class="font-bold text-slate-900 text-base">Visitor Badge Pass</h3>
+                <button @click="close" aria-label="Close badge modal" class="text-slate-400 hover:text-slate-700 font-bold p-1 cursor-pointer">✕</button>
             </div>
 
             <!-- Printable Badge Card -->

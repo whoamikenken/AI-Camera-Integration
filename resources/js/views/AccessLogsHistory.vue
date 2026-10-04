@@ -19,6 +19,7 @@
     <!-- Filters -->
     <div class="grid grid-cols-1 sm:grid-cols-4 gap-3 bg-white border border-slate-200 p-3 rounded-xl shadow-xs">
       <input 
+        aria-label="Search by person name or custom ID"
         v-model="filters.search" 
         @input="debouncedFetch"
         type="text" 
@@ -26,19 +27,20 @@
         class="bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 shadow-xs"
       />
 
-      <select v-model="filters.status" @change="fetchLogs" class="bg-white border border-slate-200 text-xs rounded-lg px-3 py-2 text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 cursor-pointer shadow-xs">
+      <select aria-label="Filter by verification status" v-model="filters.status" @change="fetchLogs" class="bg-white border border-slate-200 text-xs rounded-lg px-3 py-2 text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 cursor-pointer shadow-xs">
         <option value="">All Verification Statuses</option>
         <option value="1">Allowed (Whitelisted)</option>
         <option value="2">Rejected / Denied</option>
         <option value="3">Not Registered</option>
       </select>
 
-      <select v-model="filters.deviceId" @change="fetchLogs" class="bg-white border border-slate-200 text-xs rounded-lg px-3 py-2 text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 cursor-pointer shadow-xs">
+      <select aria-label="Filter by camera device" v-model="filters.deviceId" @change="fetchLogs" class="bg-white border border-slate-200 text-xs rounded-lg px-3 py-2 text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 cursor-pointer shadow-xs">
         <option value="">All Cameras</option>
         <option v-for="d in store.devices" :key="d.device_id" :value="d.device_id">{{ d.name }} ({{ d.device_id }})</option>
       </select>
 
       <input 
+        aria-label="Minimum match percentage"
         v-model.number="filters.minSimilarity" 
         @change="fetchLogs"
         type="number" 
@@ -55,25 +57,31 @@
         <table class="w-full text-left text-xs text-slate-700">
           <thead class="bg-slate-50 text-slate-500 uppercase text-[11px] font-semibold border-b border-slate-200">
             <tr>
-              <th class="py-3 px-4">Face</th>
-              <th class="py-3 px-4">Timestamp</th>
-              <th class="py-3 px-4">Camera</th>
-              <th class="py-3 px-4">Person Details</th>
-              <th class="py-3 px-4">Match %</th>
-              <th class="py-3 px-4">Status</th>
-              <th class="py-3 px-4 text-right">Scene</th>
+              <th scope="col" class="py-3 px-4">Face</th>
+              <th scope="col" class="py-3 px-4">Timestamp</th>
+              <th scope="col" class="py-3 px-4">Camera</th>
+              <th scope="col" class="py-3 px-4">Person Details</th>
+              <th scope="col" class="py-3 px-4">Match %</th>
+              <th scope="col" class="py-3 px-4">Status</th>
+              <th scope="col" class="py-3 px-4 text-right">Scene</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-slate-100">
-            <tr v-if="loading">
-              <td colspan="7" class="py-12 text-center text-slate-500">Loading access logs...</td>
+            <tr v-if="loading" v-for="i in 6" :key="'skel-row-' + i" class="animate-pulse">
+              <td class="py-3 px-4"><div class="w-10 h-10 bg-slate-200 rounded-lg"></div></td>
+              <td class="py-3 px-4"><div class="h-4 bg-slate-200 rounded w-28"></div></td>
+              <td class="py-3 px-4"><div class="h-4 bg-slate-200 rounded w-24"></div></td>
+              <td class="py-3 px-4"><div class="h-4 bg-slate-200 rounded w-32 mb-1"></div><div class="h-3 bg-slate-200 rounded w-16"></div></td>
+              <td class="py-3 px-4"><div class="h-4 bg-slate-200 rounded w-10"></div></td>
+              <td class="py-3 px-4"><div class="h-4 bg-slate-200 rounded-full w-20"></div></td>
+              <td class="py-3 px-4 text-right"><div class="h-4 bg-slate-200 rounded w-12 ml-auto"></div></td>
             </tr>
             <tr v-else-if="logs.length === 0">
               <td colspan="7" class="py-12 text-center text-slate-500">No access logs matching filter criteria.</td>
             </tr>
             <tr v-for="log in logs" :key="log.id" class="hover:bg-slate-50 transition-colors">
               <td class="py-3 px-4">
-                <div class="w-10 h-10 rounded-lg bg-slate-100 border border-slate-200 overflow-hidden shrink-0 cursor-pointer" @click="openImage(log.snap_pic_url, log.scene_pic_url, log.person_name)">
+                <div role="button" tabindex="0" :aria-label="'Inspect face snapshot for ' + (log.person_name || 'Unregistered')" class="w-10 h-10 rounded-lg bg-slate-100 border border-slate-200 overflow-hidden shrink-0 cursor-pointer" @click="openImage(log.snap_pic_url, log.scene_pic_url, log.person_name)" @keydown.enter="openImage(log.snap_pic_url, log.scene_pic_url, log.person_name)">
                   <img v-if="log.snap_pic_url" :src="log.snap_pic_url" class="w-full h-full object-cover" />
                   <span v-else class="w-full h-full flex items-center justify-center text-[10px] text-slate-400">No Pic</span>
                 </div>
@@ -118,11 +126,11 @@
     </div>
 
     <!-- Modal -->
-    <div v-if="modal.show" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm" @click.self="modal.show = false">
-      <div class="bg-white border border-slate-200 rounded-2xl max-w-3xl w-full p-6 space-y-4 shadow-2xl">
+    <div v-if="modal.show" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm" @click.self="modal.show = false" @keydown.escape="modal.show = false">
+      <div role="dialog" aria-modal="true" aria-labelledby="access-log-modal-title" class="bg-white border border-slate-200 rounded-2xl max-w-3xl w-full p-6 space-y-4 shadow-2xl">
         <div class="flex items-center justify-between border-b border-slate-200 pb-3">
-          <h3 class="text-base font-bold text-slate-900">{{ modal.title }} - Snapshot Inspection</h3>
-          <button @click="modal.show = false" class="text-slate-400 hover:text-slate-700 text-lg font-bold cursor-pointer">&times;</button>
+          <h3 id="access-log-modal-title" class="text-base font-bold text-slate-900">{{ modal.title }} - Snapshot Inspection</h3>
+          <button @click="modal.show = false" aria-label="Close dialog" class="text-slate-400 hover:text-slate-700 text-lg font-bold cursor-pointer">&times;</button>
         </div>
         <div class="grid grid-cols-1">
           <div v-if="modal.snapUrl">

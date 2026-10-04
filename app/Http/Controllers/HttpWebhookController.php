@@ -41,7 +41,7 @@ class HttpWebhookController extends Controller
         // 2. Explicit X-Camera-Secret header verification
         if ($request->hasHeader('X-Camera-Secret')) {
             $headerSecret = $request->header('X-Camera-Secret');
-            if ($device && ($headerSecret === $device->password || $headerSecret === 'valid-camera-secret')) {
+            if ($device && ($headerSecret === $device->password)) {
                 return true;
             }
             return false;
@@ -101,7 +101,6 @@ class HttpWebhookController extends Controller
 
         $device = $deviceId ? Device::where('device_id', $deviceId)->first() : null;
 
-        // If secret is configured, require authentication
         $configuredSecret = config('services.camera.webhook_secret') ?: env('CAMERA_WEBHOOK_SECRET');
         if (!empty($configuredSecret) && !$this->authenticateWebhook($request, $device, $deviceId)) {
             return response()->json([
@@ -110,10 +109,19 @@ class HttpWebhookController extends Controller
             ], 401);
         }
 
-        if ($request->hasHeader('X-Camera-Secret') && !$this->authenticateWebhook($request, $device, $deviceId)) {
+        if (($request->hasHeader('X-Camera-Secret') || $request->hasHeader('Authorization'))
+            && !$this->authenticateWebhook($request, $device, $deviceId)) {
             return response()->json([
                 'code' => 401,
-                'desc' => 'Unauthorized: Invalid camera secret',
+                'desc' => 'Unauthorized: Invalid camera credentials',
+            ], 401);
+        }
+
+        // In production, un-enrolled devices cannot auto-register without configured secret
+        if (!$device && !app()->environment('local', 'testing') && empty($configuredSecret)) {
+            return response()->json([
+                'code' => 401,
+                'desc' => 'Unauthorized: Camera device not pre-registered',
             ], 401);
         }
 

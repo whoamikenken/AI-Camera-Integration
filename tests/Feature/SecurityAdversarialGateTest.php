@@ -194,7 +194,7 @@ class SecurityAdversarialGateTest extends TestCase
             $this->assertNull($service->storeFromUrlOrPath($url), "storeFromUrlOrPath must return null for: {$url}");
         }
 
-        Http::shouldHaveReceived('get')->never();
+        Http::shouldNotHaveReceived('get');
     }
 
     public function test_ssrf_probes_reject_rfc1918_private_subnets(): void
@@ -222,7 +222,7 @@ class SecurityAdversarialGateTest extends TestCase
             $this->assertNull($service->storeFromUrlOrPath($url), "storeFromUrlOrPath must return null for: {$url}");
         }
 
-        Http::shouldHaveReceived('get')->never();
+        Http::shouldNotHaveReceived('get');
     }
 
     public function test_ssrf_probes_reject_link_local_and_cloud_metadata(): void
@@ -243,7 +243,7 @@ class SecurityAdversarialGateTest extends TestCase
             $this->assertNull($service->storeFromUrlOrPath($url), "storeFromUrlOrPath must return null for: {$url}");
         }
 
-        Http::shouldHaveReceived('get')->never();
+        Http::shouldNotHaveReceived('get');
     }
 
     public function test_ssrf_probes_reject_non_http_schemes(): void
@@ -704,8 +704,8 @@ class SecurityAdversarialGateTest extends TestCase
         $this->assertNotEmpty($content);
 
         // Verify that formula characters are neutralized with prepended single quote in the CSV output
-        $this->assertStringContainsString("''=DDE_CALC", $content, 'Employee code formula trigger must be neutralized');
-        $this->assertStringContainsString("''+ExploitFirst", $content, 'First name formula trigger must be neutralized');
-        $this->assertStringContainsString("''-ExploitLast", $content, 'Last name formula trigger must be neutralized');
+        $this->assertStringContainsString("'=DDE_CALC", $content, 'Employee code formula trigger must be neutralized');
+        $this->assertStringContainsString("'+ExploitFirst", $content, 'First name formula trigger must be neutralized');
+        $this->assertStringContainsString("'-ExploitLast", $content, 'Last name formula trigger must be neutralized');
     }
 }

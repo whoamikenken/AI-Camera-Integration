@@ -44,6 +44,9 @@
           </div>
           <button
             type="button"
+            role="switch"
+            :aria-checked="settings['attendance.auto_process']"
+            aria-label="attendance auto process"
             @click="settings['attendance.auto_process'] = !settings['attendance.auto_process']"
             class="relative inline-flex h-5 w-10 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none"
             :class="settings['attendance.auto_process'] ? 'bg-indigo-600' : 'bg-slate-300'"
@@ -57,8 +60,9 @@
 
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
           <div>
-            <label class="block text-xs font-semibold text-slate-700">Late Grace Period (Minutes)</label>
+            <label for="late_grace" class="block text-xs font-semibold text-slate-700">Late Grace Period (Minutes)</label>
             <input
+              id="late_grace"
               v-model.number="settings['attendance.late_grace_minutes']"
               type="number"
               min="0"
@@ -68,8 +72,9 @@
           </div>
 
           <div>
-            <label class="block text-xs font-semibold text-slate-700">Overtime Threshold (Minutes)</label>
+            <label for="overtime_threshold" class="block text-xs font-semibold text-slate-700">Overtime Threshold (Minutes)</label>
             <input
+              id="overtime_threshold"
               v-model.number="settings['attendance.overtime_threshold_minutes']"
               type="number"
               min="0"
@@ -79,8 +84,9 @@
           </div>
 
           <div>
-            <label class="block text-xs font-semibold text-slate-700">Half-Day Threshold (Hours)</label>
+            <label for="half_day_threshold" class="block text-xs font-semibold text-slate-700">Half-Day Threshold (Hours)</label>
             <input
+              id="half_day_threshold"
               v-model.number="settings['attendance.half_day_threshold_hours']"
               type="number"
               step="0.5"
@@ -127,6 +133,9 @@
           </div>
           <button
             type="button"
+            role="switch"
+            :aria-checked="settings['visitor.require_photo']"
+            aria-label="visitor require photo"
             @click="settings['visitor.require_photo'] = !settings['visitor.require_photo']"
             class="relative inline-flex h-5 w-10 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out"
             :class="settings['visitor.require_photo'] ? 'bg-indigo-600' : 'bg-slate-300'"
@@ -143,6 +152,9 @@
           </div>
           <button
             type="button"
+            role="switch"
+            :aria-checked="settings['visitor.require_nda']"
+            aria-label="visitor require nda"
             @click="settings['visitor.require_nda'] = !settings['visitor.require_nda']"
             class="relative inline-flex h-5 w-10 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out"
             :class="settings['visitor.require_nda'] ? 'bg-indigo-600' : 'bg-slate-300'"
@@ -159,6 +171,9 @@
           </div>
           <button
             type="button"
+            role="switch"
+            :aria-checked="settings['visitor.enroll_face_to_camera']"
+            aria-label="visitor enroll face to camera"
             @click="settings['visitor.enroll_face_to_camera'] = !settings['visitor.enroll_face_to_camera']"
             class="relative inline-flex h-5 w-10 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out"
             :class="settings['visitor.enroll_face_to_camera'] ? 'bg-indigo-600' : 'bg-slate-300'"
@@ -169,8 +184,9 @@
 
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
           <div>
-            <label class="block text-xs font-semibold text-slate-700">Nightly Auto-Checkout Cutoff Time</label>
+            <label for="auto_checkout_time" class="block text-xs font-semibold text-slate-700">Nightly Auto-Checkout Cutoff Time</label>
             <input
+              id="auto_checkout_time"
               v-model="settings['visitor.auto_checkout_time']"
               type="text"
               placeholder="23:59:59"
@@ -180,8 +196,9 @@
           </div>
 
           <div>
-            <label class="block text-xs font-semibold text-slate-700">Maximum Allowed Visit Duration (Hours)</label>
+            <label for="max_visit_duration" class="block text-xs font-semibold text-slate-700">Maximum Allowed Visit Duration (Hours)</label>
             <input
+              id="max_visit_duration"
               v-model.number="settings['visitor.max_visit_duration_hours']"
               type="number"
               min="1"
@@ -212,6 +229,9 @@
           </div>
           <button
             type="button"
+            role="switch"
+            :aria-checked="settings['notification.email_enabled']"
+            aria-label="notification email enabled"
             @click="settings['notification.email_enabled'] = !settings['notification.email_enabled']"
             class="relative inline-flex h-5 w-10 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out"
             :class="settings['notification.email_enabled'] ? 'bg-indigo-600' : 'bg-slate-300'"
@@ -228,6 +248,9 @@
           </div>
           <button
             type="button"
+            role="switch"
+            :aria-checked="settings['notification.sms_enabled']"
+            aria-label="notification sms enabled"
             @click="settings['notification.sms_enabled'] = !settings['notification.sms_enabled']"
             class="relative inline-flex h-5 w-10 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out"
             :class="settings['notification.sms_enabled'] ? 'bg-indigo-600' : 'bg-slate-300'"
@@ -244,6 +267,9 @@
           </div>
           <button
             type="button"
+            role="switch"
+            :aria-checked="settings['notification.stranger_alert_sound']"
+            aria-label="notification stranger alert sound"
             @click="settings['notification.stranger_alert_sound'] = !settings['notification.stranger_alert_sound']"
             class="relative inline-flex h-5 w-10 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out"
             :class="settings['notification.stranger_alert_sound'] ? 'bg-indigo-600' : 'bg-slate-300'"

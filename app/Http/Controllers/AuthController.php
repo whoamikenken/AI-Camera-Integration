@@ -141,6 +141,7 @@ class AuthController extends Controller
                 ], 422);
             }
             $user->password = Hash::make($validated['password']);
+            $user->tokens()->delete();
         }
 
         if (isset($validated['name'])) {
@@ -193,6 +194,7 @@ class AuthController extends Controller
 
         $user->password = Hash::make($request->password);
         $user->save();
+        $user->tokens()->delete();
 
         return response()->json([
             'success' => true,

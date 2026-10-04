@@ -177,3 +177,38 @@ Integrity mode: development
 - Check route & channel configurations: `php artisan route:list`, `php artisan channel:list`
 - Verify migrations: `php artisan migrate:status`
 - Verify frontend asset compilation: `npm run build`
+
+
+## Follow-up — 2026-10-04T01:30:14Z
+
+Orchestrate and delegate all pending tasks from `tasks-security.md`, `tasks-performance.md`, and `tasks-optimization.md` to autonomous Jules CLI sessions on the `whoamikenken/AI-Camera-Integration` repository using a staged, prioritized pipeline (Security first, followed by Performance, then UI/UX Optimization).
+
+Working directory: /home/wsk-devops2/AI-Camera-Integration
+Integrity mode: development
+
+## Requirements
+
+### R1. Staged Pipeline Dispatch
+Process tasks sequentially by file priority:
+1. All pending items in `tasks-security.md` (SEC-01 through SEC-10)
+2. All pending items in `tasks-performance.md` (P0/P1 database & backend performance refactors)
+3. All pending items in `tasks-optimization.md` (UI/UX, accessibility, and interactive states)
+
+Each task or closely related set of actions must be formulated into an explicit Jules brief and dispatched via `jules new --repo whoamikenken/AI-Camera-Integration "<Brief>"`.
+
+### R2. Lifecycle Monitoring & Teleportation
+Track dispatched session identifiers to completion via `jules remote list`. For completed sessions, retrieve or inspect the proposed changes (`jules remote pull --session <ID> --apply` or `jules teleport <ID>`), ensuring each change integrates cleanly into the local repository without regressions.
+
+### R3. Verification & Task Tracking
+Validate all pulled patches against project unit and integration test suites (`php artisan test` and frontend build `npm run build`). Once verified, update the task state in `tasks-security.md`, `tasks-performance.md`, and `tasks-optimization.md` by marking the corresponding checklist boxes from `- [ ]` to `- [x]`.
+
+## Acceptance Criteria
+
+### Dispatch & Tracking
+- [ ] Every uncompleted task in `tasks-security.md`, `tasks-performance.md`, and `tasks-optimization.md` is dispatched to Jules with an unambiguous session prompt.
+- [ ] A manifest of dispatched Jules session IDs, their target task codes, and their execution statuses is recorded and maintained.
+
+### Verification & Integration
+- [ ] Applied patches pass automated validation (`php artisan test` exits code 0; `npm run build` exits code 0).
+- [ ] Every successfully resolved and verified task is marked as `- [x]` in its corresponding markdown task file.
+- [ ] Any failed or conflicting Jules patch is logged with the error cause and re-queued or adjusted without leaving the working tree dirty.
