@@ -5,13 +5,15 @@ namespace App\Events;
 use App\Models\Visit;
 use Illuminate\Broadcasting\InteractsWithSockets;
 use Illuminate\Broadcasting\PrivateChannel;
-use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
+use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
 
-class VisitorCheckedOut implements ShouldBroadcastNow
+class VisitorCheckedOut implements ShouldBroadcast
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
+
+    public string $broadcastQueue = 'broadcasts';
 
     public function __construct(public Visit $visit)
     {

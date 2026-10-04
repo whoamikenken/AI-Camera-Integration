@@ -134,7 +134,7 @@
           @keydown.enter="openImageModal(snap.snap_pic_url, snap.scene_pic_url, snap.device_id, snap.captured_at, snap.alarm_action)"
         >
           <div class="w-full h-24 rounded-lg bg-slate-100 overflow-hidden relative border border-slate-200">
-            <img v-if="snap.snap_pic_url" :src="snap.snap_pic_url" alt="Stranger Crop" class="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+            <img v-if="snap.snap_pic_url" :src="formatMediaUrl(snap.snap_pic_url)" alt="Stranger Crop" class="w-full h-full object-cover group-hover:scale-105 transition-transform" />
             <div v-else class="w-full h-full flex items-center justify-center text-[10px] text-slate-400 font-mono">NO PIC</div>
             <div v-if="snap.is_no_mask === 1" class="absolute bottom-0 right-0 bg-amber-500 text-black text-[8px] px-1 font-bold rounded-tl">NO MASK</div>
           </div>
@@ -179,7 +179,7 @@
           <div class="relative bg-slate-950 h-48 overflow-hidden cursor-pointer group" @click="openImageModal(snap.snap_pic_url, snap.scene_pic_url, snap.device?.name || snap.device_id, snap.captured_at, snap.alarm_action)">
             <img 
               v-if="snap.snap_pic_url" 
-              :src="snap.snap_pic_url" 
+              :src="formatMediaUrl(snap.snap_pic_url)" 
               alt="Stranger Capture" 
               class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" 
             />
@@ -264,7 +264,7 @@
             <tr v-for="snap in snaps" :key="snap.id" role="button" tabindex="0" :aria-label="'Inspect stranger face snapshot captured by ' + (snap.device?.name || 'Camera')" class="hover:bg-slate-50 transition-colors cursor-pointer group" @click="openImageModal(snap.snap_pic_url, snap.scene_pic_url, snap.device?.name || snap.device_id, snap.captured_at, snap.alarm_action)" @keydown.enter="openImageModal(snap.snap_pic_url, snap.scene_pic_url, snap.device?.name || snap.device_id, snap.captured_at, snap.alarm_action)">
               <td class="py-3 px-4">
                 <div class="w-12 h-12 rounded-lg bg-slate-100 border border-slate-200 overflow-hidden shrink-0">
-                  <img v-if="snap.snap_pic_url" :src="snap.snap_pic_url" class="w-full h-full object-cover" />
+                  <img v-if="snap.snap_pic_url" :src="formatMediaUrl(snap.snap_pic_url)" class="w-full h-full object-cover" />
                   <span v-else class="w-full h-full flex items-center justify-center text-[10px] text-slate-400">No Pic</span>
                 </div>
               </td>
@@ -359,7 +359,7 @@
               </div>
             </div>
             <div class="relative group rounded-xl overflow-hidden border border-slate-200 bg-slate-950">
-              <img :src="modal.snapUrl" class="rounded-xl w-full max-h-80 object-contain mx-auto" />
+              <img :src="formatMediaUrl(modal.snapUrl)" class="rounded-xl w-full max-h-80 object-contain mx-auto" />
               <div class="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
                 <button 
                   @click="openEnrollModalFromSnap"
@@ -373,9 +373,9 @@
           <div v-if="modal.sceneUrl" class="space-y-2">
             <div class="text-xs font-semibold text-slate-500 flex items-center justify-between">
               <span>Context Scene View</span>
-              <a :href="modal.sceneUrl" target="_blank" download class="text-[11px] text-indigo-600 hover:underline font-medium">Download</a>
+              <a :href="formatMediaUrl(modal.sceneUrl)" target="_blank" download class="text-[11px] text-indigo-600 hover:underline font-medium">Download</a>
             </div>
-            <img :src="modal.sceneUrl" class="rounded-xl border border-slate-200 w-full max-h-80 object-contain bg-slate-950" />
+            <img :src="formatMediaUrl(modal.sceneUrl)" class="rounded-xl border border-slate-200 w-full max-h-80 object-contain bg-slate-950" />
           </div>
         </div>
 
@@ -428,7 +428,7 @@
 
             <div class="flex flex-col sm:flex-row items-center gap-4">
               <div class="w-24 h-24 rounded-xl bg-slate-950 border border-indigo-200 overflow-hidden flex items-center justify-center shrink-0 relative shadow-inner">
-                <img v-if="enrollModal.previewPhoto" :src="enrollModal.previewPhoto" class="w-full h-full object-cover" />
+                <img v-if="enrollModal.previewPhoto" :src="formatMediaUrl(enrollModal.previewPhoto)" class="w-full h-full object-cover" />
                 <span v-else class="text-3xl text-slate-400">👤</span>
               </div>
               <div class="flex-1 space-y-1.5 text-left w-full">
@@ -593,6 +593,7 @@
 import { ref, computed, watch, onMounted } from 'vue';
 import { useCameraStore } from '../stores/cameraStore';
 import { formatTime, formatDateTime } from '../utils/date';
+import formatMediaUrl from '../utils/media';
 import HistoricalBackfillModal from '../components/HistoricalBackfillModal.vue';
 import notify from '../utils/notify';
 import apiClient from '../api/client';

@@ -15,6 +15,9 @@ export default defineConfig({
     build: {
         rollupOptions: {
             output: {
+                entryFileNames: `assets/[name]-[hash]-v6.js`,
+                chunkFileNames: `assets/[name]-[hash]-v6.js`,
+                assetFileNames: `assets/[name]-[hash]-v6[extname]`,
                 manualChunks(id) {
                     if (id.includes('node_modules/vue') || id.includes('node_modules/pinia')) {
                         return 'vendor-vue';
@@ -32,8 +35,13 @@ export default defineConfig({
     server: {
         host: '0.0.0.0',
         port: 5173,
+        strictPort: true,
+        origin: 'https://camera-dev.8gategames.com',
         hmr: {
-            host: 'localhost',
+            host: 'camera-dev.8gategames.com',
+            protocol: 'wss',
+            clientPort: 443,
+            path: '/@vite-hmr',
         },
         watch: {
             ignored: ['**/storage/framework/views/**'],

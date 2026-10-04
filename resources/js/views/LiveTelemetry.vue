@@ -35,8 +35,8 @@
 
         <!-- Stream Filter -->
         <select 
-          v-model="statusFilter" 
-          @change="onFilterChange" 
+          :value="statusFilter" 
+          @change="statusFilter = $event.target.value; onFilterChange()" 
           aria-label="Filter events by verification status"
           class="bg-white border border-slate-200 text-xs rounded-lg px-3 py-1.5 text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 shadow-xs cursor-pointer"
         >
@@ -117,7 +117,7 @@
               :aria-label="`Inspect snapshot for ${log.person_name || 'Unregistered Person'}`"
               class="relative w-16 h-16 rounded-lg bg-slate-100 border border-slate-200 overflow-hidden shrink-0 cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-500"
             >
-              <img v-if="log.snap_pic_url" :src="log.snap_pic_url" :alt="`Snapshot of ${log.person_name || 'person'}`" class="w-full h-full object-cover hover:scale-105 transition-transform" />
+              <img v-if="log.snap_pic_url" :src="formatMediaUrl(log.snap_pic_url)" :alt="`Snapshot of ${log.person_name || 'person'}`" class="w-full h-full object-cover hover:scale-105 transition-transform" />
               <div v-else class="w-full h-full flex items-center justify-center text-xs text-slate-400 font-mono">NO PIC</div>
               <div v-if="log.is_no_mask === 1" class="absolute bottom-0 right-0 bg-amber-500 text-black text-[9px] px-1 font-bold rounded-tl">NO MASK</div>
             </button>
@@ -175,7 +175,7 @@
           <span>Showing <strong class="text-slate-900 font-mono">{{ fromCount }}</strong> to <strong class="text-slate-900 font-mono">{{ toCount }}</strong> of <strong class="text-slate-900 font-mono">{{ totalLogs }}</strong> telemetry logs</span>
           <div class="flex items-center gap-1.5 text-slate-500">
             <span>Show:</span>
-            <select v-model.number="perPage" @change="onPerPageChange" aria-label="Items per page" class="bg-white border border-slate-200 text-xs rounded px-2 py-1 text-slate-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer">
+            <select :value="perPage" @change="perPage = Number($event.target.value); onPerPageChange()" aria-label="Items per page" class="bg-white border border-slate-200 text-xs rounded px-2 py-1 text-slate-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer">
               <option :value="10">10</option>
               <option :value="20">20</option>
               <option :value="50">50</option>
@@ -229,11 +229,11 @@
         <div class="grid grid-cols-1 gap-4">
           <div v-if="modal.snapUrl" class="space-y-2">
             <div class="text-xs font-semibold text-slate-500">Face Snapshot (Crop)</div>
-            <img :src="modal.snapUrl" alt="High resolution facial crop" class="rounded-xl border border-slate-200 w-full max-h-72 object-contain bg-slate-950" />
+            <img :src="formatMediaUrl(modal.snapUrl)" alt="High resolution facial crop" class="rounded-xl border border-slate-200 w-full max-h-72 object-contain bg-slate-950" />
           </div>
           <div v-if="modal.sceneUrl" class="space-y-2">
             <div class="text-xs font-semibold text-slate-500">Context Scene View</div>
-            <img :src="modal.sceneUrl" alt="Wide-angle scene context" class="rounded-xl border border-slate-200 w-full max-h-72 object-contain bg-slate-950" />
+            <img :src="formatMediaUrl(modal.sceneUrl)" alt="Wide-angle scene context" class="rounded-xl border border-slate-200 w-full max-h-72 object-contain bg-slate-950" />
           </div>
         </div>
         <div class="flex justify-end pt-2">
@@ -248,6 +248,7 @@
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import { useCameraStore } from '../stores/cameraStore';
 import { formatTime, formatDateTime } from '../utils/date';
+import formatMediaUrl from '../utils/media';
 import apiClient from '../api/client';
 
 const store = useCameraStore();

@@ -82,7 +82,7 @@
             <tr v-for="log in logs" :key="log.id" class="hover:bg-slate-50 transition-colors">
               <td class="py-3 px-4">
                 <div role="button" tabindex="0" :aria-label="'Inspect face snapshot for ' + (log.person_name || 'Unregistered')" class="w-10 h-10 rounded-lg bg-slate-100 border border-slate-200 overflow-hidden shrink-0 cursor-pointer" @click="openImage(log.snap_pic_url, log.scene_pic_url, log.person_name)" @keydown.enter="openImage(log.snap_pic_url, log.scene_pic_url, log.person_name)">
-                  <img v-if="log.snap_pic_url" :src="log.snap_pic_url" class="w-full h-full object-cover" />
+                  <img v-if="log.snap_pic_url" :src="formatMediaUrl(log.snap_pic_url)" class="w-full h-full object-cover" />
                   <span v-else class="w-full h-full flex items-center justify-center text-[10px] text-slate-400">No Pic</span>
                 </div>
               </td>
@@ -135,11 +135,11 @@
         <div class="grid grid-cols-1">
           <div v-if="modal.snapUrl">
             <div class="text-xs font-semibold text-slate-500 mb-1">Face Crop</div>
-            <img :src="modal.snapUrl" class="rounded-xl border border-slate-200 w-full max-h-72 object-contain bg-slate-950" />
+            <img :src="formatMediaUrl(modal.snapUrl)" class="rounded-xl border border-slate-200 w-full max-h-72 object-contain bg-slate-950" />
           </div>
           <div v-if="modal.sceneUrl">
             <div class="text-xs font-semibold text-slate-500 mb-1">Scene View</div>
-            <img :src="modal.sceneUrl" class="rounded-xl border border-slate-200 w-full max-h-72 object-contain bg-slate-950" />
+            <img :src="formatMediaUrl(modal.sceneUrl)" class="rounded-xl border border-slate-200 w-full max-h-72 object-contain bg-slate-950" />
           </div>
         </div>
       </div>
@@ -158,6 +158,7 @@
 import { ref, onMounted } from 'vue';
 import { useCameraStore } from '../stores/cameraStore';
 import { formatDateTime } from '../utils/date';
+import formatMediaUrl from '../utils/media';
 import HistoricalBackfillModal from '../components/HistoricalBackfillModal.vue';
 import apiClient from '../api/client';
 

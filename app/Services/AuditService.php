@@ -21,16 +21,31 @@ class AuditService
             $newValues = null;
 
             if ($action === 'create') {
-                $newValues = array_diff_key($model->getAttributes(), array_flip($exclude));
+                try {
+                    $attributes = $model->getAttributes();
+                } catch (\Illuminate\Contracts\Encryption\DecryptException) {
+                    $attributes = $model->getRawOriginal();
+                }
+                $newValues = array_diff_key($attributes, array_flip($exclude));
             } elseif ($action === 'update') {
                 $dirty = $model->getDirty();
                 $newValues = array_diff_key($dirty, array_flip($exclude));
                 if (empty($newValues)) {
                     return null; // Nothing audited changed
                 }
-                $oldValues = array_intersect_key($model->getOriginal(), $newValues);
+                try {
+                    $original = $model->getOriginal();
+                } catch (\Illuminate\Contracts\Encryption\DecryptException) {
+                    $original = $model->getRawOriginal();
+                }
+                $oldValues = array_intersect_key($original, $newValues);
             } elseif ($action === 'delete') {
-                $oldValues = array_diff_key($model->getAttributes(), array_flip($exclude));
+                try {
+                    $attributes = $model->getAttributes();
+                } catch (\Illuminate\Contracts\Encryption\DecryptException) {
+                    $attributes = $model->getRawOriginal();
+                }
+                $oldValues = array_diff_key($attributes, array_flip($exclude));
             }
 
             $user = Auth::user();

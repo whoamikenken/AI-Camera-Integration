@@ -42,6 +42,7 @@ php artisan migrate --force
 
 # 3. Clean up any stale background processes on standard ports & daemons
 echo -e "${YELLOW}[3/4] Preparing ports (8000, 8080, 5173) and daemons...${NC}"
+rm -f public/hot 2>/dev/null || true
 pkill -f "./bore local" 2>/dev/null || true
 pkill -f "cloudflared tunnel run" 2>/dev/null || true
 PIDS=$(lsof -t -i:8000 -i:8080 -i:5173 2>/dev/null || true)
@@ -55,15 +56,24 @@ echo -e "${YELLOW}[4/4] Launching background services...${NC}"
 
 # Function to clean up background processes on Ctrl+C / exit
 cleanup() {
+    trap - SIGINT SIGTERM EXIT
     echo -e "\n${RED}Shutting down development processes...${NC}"
+    rm -f public/hot 2>/dev/null || true
     kill 0 2>/dev/null || true
     exit 0
 }
 trap cleanup SIGINT SIGTERM EXIT
 
+# Source .env file if available
+if [ -f .env ]; then
+    set -a
+    source .env
+    set +a
+fi
+
 # A. Start Cloudflare Tunnel
 echo -e "${CYAN}→ Starting Cloudflare Tunnel (camera-hub-tunnel)...${NC}"
-cloudflared --protocol http2 --config /home/wsk-devops2/.cloudflared/config.yml tunnel run camera-hub-tunnel > /tmp/cloudflared.log 2>&1 &
+cloudflared --config /home/wsk-devops2/.cloudflared/config.yml tunnel run camera-hub-tunnel > /tmp/cloudflared.log 2>&1 &
 TUNNEL_PID=$!
 
 # B. Start MQTT Telemetry Daemon
@@ -71,9 +81,8 @@ echo -e "${CYAN}→ Starting MQTT Ingestion Daemon (php artisan mqtt:listen)...$
 php artisan mqtt:listen > /dev/null 2>&1 &
 MQTT_PID=$!
 
-# C. Insecure bore TCP Tunnel for MQTT disabled for security (SEC-03)
-# To enable only for trusted testing: ENABLE_INSECURE_MQTT_TUNNEL=true ./start-dev.sh
-if [ "${ENABLE_INSECURE_MQTT_TUNNEL:-false}" = "true" ]; then
+# C. Public bore TCP Tunnel for MQTT (enabled by default unless ENABLE_INSECURE_MQTT_TUNNEL=false)
+if [ "${ENABLE_INSECURE_MQTT_TUNNEL:-true}" != "false" ]; then
     echo -e "${RED}⚠ WARNING: Exposing unencrypted MQTT to public bore.pub tunnel...${NC}"
     ./bore local 1883 --to bore.pub --port 35803 > /tmp/bore.log 2>&1 &
     BORE_PID=$!

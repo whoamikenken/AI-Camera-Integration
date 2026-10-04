@@ -7,6 +7,10 @@ Route::get('/', function () {
     return view('welcome');
 });
 
+Route::get('/login', function () {
+    return redirect('/');
+})->name('login');
+
 // Mock Camera Hardware API Endpoint for local testing & development
 if (app()->environment('local', 'testing')) {
     Route::post('/action/{operator}', function (string $operator, Request $request) {

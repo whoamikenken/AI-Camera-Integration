@@ -128,7 +128,7 @@ The Intelligent AI Camera Hub manages high-throughput bidirectional edge-to-clou
     - Rely strictly on the 60-second Redis heartbeat throttle key (`device_hb_throttle:{$deviceId}`) to eliminate 100+ writes/sec on `devices` table during peak traffic.
   - **Verification:** Verified in `PerformanceOptimizationTest::test_mqtt_listener_heartbeat_throttling_skips_database_write`.
 
-- [ ] **Task 3.2: Asynchronous Event Broadcasting Across All Real-Time Events** `[PARTIAL · Jules 8924291706478942295 · 4 events still ShouldBroadcastNow: SyncTaskUpdated, VisitorCheckedIn, VisitorCheckedOut, PersonnelUpdated · FIX DISPATCHED: Jules 8102084558259711491]`
+- [x] **Task 3.2: Asynchronous Event Broadcasting Across All Real-Time Events** `[ARCHIVED · Jules 8924291706478942295 + 8102084558259711491]`
   - **Files:** `app/Events/DeviceAlertReceived.php`, `app/Events/DeviceAlertUpdated.php`, `app/Events/StrangerSnapReceived.php`, `app/Events/DeviceStatusUpdated.php`, `app/Events/AttendancePunchReceived.php`, `app/Events/NotificationCreated.php`
   - **Details:**
     - Change events from `ShouldBroadcastNow` (synchronous HTTP to Reverb) to `ShouldBroadcast` backed by Redis `broadcasts` queue.

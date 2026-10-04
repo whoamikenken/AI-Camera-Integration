@@ -26,5 +26,16 @@ class AppServiceProvider extends ServiceProvider
         \App\Models\Employee::observe(\App\Observers\EmployeeObserver::class);
         \App\Models\Personnel::observe(\App\Observers\PersonnelObserver::class);
         \App\Models\SyncTask::observe(\App\Observers\SyncTaskObserver::class);
+
+        $host = request()->getHost();
+        $forwardedHost = request()->header('X-Forwarded-Host', '');
+        if (
+            app()->environment('production', 'staging') ||
+            str_contains($host, 'camera-dev') ||
+            str_contains($host, '8gategames.com') ||
+            str_contains($forwardedHost, 'camera-dev')
+        ) {
+            \Illuminate\Support\Facades\Vite::useHotFile(storage_path('vite.hot.nonexistent'));
+        }
     }
 }

@@ -100,10 +100,12 @@ apiClient.interceptors.response.use(
             }
 
             case 403: {
-                notify.warning(
-                    'Permission Denied',
-                    data?.message || 'You do not have administrative privileges to execute this action.'
-                );
+                if (!error.config?.skip403Notify) {
+                    notify.warning(
+                        'Permission Denied',
+                        data?.message || 'You do not have administrative privileges to execute this action.'
+                    );
+                }
                 break;
             }
 

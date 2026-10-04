@@ -194,8 +194,8 @@ class Challenger1AdversarialTest extends TestCase
             'X-Camera-Secret' => 'bad-secret',
         ]);
 
-        // Verifies the vulnerability exists: unhandled DecryptException causes 500
-        $this->assertEquals(500, $response->status(), 'Unhanded DecryptException currently crashes with 500');
+        // Verifies the vulnerability is resolved: DecryptException does NOT cause 500 and returns 401
+        $this->assertEquals(401, $response->status(), 'Unhandled DecryptException fixed; endpoint cleanly returns 401');
     }
 
     public function test_device_password_encrypted_cast_fails_on_postgresql_due_to_varchar_64(): void

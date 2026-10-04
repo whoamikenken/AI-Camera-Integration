@@ -51,12 +51,48 @@ class Device extends Model
 
     protected $casts = [
         'port' => 'integer',
-        'password' => 'encrypted',
         'device_type' => 'integer',
         'is_active' => 'boolean',
         'last_heartbeat_at' => 'datetime',
         'department_ids' => 'array',
     ];
+
+    public function getPasswordAttribute($value): ?string
+    {
+        if (empty($value)) {
+            return $value;
+        }
+
+        try {
+            return \Illuminate\Support\Facades\Crypt::decryptString($value);
+        } catch (\Illuminate\Contracts\Encryption\DecryptException) {
+            try {
+                return decrypt($value);
+            } catch (\Illuminate\Contracts\Encryption\DecryptException) {
+                return $value;
+            }
+        }
+    }
+
+    public function setPasswordAttribute($value): void
+    {
+        if (empty($value)) {
+            $this->attributes['password'] = $value;
+            return;
+        }
+
+        try {
+            \Illuminate\Support\Facades\Crypt::decryptString($value);
+            $this->attributes['password'] = $value;
+        } catch (\Illuminate\Contracts\Encryption\DecryptException) {
+            try {
+                decrypt($value);
+                $this->attributes['password'] = $value;
+            } catch (\Illuminate\Contracts\Encryption\DecryptException) {
+                $this->attributes['password'] = \Illuminate\Support\Facades\Crypt::encryptString($value);
+            }
+        }
+    }
 
     public function organization(): BelongsTo
     {

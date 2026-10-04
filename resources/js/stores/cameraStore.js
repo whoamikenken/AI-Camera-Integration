@@ -63,7 +63,7 @@ export const useCameraStore = defineStore('camera', {
         async fetchStats() {
             this.statsLoading = true;
             try {
-                const res = await apiClient.get('/api/stats');
+                const res = await apiClient.get('/api/stats', { skip403Notify: true });
                 if (res.data) {
                     this.stats = {
                         telemetry: {
@@ -100,7 +100,7 @@ export const useCameraStore = defineStore('camera', {
 
         async fetchDevices() {
             try {
-                const res = await apiClient.get('/api/devices');
+                const res = await apiClient.get('/api/devices', { skip403Notify: true });
                 this.devices = res.data || [];
             } catch (err) {
                 console.error('Failed to fetch devices:', err);
@@ -109,7 +109,7 @@ export const useCameraStore = defineStore('camera', {
 
         async fetchRecentLogs() {
             try {
-                const res = await apiClient.get('/api/access-logs?per_page=25');
+                const res = await apiClient.get('/api/access-logs?per_page=25', { skip403Notify: true });
                 this.liveLogs = res.data?.data || [];
             } catch (err) {
                 console.error('Failed to fetch access logs:', err);

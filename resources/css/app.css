@@ -11,3 +11,9 @@
     --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
         'Segoe UI Symbol', 'Noto Color Emoji';
 }
+/* cache bust 2026-10-04 */
+.cb-20261004 { display: block; }
+/* cb 213900 */
+.version-214100 { color: #123456; }
+.cache-buster-214300 { color: #fe4321; }
+.v4-fix-214500 { background: #abcdef; }

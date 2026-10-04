@@ -15,7 +15,7 @@ return new class extends Migration
             $table->string('ip_address', 45);
             $table->integer('port')->default(8080);
             $table->string('username', 64)->default('admin');
-            $table->string('password', 64)->default('admin');
+            $table->text('password')->nullable();
             $table->integer('device_type')->default(0)->comment('0: IPC, 1: DVR, 2: NVR, 3: Panel Unit');
             $table->string('mqtt_topic', 128)->nullable();
             $table->boolean('is_active')->default(true)->index();

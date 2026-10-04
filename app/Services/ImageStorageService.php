@@ -286,7 +286,18 @@ class ImageStorageService
 
         $cleanPath = ltrim(preg_replace('#^.*?/api/media/#', '', preg_replace('#^.*?/storage/#', '', $path)), '/');
 
-        $allowedPrefixes = ['personnel/', 'snaps/', 'scenes/', 'verification_snaps/', 'verification_scenes/', 'visitors/'];
+        $allowedPrefixes = [
+            'personnel/',
+            'snaps/',
+            'scenes/',
+            'strangers/',
+            'stranger_snaps/',
+            'stranger_scenes/',
+            'verification_snaps/',
+            'verification_scenes/',
+            'visitors/',
+            'alerts/',
+        ];
         $allowed = false;
         foreach ($allowedPrefixes as $prefix) {
             if (str_starts_with($cleanPath, $prefix)) {

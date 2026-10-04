@@ -220,7 +220,7 @@
                     <NotificationBell />
 
                     <!-- Quick User Menu Dropdown -->
-                    <div class="relative" ref="userMenuRef">
+                    <div class="relative" ref="userMenuRef" :key="'user-menu-dropdown'">
                         <button
                             @click="userMenuOpen = !userMenuOpen"
                             aria-haspopup="menu"
@@ -907,6 +907,18 @@ watch(
             cleanupTelemetry();
         }
     },
+);
+
+watch(
+    navGroups,
+    (groups) => {
+        if (!authStore.isAuthenticated) return;
+        const allowedIds = groups.flatMap((g) => g.items.map((i) => i.id));
+        if (allowedIds.length > 0 && !allowedIds.includes(currentTab.value)) {
+            currentTab.value = allowedIds[0];
+        }
+    },
+    { immediate: true },
 );
 
 onUnmounted(() => {
