@@ -122,7 +122,7 @@
             <div class="bg-white border border-slate-200 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
                 <div class="flex items-center justify-between border-b border-slate-100 pb-3">
                     <h3 class="text-base font-bold text-slate-900">Override Attendance Status</h3>
-                    <button @click="showOverrideModal = false" class="text-slate-400 hover:text-slate-700 font-bold p-1 cursor-pointer">✕</button>
+                    <button @click="showOverrideModal = false" aria-label="Close dialog" class="text-slate-400 hover:text-slate-700 font-bold p-1 cursor-pointer">✕</button>
                 </div>
                 <div class="space-y-3">
                     <div>

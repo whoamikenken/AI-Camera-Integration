@@ -6,7 +6,7 @@
                     <span class="text-xl" aria-hidden="true">🏖️</span>
                     <h3 id="leave-modal-title" class="text-base font-bold text-slate-900">Apply for Leave</h3>
                 </div>
-                <button @click="close" class="text-slate-400 hover:text-slate-700 font-bold p-1 cursor-pointer">✕</button>
+                <button @click="close" aria-label="Close dialog" class="text-slate-400 hover:text-slate-700 font-bold p-1 cursor-pointer">✕</button>
             </div>
 
             <form @submit.prevent="handleSubmit" class="space-y-4">
