@@ -10,7 +10,7 @@
                         {{ employee?.first_name }} {{ employee?.last_name || '' }} ({{ employee?.employee_code }}) — {{ currentMonthName }} {{ currentYear }}
                     </p>
                 </div>
-                <button @click="close" class="text-slate-400 hover:text-slate-700 font-bold p-1 cursor-pointer">✕</button>
+                <button @click="close" aria-label="Close dialog" class="text-slate-400 hover:text-slate-700 font-bold p-1 cursor-pointer">✕</button>
             </div>
 
             <!-- Month Navigator & Summary Stats -->

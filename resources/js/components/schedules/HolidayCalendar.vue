@@ -196,7 +196,7 @@
           <h3 class="text-sm font-bold text-slate-900">
             {{ isEditing ? 'Edit Holiday' : 'Add New Holiday' }}
           </h3>
-          <button @click="showModal = false" class="text-slate-400 hover:text-slate-600 cursor-pointer">✕</button>
+          <button @click="showModal = false" class="text-slate-400 hover:text-slate-600 cursor-pointer" aria-label="Close dialog">✕</button>
         </div>
 
         <div class="space-y-3 text-xs">
