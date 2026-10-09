@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\AttendancePunch;
 use App\Models\AttendanceRecord;
 use App\Models\Employee;
 use App\Models\Holiday;
@@ -278,5 +279,90 @@ class LeaveService
                 ]
             );
         }
+    }
+
+    /**
+     * Cancel an existing leave request (pending or approved).
+     * Restores balances atomically and reverts affected daily attendance records.
+     */
+    public function cancelLeaveRequest(
+        LeaveRequest $request,
+        ?User $user = null,
+        ?string $reason = null
+    ): LeaveRequest {
+        if (!in_array($request->status, ['pending', 'approved'])) {
+            throw ValidationException::withMessages([
+                'status' => ["Cannot cancel leave request with status '{$request->status}'."],
+            ]);
+        }
+
+        return DB::transaction(function () use ($request, $user, $reason) {
+            $previousStatus = $request->status;
+            $totalDays = (float) $request->total_days;
+            $year = Carbon::parse($request->start_date)->year;
+
+            // 1. Lock and update LeaveBalance
+            $balance = LeaveBalance::where('employee_id', $request->employee_id)
+                ->where('leave_type_id', $request->leave_type_id)
+                ->where('year', $year)
+                ->lockForUpdate()
+                ->first();
+
+            if ($balance) {
+                if ($previousStatus === 'pending') {
+                    $balance->pending = max(0.0, (float) $balance->pending - $totalDays);
+                } elseif ($previousStatus === 'approved') {
+                    $balance->used = max(0.0, (float) $balance->used - $totalDays);
+                }
+                $balance->save();
+            }
+
+            // 2. Update LeaveRequest status
+            $cancellationReason = !empty(trim((string) ($reason ?? ''))) ? trim((string) $reason) : 'Cancelled by user';
+            $request->update([
+                'status' => 'cancelled',
+                'cancellation_reason' => $cancellationReason,
+                'cancelled_by' => $user?->id,
+                'cancelled_at' => now(),
+            ]);
+
+            // 3. Rollback AttendanceRecords if previously approved
+            if ($previousStatus === 'approved') {
+                $employee = $request->employee ?? Employee::find($request->employee_id);
+                if ($employee) {
+                    $period = CarbonPeriod::create(
+                        Carbon::parse($request->start_date),
+                        Carbon::parse($request->end_date)
+                    );
+
+                    $attendanceService = app(AttendanceProcessingService::class);
+
+                    foreach ($period as $date) {
+                        if ($date->isWeekend()) {
+                            continue;
+                        }
+                        $dateStr = $date->format('Y-m-d');
+                        $isFuture = $date->copy()->startOfDay()->isFuture();
+                        $record = AttendanceRecord::where('employee_id', $employee->id)->whereDate('date', $dateStr)->first();
+                        $hasPunches = AttendancePunch::where('employee_id', $employee->id)
+                            ->whereBetween('punch_time', [$date->copy()->startOfDay(), $date->copy()->endOfDay()])
+                            ->exists();
+
+                        if ($isFuture && !$hasPunches) {
+                            if ($record && $record->status === 'on_leave') {
+                                $record->delete();
+                            }
+                        } else {
+                            if ($record && $record->status === 'on_leave') {
+                                $record->update(['remarks' => null]);
+                            }
+                            $attendanceService->processDay($employee, $dateStr);
+                        }
+                    }
+                }
+            }
+
+            return $request->fresh();
+        });
     }
 }

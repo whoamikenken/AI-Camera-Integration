@@ -4,6 +4,7 @@ namespace App\Services;
 
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Str;
 
 class ImageStorageService
@@ -151,6 +152,7 @@ class ImageStorageService
         } elseif (str_contains($relativePath, '/storage/')) {
             $relativePath = preg_replace('#^.*?/storage/#', '', $relativePath);
         }
+        $relativePath = explode('?', $relativePath)[0];
         $relativePath = ltrim($relativePath, '/');
 
         $disk = $this->getDisk();
@@ -276,6 +278,16 @@ class ImageStorageService
     }
 
     /**
+     * Generate a cryptographically signed temporary URL for media streaming (SEC-14).
+     */
+    public function signedMediaUrl(string $path, int $minutes = 120): string
+    {
+        $cleanPath = ltrim(preg_replace('#^.*?/api/media/#', '', preg_replace('#^.*?/storage/#', '', $path)), '/');
+        $cleanPath = explode('?', $cleanPath)[0];
+        return URL::temporarySignedRoute('media.show', now()->addMinutes($minutes), ['path' => $cleanPath]);
+    }
+
+    /**
      * Retrieve binary and mime type for secure serving of biometric images.
      */
     public function getMedia(string $path): ?array
@@ -285,6 +297,7 @@ class ImageStorageService
         }
 
         $cleanPath = ltrim(preg_replace('#^.*?/api/media/#', '', preg_replace('#^.*?/storage/#', '', $path)), '/');
+        $cleanPath = explode('?', $cleanPath)[0];
 
         $allowedPrefixes = [
             'personnel/',
@@ -310,12 +323,21 @@ class ImageStorageService
             return null;
         }
 
+        $ext = strtolower(pathinfo($cleanPath, PATHINFO_EXTENSION));
+        if (in_array($ext, ['svg', 'xml', 'html', 'htm'], true)) {
+            return null;
+        }
+
         $disks = array_unique([$this->getDisk(), 'public', 'local', 'biometrics']);
 
         foreach ($disks as $disk) {
             try {
                 if (Storage::disk($disk)->exists($cleanPath)) {
                     $mimeType = Storage::disk($disk)->mimeType($cleanPath) ?: 'image/jpeg';
+                    if (str_contains(strtolower($mimeType), 'svg') || str_contains(strtolower($mimeType), 'xml') || str_contains(strtolower($mimeType), 'html')) {
+                        return null;
+                    }
+
                     return [
                         'content' => Storage::disk($disk)->get($cleanPath),
                         'mime_type' => $mimeType,

@@ -23,6 +23,93 @@
       </div>
     </div>
 
+    <!-- Master Selection & Fleet Summary Bar -->
+    <div class="bg-white border border-slate-200 p-3.5 rounded-xl shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+      <div class="flex items-center gap-3">
+        <label class="flex items-center gap-2 text-xs font-semibold text-slate-700 cursor-pointer">
+          <input 
+            type="checkbox"
+            :checked="isAllSelected"
+            :indeterminate.prop="isIndeterminate"
+            @change="toggleSelectAll"
+            aria-label="Select all cameras in fleet"
+            class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 h-4 w-4 cursor-pointer"
+          />
+          <span>Select All ({{ store.devices.length }} Cameras)</span>
+        </label>
+        <span v-if="selectedCount > 0" class="text-xs text-indigo-600 font-bold bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-200 font-mono">
+          {{ selectedCount }} selected
+        </span>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <button
+          v-if="selectedCount > 0"
+          @click="clearDeviceSelection"
+          class="text-xs text-slate-500 hover:text-slate-800 underline cursor-pointer"
+          aria-label="Clear device selection"
+        >
+          Clear selection
+        </button>
+      </div>
+    </div>
+
+    <!-- Floating Fleet Batch Action Toolbar -->
+    <transition name="fade">
+      <div 
+        v-if="selectedCount > 0"
+        role="region"
+        aria-label="Fleet batch actions toolbar"
+        class="sticky top-4 z-40 bg-slate-900 text-white p-3.5 rounded-2xl shadow-xl border border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3"
+      >
+        <div class="flex items-center gap-3">
+          <div class="flex items-center gap-2">
+            <span class="w-6 h-6 rounded-full bg-indigo-500/20 text-indigo-400 flex items-center justify-center text-xs font-bold font-mono">
+              {{ selectedCount }}
+            </span>
+            <span class="text-xs font-semibold text-slate-200">
+              {{ selectedCount === 1 ? '1 camera selected' : `${selectedCount} cameras selected` }}
+            </span>
+          </div>
+          <span class="text-slate-600 text-xs hidden sm:inline">|</span>
+          <span class="text-[11px] text-slate-400 hidden sm:inline">Fleet Operations</span>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2 w-full sm:w-auto justify-end">
+          <!-- Reboot Fleet -->
+          <button 
+            @click="confirmBulkReboot"
+            :disabled="bulkActionLoading"
+            class="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold rounded-lg shadow-sm transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+            aria-label="Reboot selected camera fleet"
+          >
+            <span aria-hidden="true">🔄</span>
+            <span>Reboot Fleet ({{ selectedCount }})</span>
+          </button>
+
+          <!-- Sync MQTT Config -->
+          <button 
+            @click="openBulkMqttModal"
+            :disabled="bulkActionLoading"
+            class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-lg shadow-sm transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+            aria-label="Sync MQTT parameters to selected cameras"
+          >
+            <span aria-hidden="true">⚡</span>
+            <span>Sync MQTT Config</span>
+          </button>
+
+          <!-- Clear Selection -->
+          <button 
+            @click="clearDeviceSelection"
+            class="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium rounded-lg transition-colors cursor-pointer"
+            aria-label="Clear device selection"
+          >
+            ✕ Clear
+          </button>
+        </div>
+      </div>
+    </transition>
+
     <!-- Device Cards Grid -->
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
       <div 
@@ -35,6 +122,13 @@
         <div class="flex items-start justify-between">
           <div>
             <div class="flex items-center gap-2">
+              <input 
+                type="checkbox"
+                :checked="selectedDeviceIds.includes(device.id)"
+                @change="toggleDeviceSelect(device.id)"
+                :aria-label="`Select camera ${device.name}`"
+                class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 h-4 w-4 cursor-pointer"
+              />
               <span class="inline-block w-2.5 h-2.5 rounded-full" :class="device.is_online ? 'bg-emerald-500 shadow-sm shadow-emerald-500/50' : 'bg-slate-400'"></span>
               <h3 class="font-bold text-slate-900 text-base">{{ device.name }}</h3>
             </div>
@@ -673,20 +767,190 @@
       :initial-device="backfillModal.device"
       @close="backfillModal.show = false"
     />
+
+    <!-- Bulk MQTT Parameter Configuration Modal -->
+    <div 
+      v-if="bulkMqttModal.show" 
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="bulk-mqtt-title"
+      @keydown.escape="bulkMqttModal.show = false"
+      class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs"
+      @click.self="bulkMqttModal.show = false"
+    >
+      <div class="bg-white border border-slate-200 rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl">
+        <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+          <h3 id="bulk-mqtt-title" class="text-base font-bold text-slate-900 flex items-center gap-2">
+            <span>⚡ Bulk Sync MQTT Parameters</span>
+          </h3>
+          <button 
+            @click="bulkMqttModal.show = false"
+            class="text-slate-400 hover:text-slate-600 text-lg p-1 cursor-pointer rounded"
+            aria-label="Close dialog"
+          >✕</button>
+        </div>
+        <p class="text-xs text-slate-500">
+          Apply standardized MQTT broker and telemetry upload parameters across the {{ selectedCount }} selected edge cameras.
+        </p>
+
+        <div class="space-y-3">
+          <div>
+            <label for="bulk-keep-alive" class="block text-xs font-semibold text-slate-700">KeepAlive Interval (seconds)</label>
+            <input 
+              id="bulk-keep-alive" 
+              v-model.number="bulkMqttForm.KeepAlive" 
+              type="number" 
+              class="w-full mt-1 bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500" 
+            />
+          </div>
+
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label for="bulk-record-upload" class="block text-xs font-semibold text-slate-700">Record Upload Type</label>
+              <select 
+                id="bulk-record-upload" 
+                v-model.number="bulkMqttForm.RecordUploadType" 
+                class="w-full mt-1 bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              >
+                <option :value="1">1: Real-time VerifyPush</option>
+                <option :value="0">0: Disabled</option>
+              </select>
+            </div>
+            <div>
+              <label for="bulk-stranger-upload" class="block text-xs font-semibold text-slate-700">Stranger Upload Type</label>
+              <select 
+                id="bulk-stranger-upload" 
+                v-model.number="bulkMqttForm.StrangerUploadType" 
+                class="w-full mt-1 bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              >
+                <option :value="1">1: StrSnapPush Snapshots</option>
+                <option :value="0">0: Disabled</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div class="pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
+          <button 
+            @click="bulkMqttModal.show = false"
+            class="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium rounded-lg cursor-pointer"
+          >Cancel</button>
+          <button 
+            @click="executeBulkMqttSync"
+            :disabled="bulkActionLoading"
+            class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-lg shadow-sm transition-all cursor-pointer disabled:opacity-50"
+          >
+            {{ bulkActionLoading ? 'Dispatching...' : `Sync to ${selectedCount} Cameras` }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bulk Campaign Progress Modal Integration -->
+    <BulkCampaignProgressModal 
+      :show="campaignStore.modalVisible"
+      :title="campaignStore.modalTitle"
+      :campaign="campaignStore.activeCampaign"
+      @close="campaignStore.closeModal"
+    />
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { useCameraStore } from '../stores/cameraStore';
+import { useBulkCampaignStore } from '../stores/bulkCampaignStore';
 import { formatTime, formatDateTime } from '../utils/date';
 import CameraLivePreviewModal from '../components/CameraLivePreviewModal.vue';
 import DeviceAuditModal from '../components/DeviceAuditModal.vue';
 import HistoricalBackfillModal from '../components/HistoricalBackfillModal.vue';
+import BulkCampaignProgressModal from '../components/BulkCampaignProgressModal.vue';
 import notify from '../utils/notify';
 import apiClient from '../api/client';
 
 const store = useCameraStore();
+const campaignStore = useBulkCampaignStore();
+const selectedDeviceIds = ref([]);
+const bulkActionLoading = ref(false);
+
+const selectedCount = computed(() => selectedDeviceIds.value.length);
+const isAllSelected = computed(() => {
+  return store.devices.length > 0 && selectedDeviceIds.value.length === store.devices.length;
+});
+const isIndeterminate = computed(() => {
+  return selectedDeviceIds.value.length > 0 && selectedDeviceIds.value.length < store.devices.length;
+});
+
+function toggleSelectAll() {
+  if (isAllSelected.value) {
+    selectedDeviceIds.value = [];
+  } else {
+    selectedDeviceIds.value = store.devices.map(d => d.id);
+  }
+}
+
+function toggleDeviceSelect(deviceId) {
+  const idx = selectedDeviceIds.value.indexOf(deviceId);
+  if (idx > -1) {
+    selectedDeviceIds.value.splice(idx, 1);
+  } else {
+    selectedDeviceIds.value.push(deviceId);
+  }
+}
+
+function clearDeviceSelection() {
+  selectedDeviceIds.value = [];
+}
+
+const bulkMqttModal = ref({ show: false });
+const bulkMqttForm = ref({
+  KeepAlive: 30,
+  StrangerUploadType: 0,
+  RecordUploadType: 1,
+  ResumefromBreakpoint: 1,
+});
+
+function openBulkMqttModal() {
+  bulkMqttModal.value.show = true;
+}
+
+async function confirmBulkReboot() {
+  if (selectedDeviceIds.value.length === 0) return;
+  const confirmed = await notify.confirm(
+    `Reboot ${selectedCount.value} Edge Cameras?`,
+    `A remote reboot command will be dispatched to each of the selected cameras over WAN MQTT. Camera video streaming and biometric verifications will be temporarily offline during reboot.`,
+    'Yes, Reboot Fleet',
+    'Cancel',
+    true
+  );
+
+  if (!confirmed) return;
+
+  bulkActionLoading.value = true;
+  try {
+    await campaignStore.startFleetReboot(selectedDeviceIds.value);
+    clearDeviceSelection();
+  } catch (err) {
+    notify.error('Fleet Reboot Error', err.response?.data?.message || 'Failed to dispatch bulk reboot.');
+  } finally {
+    bulkActionLoading.value = false;
+  }
+}
+
+async function executeBulkMqttSync() {
+  if (selectedDeviceIds.value.length === 0) return;
+  bulkActionLoading.value = true;
+  try {
+    await campaignStore.startFleetMqttSync(selectedDeviceIds.value, bulkMqttForm.value);
+    bulkMqttModal.value.show = false;
+    clearDeviceSelection();
+  } catch (err) {
+    notify.error('Fleet MQTT Sync Error', err.response?.data?.message || 'Failed to dispatch bulk MQTT configuration.');
+  } finally {
+    bulkActionLoading.value = false;
+  }
+}
+
 const testingId = ref(null);
 const deletingId = ref(null);
 const importingId = ref(null);

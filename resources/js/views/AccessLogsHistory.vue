@@ -161,10 +161,9 @@ import { formatDateTime } from '../utils/date';
 import formatMediaUrl from '../utils/media';
 import HistoricalBackfillModal from '../components/HistoricalBackfillModal.vue';
 import apiClient from '../api/client';
+import { usePaginatedResource } from '../composables/usePaginatedResource';
 
 const store = useCameraStore();
-const logs = ref([]);
-const loading = ref(false);
 const showBackfillModal = ref(false);
 
 const filters = ref({
@@ -174,43 +173,28 @@ const filters = ref({
   minSimilarity: ''
 });
 
-const pagination = ref({
-  current_page: 1,
-  last_page: 1,
-  total: 0,
-  per_page: 15,
-  from: 0,
-  to: 0,
-});
-
-const modal = ref({ show: false, snapUrl: '', sceneUrl: '', title: '' });
-
-async function fetchLogs(page = 1) {
-  loading.value = true;
-  try {
-    const params = {
-      page,
+const {
+  items: logs,
+  loading,
+  pagination,
+  fetch: fetchLogsPage,
+} = usePaginatedResource((params) => {
+  return apiClient.get('/api/access-logs', {
+    params: {
+      ...params,
       search: filters.value.search,
       verify_status: filters.value.status,
       device_id: filters.value.deviceId,
       min_similarity: filters.value.minSimilarity,
-    };
-    const res = await apiClient.get('/api/access-logs', { params });
-    logs.value = res.data.data;
-    pagination.value = {
-      current_page: res.data.current_page,
-      last_page: res.data.last_page,
-      total: res.data.total,
-      per_page: res.data.per_page,
-      from: res.data.from,
-      to: res.data.to,
-    };
-  } catch (err) {
-    console.error('Failed to load logs:', err);
-  } finally {
-    loading.value = false;
-  }
+    }
+  });
+}, { initialPerPage: 15, immediate: false });
+
+function fetchLogs(page = 1) {
+  fetchLogsPage(page);
 }
+
+const modal = ref({ show: false, snapUrl: '', sceneUrl: '', title: '' });
 
 let debounceTimer = null;
 function debouncedFetch() {

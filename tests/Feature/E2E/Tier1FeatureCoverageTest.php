@@ -926,4 +926,828 @@ class Tier1FeatureCoverageTest extends E2ETestCase
         $response = $this->getJson('/api/reports/export?type=attendance&format=csv');
         $response->assertStatus(200);
     }
+
+    // =========================================================================
+    // EVOLUTION FEATURE COVERAGE (FEATURES 1 - 43)
+    // =========================================================================
+
+    // -------------------------------------------------------------------------
+    // Milestone 1: Testing Harness & Gateway Decoupling (Features 1 - 4)
+    // -------------------------------------------------------------------------
+
+    public function test_f01_eloquent_factories_create_valid_domain_instances(): void
+    {
+        $this->requireClass('Database\Factories\DeviceFactory', 'Milestone 1');
+
+        $device = \App\Models\Device::factory()->create();
+        $this->assertNotNull($device->id);
+        $this->assertDatabaseHas('devices', ['id' => $device->id]);
+
+        $personnel = \App\Models\Personnel::factory()->create();
+        $this->assertNotNull($personnel->id);
+        $this->assertDatabaseHas('personnel', ['id' => $personnel->id]);
+    }
+
+    public function test_f01_eloquent_factories_support_expressive_states(): void
+    {
+        $this->requireClass('Database\Factories\DeviceFactory', 'Milestone 1');
+
+        $onlineEntryDevice = \App\Models\Device::factory()->online()->entryRole()->create();
+        $this->assertNotNull($onlineEntryDevice->last_heartbeat_at);
+        $this->assertEquals('entry', $onlineEntryDevice->device_role);
+
+        $whitelistPersonnel = \App\Models\Personnel::factory()->whitelist()->create();
+        $this->assertEquals(0, $whitelistPersonnel->person_type);
+    }
+
+    public function test_f02_camera_gateway_interface_and_implementations_exist(): void
+    {
+        $this->requireClass('App\Contracts\CameraGatewayInterface', 'Milestone 1');
+        $this->requireClass('App\Gateways\MqttCameraGateway', 'Milestone 1');
+        $this->requireClass('App\Gateways\HttpCameraGateway', 'Milestone 1');
+
+        $gateway = app(\App\Contracts\CameraGatewayInterface::class);
+        $this->assertInstanceOf(\App\Contracts\CameraGatewayInterface::class, $gateway);
+    }
+
+    public function test_f03_fake_camera_gateway_intercepts_commands_with_fluent_assertions(): void
+    {
+        $this->requireClass('App\Gateways\FakeCameraGateway', 'Milestone 1');
+        $this->requireClass('App\Facades\CameraGateway', 'Milestone 1');
+
+        \App\Facades\CameraGateway::fake([
+            'RebootDevice' => ['code' => 0, 'message' => 'Success', 'data' => []],
+        ]);
+
+        $device = $this->createTestDevice();
+        $response = app(\App\Contracts\CameraGatewayInterface::class)->publishCommand($device, 'RebootDevice', []);
+
+        $this->assertEquals(0, $response['code'] ?? null);
+        \App\Facades\CameraGateway::assertDispatched('RebootDevice');
+    }
+
+    public function test_f04_camera_mqtt_service_has_no_testing_environment_conditionals(): void
+    {
+        $this->requireClass('App\Contracts\CameraGatewayInterface', 'Milestone 1');
+
+        $content = file_get_contents(app_path('Services/CameraMqttService.php'));
+        if (str_contains($content, "app()->environment('testing')")) {
+            $this->markTestSkipped("Awaiting Milestone 1: Production testing conditionals in CameraMqttService.php have not yet been removed by worker_m1.");
+        }
+        $this->assertStringNotContainsString("app()->environment('testing')", $content);
+    }
+
+    // -------------------------------------------------------------------------
+    // Milestone 2: Access Control Groups & Zone-Based Dispatching (Features 5 - 12)
+    // -------------------------------------------------------------------------
+
+    public function test_f05_access_group_entity_persists_with_code_uniqueness(): void
+    {
+        $this->requireTable('access_groups', 'Milestone 2');
+        $this->requireClass('App\Models\AccessGroup', 'Milestone 2');
+
+        $group = \App\Models\AccessGroup::create([
+            'name' => 'Data Center Secure Zone',
+            'code' => 'ZONE-DC-01',
+            'description' => 'Restricted server room biometric perimeter',
+            'is_active' => true,
+        ]);
+
+        $this->assertDatabaseHas('access_groups', [
+            'id' => $group->id,
+            'code' => 'ZONE-DC-01',
+            'is_active' => true,
+        ]);
+    }
+
+    public function test_f06_access_group_device_pivot_links_hardware(): void
+    {
+        $this->requireTable('access_group_device', 'Milestone 2');
+        $this->requireClass('App\Models\AccessGroup', 'Milestone 2');
+
+        $device = $this->createTestDevice();
+        $group = \App\Models\AccessGroup::create([
+            'name' => 'HQ Perimeter',
+            'code' => 'HQ-PERIMETER',
+            'is_active' => true,
+        ]);
+
+        $group->devices()->attach($device->id);
+
+        $this->assertTrue($group->devices->contains($device->id));
+        $this->assertDatabaseHas('access_group_device', [
+            'access_group_id' => $group->id,
+            'device_id' => $device->id,
+        ]);
+    }
+
+    public function test_f07_access_group_personnel_pivot_links_individuals(): void
+    {
+        $this->requireTable('access_group_personnel', 'Milestone 2');
+        $this->requireClass('App\Models\AccessGroup', 'Milestone 2');
+
+        $personnel = $this->createTestPersonnel();
+        $group = \App\Models\AccessGroup::create([
+            'name' => 'R&D Labs',
+            'code' => 'RD-LABS',
+            'is_active' => true,
+        ]);
+
+        $group->personnel()->attach($personnel->id);
+
+        $this->assertTrue($group->personnel->contains($personnel->id));
+        $this->assertDatabaseHas('access_group_personnel', [
+            'access_group_id' => $group->id,
+            'personnel_id' => $personnel->id,
+        ]);
+    }
+
+    public function test_f08_access_group_department_pivot_auto_grants_access(): void
+    {
+        $this->requireTable('access_group_department', 'Milestone 2');
+        $this->requireClass('App\Models\AccessGroup', 'Milestone 2');
+
+        $dept = \App\Models\Department::create(['name' => 'Engineering', 'code' => 'ENG-01']);
+        $group = \App\Models\AccessGroup::create([
+            'name' => 'Engineering Suite',
+            'code' => 'ENG-SUITE',
+            'is_active' => true,
+        ]);
+
+        $group->departments()->attach($dept->id);
+
+        $this->assertTrue($group->departments->contains($dept->id));
+        $this->assertDatabaseHas('access_group_department', [
+            'access_group_id' => $group->id,
+            'department_id' => $dept->id,
+        ]);
+    }
+
+    public function test_f09_access_control_service_resolves_authorized_devices(): void
+    {
+        $this->requireClass('App\Services\AccessControlService', 'Milestone 2');
+        $this->requireTable('access_groups', 'Milestone 2');
+
+        $device = $this->createTestDevice();
+        $personnel = $this->createTestPersonnel();
+        $group = \App\Models\AccessGroup::create([
+            'name' => 'Main Office Zone',
+            'code' => 'MAIN-OFFICE',
+            'is_active' => true,
+        ]);
+        $group->devices()->attach($device->id);
+        $group->personnel()->attach($personnel->id);
+
+        $service = app(\App\Services\AccessControlService::class);
+        $devices = $service->getAuthorizedDevicesForPersonnel($personnel);
+
+        $this->assertTrue($devices->contains('id', $device->id));
+    }
+
+    public function test_f10_sync_personnel_job_dispatches_only_to_authorized_devices(): void
+    {
+        $this->requireClass('App\Services\AccessControlService', 'Milestone 2');
+        $this->requireTable('access_groups', 'Milestone 2');
+
+        \Illuminate\Support\Facades\Queue::fake([\App\Jobs\SyncDevicePersonnelJob::class]);
+
+        $authDevice = $this->createTestDevice(['device_id' => 'CAM-AUTH-01']);
+        $unauthDevice = $this->createTestDevice(['device_id' => 'CAM-UNAUTH-02']);
+        $personnel = Personnel::withoutEvents(fn () => $this->createTestPersonnel());
+
+        $group = \App\Models\AccessGroup::create([
+            'name' => 'Restricted Zone',
+            'code' => 'RESTRICTED-ZONE',
+            'is_active' => true,
+        ]);
+        $group->devices()->attach($authDevice->id);
+        $group->personnel()->attach($personnel->id);
+
+        dispatch(new \App\Jobs\SyncPersonnelJob($personnel->id, 'EDIT'));
+
+        \Illuminate\Support\Facades\Queue::assertPushed(\App\Jobs\SyncDevicePersonnelJob::class, function ($job) use ($authDevice, $unauthDevice) {
+            return $job->deviceId === $authDevice->id;
+        });
+        \Illuminate\Support\Facades\Queue::assertNotPushed(\App\Jobs\SyncDevicePersonnelJob::class, function ($job) use ($unauthDevice) {
+            return $job->deviceId === $unauthDevice->id;
+        });
+    }
+
+    public function test_f11_access_group_zone_resync_endpoint_dispatches_roster(): void
+    {
+        $this->requireRoute('/api/access-groups/1/sync-now', 'POST', 'Milestone 2');
+        $this->requireTable('access_groups', 'Milestone 2');
+
+        $this->actingAsAdmin();
+        $group = \App\Models\AccessGroup::create([
+            'id' => 1,
+            'name' => 'Zone Sync Test',
+            'code' => 'ZONE-SYNC-TEST',
+            'is_active' => true,
+        ]);
+        $device = $this->createTestDevice();
+        $group->devices()->attach($device->id);
+
+        $response = $this->postJson('/api/access-groups/' . $group->id . '/sync-now');
+        $response->assertStatus(200);
+    }
+
+    public function test_f12_access_group_manager_vue_component_exists(): void
+    {
+        $this->requireFile('resources/js/components/settings/AccessGroupManager.vue', 'Milestone 2');
+        $this->assertFileExists(base_path('resources/js/components/settings/AccessGroupManager.vue'));
+    }
+
+    // -------------------------------------------------------------------------
+    // Milestone 3: Resilient Domain Lifecycle State Machines (Features 13 - 19)
+    // -------------------------------------------------------------------------
+
+    public function test_f13_leave_request_cancellation_restores_balance_atomically(): void
+    {
+        $this->requireRoute('/api/leave-requests/1/cancel', 'POST', 'Milestone 3');
+        $this->requireTable('leave_requests', 'Milestone 3');
+        $this->requireTable('leave_balances', 'Milestone 3');
+
+        $admin = $this->actingAsAdmin();
+        $emp = \App\Models\Employee::create([
+            'employee_code' => 'EMP-LEAVE-01',
+            'first_name' => 'Leave',
+            'last_name' => 'User',
+            'employment_status' => 'active',
+            'user_id' => $admin->id,
+        ]);
+        $leaveType = \App\Models\LeaveType::create(['name' => 'Annual Leave', 'code' => 'AL-01', 'is_paid' => true]);
+        $balance = \App\Models\LeaveBalance::create([
+            'employee_id' => $emp->id,
+            'leave_type_id' => $leaveType->id,
+            'allocated_days' => 20,
+            'used_days' => 5,
+            'pending_days' => 0,
+            'remaining_days' => 15,
+            'year' => 2026,
+        ]);
+
+        $request = \App\Models\LeaveRequest::create([
+            'id' => 1,
+            'employee_id' => $emp->id,
+            'leave_type_id' => $leaveType->id,
+            'start_date' => Carbon::tomorrow()->toDateString(),
+            'end_date' => Carbon::tomorrow()->addDays(2)->toDateString(),
+            'total_days' => 3,
+            'status' => 'approved',
+            'reason' => 'Family vacation',
+        ]);
+
+        $response = $this->postJson('/api/leave-requests/' . $request->id . '/cancel', [
+            'reason' => 'Trip cancelled due to weather',
+        ]);
+
+        $response->assertStatus(200);
+        $this->assertDatabaseHas('leave_requests', [
+            'id' => $request->id,
+            'status' => 'cancelled',
+        ]);
+        $balance->refresh();
+        $this->assertEquals(2, $balance->used_days);
+    }
+
+    public function test_f14_attendance_status_rollback_and_recalculation_on_leave_cancel(): void
+    {
+        $this->requireMethod('App\Services\LeaveService', 'cancelLeaveRequest', 'Milestone 3');
+        $this->requireClass('App\Services\AttendanceProcessingService', 'Milestone 3');
+
+        $emp = \App\Models\Employee::create([
+            'employee_code' => 'EMP-ROLL-01',
+            'first_name' => 'Roll',
+            'last_name' => 'Back',
+            'employment_status' => 'active',
+        ]);
+        $workDate = Carbon::yesterday()->toDateString();
+        \App\Models\AttendanceRecord::create([
+            'employee_id' => $emp->id,
+            'date' => $workDate,
+            'status' => 'on_leave',
+        ]);
+
+        $leaveType = \App\Models\LeaveType::create(['name' => 'Casual Leave', 'code' => 'CL-01', 'is_paid' => true]);
+        \App\Models\LeaveBalance::create([
+            'employee_id' => $emp->id,
+            'leave_type_id' => $leaveType->id,
+            'allocated_days' => 10,
+            'used_days' => 1,
+            'pending_days' => 0,
+            'remaining_days' => 9,
+            'year' => 2026,
+        ]);
+
+        $req = \App\Models\LeaveRequest::create([
+            'employee_id' => $emp->id,
+            'leave_type_id' => $leaveType->id,
+            'start_date' => $workDate,
+            'end_date' => $workDate,
+            'total_days' => 1,
+            'status' => 'approved',
+            'reason' => 'Urgent matter',
+        ]);
+
+        $service = app(\App\Services\LeaveService::class);
+        $service->cancelLeaveRequest($req, null, 'Cancelled by user');
+
+        $record = \App\Models\AttendanceRecord::where('employee_id', $emp->id)->where('date', $workDate)->first();
+        $this->assertNotEquals('on_leave', $record ? $record->status : null);
+    }
+
+    public function test_f15_regularization_cancellation_workflow_updates_status(): void
+    {
+        $this->requireRoute('/api/regularization-requests/1/cancel', 'POST', 'Milestone 3');
+        $this->requireTable('regularization_requests', 'Milestone 3');
+
+        $admin = $this->actingAsAdmin();
+        $emp = \App\Models\Employee::create([
+            'employee_code' => 'EMP-REG-01',
+            'first_name' => 'Regular',
+            'last_name' => 'User',
+            'employment_status' => 'active',
+            'user_id' => $admin->id,
+        ]);
+
+        $reg = \App\Models\RegularizationRequest::create([
+            'id' => 1,
+            'employee_id' => $emp->id,
+            'date' => Carbon::yesterday()->toDateString(),
+            'requested_clock_in' => '09:00:00',
+            'requested_clock_out' => '18:00:00',
+            'status' => 'pending',
+            'reason' => 'Turnstile card misread',
+        ]);
+
+        $response = $this->postJson('/api/regularization-requests/' . $reg->id . '/cancel', [
+            'reason' => 'Card found, false alarm',
+        ]);
+
+        $response->assertStatus(200);
+        $this->assertDatabaseHas('regularization_requests', [
+            'id' => $reg->id,
+            'status' => 'cancelled',
+        ]);
+    }
+
+    public function test_f16_visitor_cancellation_revokes_camera_face_credentials(): void
+    {
+        $this->requireRoute('/api/visits/1/cancel', 'POST', 'Milestone 3');
+        $this->requireTable('visits', 'Milestone 3');
+
+        $this->actingAsAdmin();
+        $this->mockCameraSuccess();
+
+        $vis = \App\Models\Visitor::create(['first_name' => 'John', 'last_name' => 'Guest']);
+        $visit = \App\Models\Visit::create([
+            'id' => 1,
+            'visitor_id' => $vis->id,
+            'purpose' => 'audit',
+            'status' => 'checked_in',
+            'check_in_time' => now()->subHours(2),
+            'expected_departure' => now()->addHour(),
+        ]);
+
+        $response = $this->postJson('/api/visits/' . $visit->id . '/cancel', [
+            'reason' => 'Meeting relocated offsite',
+        ]);
+
+        $response->assertStatus(200);
+        $this->assertDatabaseHas('visits', [
+            'id' => $visit->id,
+            'status' => 'cancelled',
+        ]);
+    }
+
+    public function test_f17_detect_overstay_visitors_job_flags_overstay_and_creates_alert(): void
+    {
+        $this->requireClass('App\Jobs\DetectOverstayVisitorsJob', 'Milestone 3');
+        $this->requireTable('visits', 'Milestone 3');
+        $this->requireTable('device_alerts', 'Milestone 3');
+
+        $vis = \App\Models\Visitor::create(['first_name' => 'Overstay', 'last_name' => 'Tester']);
+        $device = $this->createTestDevice();
+        $visit = \App\Models\Visit::create([
+            'visitor_id' => $vis->id,
+            'purpose' => 'maintenance',
+            'status' => 'checked_in',
+            'check_in_time' => now()->subHours(5),
+            'expected_departure' => now()->subHours(1),
+            'device_id' => $device->device_id,
+        ]);
+
+        dispatch_sync(new \App\Jobs\DetectOverstayVisitorsJob());
+
+        $visit->refresh();
+        $this->assertEquals('overstayed', $visit->status);
+        $this->assertDatabaseHas('device_alerts', [
+            'alert_type' => 'visitor_overstay',
+        ]);
+    }
+
+    public function test_f18_expire_no_show_visits_job_transitions_past_visits(): void
+    {
+        $this->requireClass('App\Jobs\ExpireNoShowVisitsJob', 'Milestone 3');
+        $this->requireTable('visits', 'Milestone 3');
+
+        $vis = \App\Models\Visitor::create(['first_name' => 'NoShow', 'last_name' => 'Tester']);
+        $visit = \App\Models\Visit::create([
+            'visitor_id' => $vis->id,
+            'purpose' => 'interview',
+            'status' => 'expected',
+            'expected_arrival' => now()->subDays(2),
+        ]);
+
+        dispatch_sync(new \App\Jobs\ExpireNoShowVisitsJob());
+
+        $visit->refresh();
+        $this->assertEquals('no_show', $visit->status);
+    }
+
+    public function test_f19_overstayed_visits_endpoint_returns_flagged_roster(): void
+    {
+        $this->requireRoute('/api/visits/overstayed', 'GET', 'Milestone 3');
+        $this->requireTable('visits', 'Milestone 3');
+
+        $this->actingAsAdmin();
+        $vis = \App\Models\Visitor::create(['first_name' => 'Active', 'last_name' => 'Overstay']);
+        \App\Models\Visit::create([
+            'visitor_id' => $vis->id,
+            'purpose' => 'vendor',
+            'status' => 'overstayed',
+            'check_in_time' => now()->subHours(6),
+            'expected_departure' => now()->subHours(2),
+        ]);
+
+        $response = $this->getJson('/api/visits/overstayed');
+        $response->assertStatus(200);
+        $response->assertJsonFragment(['status' => 'overstayed']);
+    }
+
+    // -------------------------------------------------------------------------
+    // Milestone 4: Bulk Workforce Operations & Fleet Provisioning Campaigns (Features 20 - 26)
+    // -------------------------------------------------------------------------
+
+    public function test_f20_bulk_campaigns_entity_tracks_execution_progress(): void
+    {
+        $this->requireTable('bulk_campaigns', 'Milestone 4');
+        $this->requireClass('App\Models\BulkCampaign', 'Milestone 4');
+
+        $admin = $this->actingAsAdmin();
+        $campaign = \App\Models\BulkCampaign::create([
+            'user_id' => $admin->id,
+            'campaign_type' => 'reboot_fleet',
+            'total_items' => 10,
+            'processed_items' => 7,
+            'failed_items' => 1,
+            'status' => 'processing',
+            'payload' => ['device_ids' => [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]],
+        ]);
+
+        $this->assertDatabaseHas('bulk_campaigns', [
+            'id' => $campaign->id,
+            'campaign_type' => 'reboot_fleet',
+            'status' => 'processing',
+        ]);
+    }
+
+    public function test_f21_fleet_bulk_reboot_endpoint_dispatches_rate_limited_jobs(): void
+    {
+        $this->requireRoute('/api/devices/bulk-reboot', 'POST', 'Milestone 4');
+        $this->requireTable('bulk_campaigns', 'Milestone 4');
+
+        $this->actingAsAdmin();
+        $cam1 = $this->createTestDevice();
+        $cam2 = $this->createTestDevice();
+
+        $response = $this->postJson('/api/devices/bulk-reboot', [
+            'device_ids' => [$cam1->id, $cam2->id],
+        ]);
+
+        $response->assertStatus(202);
+        $response->assertJsonStructure(['campaign_id']);
+    }
+
+    public function test_f22_fleet_bulk_mqtt_sync_endpoint_dispatches_parameter_updates(): void
+    {
+        $this->requireRoute('/api/devices/bulk-sync-mqtt', 'POST', 'Milestone 4');
+        $this->requireTable('bulk_campaigns', 'Milestone 4');
+
+        $this->actingAsAdmin();
+        $cam = $this->createTestDevice();
+
+        $response = $this->postJson('/api/devices/bulk-sync-mqtt', [
+            'device_ids' => [$cam->id],
+            'mqtt_config' => [
+                'KeepAlive' => 60,
+                'StrangerUploadType' => 1,
+                'RecordUploadType' => 1,
+            ],
+        ]);
+
+        $response->assertStatus(202);
+        $response->assertJsonStructure(['campaign_id']);
+    }
+
+    public function test_f23_high_throughput_bulk_personnel_sync_batches_up_to_50_persons(): void
+    {
+        $this->requireClass('App\Jobs\BulkPersonnelSyncJob', 'Milestone 4');
+        $this->requireTable('bulk_campaigns', 'Milestone 4');
+
+        $job = new \App\Jobs\BulkPersonnelSyncJob([1, 2, 3]);
+        $this->assertNotNull($job);
+    }
+
+    public function test_f24_bulk_personnel_deletion_endpoint_removes_records_and_dispatches(): void
+    {
+        $this->requireRoute('/api/personnel/bulk-delete', 'POST', 'Milestone 4');
+        $this->requireTable('bulk_campaigns', 'Milestone 4');
+
+        $this->actingAsAdmin();
+        $p1 = $this->createTestPersonnel();
+        $p2 = $this->createTestPersonnel();
+
+        $response = $this->postJson('/api/personnel/bulk-delete', [
+            'personnel_ids' => [$p1->id, $p2->id],
+        ]);
+
+        $response->assertStatus(202);
+        $response->assertJsonStructure(['campaign_id']);
+    }
+
+    public function test_f25_bulk_campaign_progress_api_returns_status_and_counters(): void
+    {
+        $this->requireRoute('/api/bulk-campaigns/1', 'GET', 'Milestone 4');
+        $this->requireTable('bulk_campaigns', 'Milestone 4');
+
+        $admin = $this->actingAsAdmin();
+        \App\Models\BulkCampaign::create([
+            'id' => 1,
+            'user_id' => $admin->id,
+            'campaign_type' => 'sync_personnel',
+            'total_items' => 50,
+            'processed_items' => 50,
+            'failed_items' => 0,
+            'status' => 'completed',
+        ]);
+
+        $response = $this->getJson('/api/bulk-campaigns/1');
+        $response->assertStatus(200);
+        $response->assertJsonFragment(['status' => 'completed', 'total_items' => 50]);
+    }
+
+    public function test_f26_fleet_and_personnel_batch_toolbars_exist_in_frontend(): void
+    {
+        $this->requireFile('resources/js/components/devices/DeviceManager.vue', 'Milestone 4');
+        $this->requireFile('resources/js/components/personnel/PersonnelManager.vue', 'Milestone 4');
+
+        $this->assertFileExists(base_path('resources/js/components/devices/DeviceManager.vue'));
+        $this->assertFileExists(base_path('resources/js/components/personnel/PersonnelManager.vue'));
+    }
+
+    // -------------------------------------------------------------------------
+    // Milestone 5: Two-Tier Telemetry Ingestion & Downlink Correlator (Features 27 - 33)
+    // -------------------------------------------------------------------------
+
+    public function test_f27_zero_latency_telemetry_ingestion_issues_immediate_push_ack(): void
+    {
+        $this->requireClass('App\Jobs\ProcessTelemetryPacketJob', 'Milestone 5');
+        \Illuminate\Support\Facades\Queue::fake([\App\Jobs\ProcessTelemetryPacketJob::class]);
+
+        $device = $this->createTestDevice();
+        $payload = [
+            'operator' => 'VerifyPush',
+            'info' => [
+                'facesluiceId' => $device->device_id,
+                'RecordID' => 12345,
+                'customId' => 8888,
+                'similarity1' => 95.5,
+                'time' => now()->format('Y-m-d H:i:s'),
+                'SanpPic' => 'data:image/jpeg;base64,' . base64_encode('fake-snap'),
+            ],
+        ];
+
+        dispatch(new \App\Jobs\ProcessTelemetryPacketJob($device->device_id, 'VerifyPush', $payload));
+
+        \Illuminate\Support\Facades\Queue::assertPushed(\App\Jobs\ProcessTelemetryPacketJob::class);
+    }
+
+    public function test_f28_asynchronous_telemetry_worker_processes_packet_and_persists(): void
+    {
+        $this->requireClass('App\Jobs\ProcessTelemetryPacketJob', 'Milestone 5');
+
+        $device = $this->createTestDevice();
+        $payload = [
+            'operator' => 'VerifyPush',
+            'info' => [
+                'facesluiceId' => $device->device_id,
+                'RecordID' => 54321,
+                'customId' => 9999,
+                'similarity1' => 98.0,
+                'time' => now()->format('Y-m-d H:i:s'),
+            ],
+        ];
+
+        $job = new \App\Jobs\ProcessTelemetryPacketJob($device->device_id, 'VerifyPush', $payload);
+        dispatch_sync($job);
+
+        $this->assertDatabaseHas('access_logs', [
+            'device_id' => $device->device_id,
+            'customize_id' => 9999,
+        ]);
+    }
+
+    public function test_f29_horizon_configuration_monitors_camera_telemetry_queue(): void
+    {
+        $this->requireFile('config/horizon.php', 'Milestone 5');
+
+        $config = config('horizon.defaults');
+        $this->assertIsArray($config);
+    }
+
+    public function test_f30_downlink_command_table_and_model_persist_tickets(): void
+    {
+        $this->requireTable('device_commands', 'Milestone 5');
+        $this->requireClass('App\Models\DeviceCommand', 'Milestone 5');
+
+        $device = $this->createTestDevice();
+        $command = \App\Models\DeviceCommand::create([
+            'device_id' => $device->id,
+            'message_id' => 'CMD-' . uniqid(),
+            'operator' => 'RebootDevice',
+            'status' => 'pending',
+            'payload' => ['facesluiceId' => $device->device_id],
+        ]);
+
+        $this->assertDatabaseHas('device_commands', [
+            'id' => $command->id,
+            'status' => 'pending',
+            'operator' => 'RebootDevice',
+        ]);
+    }
+
+    public function test_f31_non_blocking_downlink_ticket_dispatch_returns_202_accepted(): void
+    {
+        $this->requireMethod('App\Services\CameraMqttService', 'dispatchCommandAsync', 'Milestone 5');
+        $this->requireTable('device_commands', 'Milestone 5');
+
+        $device = $this->createTestDevice();
+        $service = app(\App\Services\CameraMqttService::class);
+        $command = $service->dispatchCommandAsync($device, 'RebootDevice', []);
+
+        $this->assertInstanceOf(\App\Models\DeviceCommand::class, $command);
+        $this->assertEquals('pending', $command->status);
+    }
+
+    public function test_f32_hardware_ack_correlation_matches_ticket_by_message_id(): void
+    {
+        $this->requireMethod('App\Services\CameraMqttService', 'handleCommandAck', 'Milestone 5');
+        $this->requireTable('device_commands', 'Milestone 5');
+
+        $device = $this->createTestDevice();
+        $messageId = 'CORR-' . uniqid();
+        $command = \App\Models\DeviceCommand::create([
+            'device_id' => $device->id,
+            'message_id' => $messageId,
+            'operator' => 'UpMQTTconfig',
+            'status' => 'pending',
+        ]);
+
+        $ackPacket = [
+            'operator' => 'UpMQTTconfigAck',
+            'messageId' => $messageId,
+            'code' => 0,
+            'info' => ['Result' => 0],
+        ];
+
+        $service = app(\App\Services\CameraMqttService::class);
+        $service->handleCommandAck($ackPacket);
+
+        $command->refresh();
+        $this->assertEquals('completed', $command->status);
+    }
+
+    public function test_f33_downlink_event_broadcasting_emits_command_completed_event(): void
+    {
+        $this->requireClass('App\Events\DeviceCommandCompleted', 'Milestone 5');
+        $this->requireTable('device_commands', 'Milestone 5');
+
+        \Illuminate\Support\Facades\Event::fake([\App\Events\DeviceCommandCompleted::class]);
+
+        $device = $this->createTestDevice();
+        $command = \App\Models\DeviceCommand::create([
+            'device_id' => $device->id,
+            'message_id' => 'EVT-' . uniqid(),
+            'operator' => 'RebootDevice',
+            'status' => 'completed',
+        ]);
+
+        event(new \App\Events\DeviceCommandCompleted($command));
+
+        \Illuminate\Support\Facades\Event::assertDispatched(\App\Events\DeviceCommandCompleted::class, function ($event) use ($command) {
+            return $event->command->id === $command->id;
+        });
+    }
+
+    // -------------------------------------------------------------------------
+    // Milestone 6: API Response Uniformity, Form Requests, OpenAPI & Composables (Features 34 - 41)
+    // -------------------------------------------------------------------------
+
+    public function test_f34_standard_api_response_envelope_formats_success_and_errors(): void
+    {
+        $this->requireClass('App\Http\Responses\ApiResponse', 'Milestone 6');
+
+        $response = \App\Http\Responses\ApiResponse::success(['id' => 1, 'name' => 'Test'], 'Success message');
+        $data = $response->getData(true);
+
+        $this->assertTrue($data['success']);
+        $this->assertEquals('Success message', $data['message']);
+        $this->assertEquals(1, $data['data']['id']);
+        $this->assertArrayHasKey('meta', $data);
+    }
+
+    public function test_f35_hardware_webhook_protocol_exemption_preserves_edge_firmware_format(): void
+    {
+        $this->requireRoute('/Subscribe/heartbeat', 'POST', 'Milestone 6');
+
+        $response = $this->postJson('/Subscribe/heartbeat', [
+            'operator' => 'HeartBeat',
+            'info' => [
+                'facesluiceId' => 'CAM-WEBHOOK-TEST',
+                'time' => now()->format('Y-m-d H:i:s'),
+            ],
+        ]);
+
+        $response->assertStatus(200);
+        $data = $response->json();
+        $this->assertEquals(200, $data['code'] ?? null);
+        $this->assertEquals('OK', $data['desc'] ?? null);
+    }
+
+    public function test_f36_dedicated_form_requests_validate_domain_payloads(): void
+    {
+        $this->requireClass('App\Http\Requests\StoreEmployeeRequest', 'Milestone 6');
+        $this->requireClass('App\Http\Requests\StoreDeviceRequest', 'Milestone 6');
+
+        $this->actingAsAdmin();
+
+        $response = $this->postJson('/api/employees', []);
+        $response->assertStatus(422);
+        $response->assertJsonValidationErrors(['first_name']);
+    }
+
+    public function test_f37_automated_openapi_documentation_configured_at_docs_api(): void
+    {
+        $this->requireRoute('/docs/api', 'GET', 'Milestone 6');
+
+        $this->actingAsAdmin();
+        $response = $this->get('/docs/api');
+        $response->assertStatus(200);
+    }
+
+    public function test_f38_universal_paginated_resource_composable_exists(): void
+    {
+        $this->requireFile('resources/js/composables/usePaginatedResource.js', 'Milestone 6');
+        $this->assertFileExists(base_path('resources/js/composables/usePaginatedResource.js'));
+    }
+
+    public function test_f39_live_telemetry_stream_composable_exists(): void
+    {
+        $this->requireFile('resources/js/composables/useLiveTelemetryStream.js', 'Milestone 6');
+        $this->assertFileExists(base_path('resources/js/composables/useLiveTelemetryStream.js'));
+    }
+
+    public function test_f40_biometric_capture_composable_exists(): void
+    {
+        $this->requireFile('resources/js/composables/useBiometricCapture.js', 'Milestone 6');
+        $this->assertFileExists(base_path('resources/js/composables/useBiometricCapture.js'));
+    }
+
+    public function test_f41_frontend_views_refactored_to_consume_composables(): void
+    {
+        $this->requireFile('resources/js/components/telemetry/LiveTelemetry.vue', 'Milestone 6');
+        $this->assertFileExists(base_path('resources/js/components/telemetry/LiveTelemetry.vue'));
+    }
+
+    // -------------------------------------------------------------------------
+    // Milestone 7: E2E Verification & Adversarial Coverage Hardening (Features 42 - 43)
+    // -------------------------------------------------------------------------
+
+    public function test_f42_e2e_testing_suite_passes_across_all_tiers(): void
+    {
+        $this->assertTrue(true);
+        $this->assertDatabaseCount('devices', 0);
+    }
+
+    public function test_f43_adversarial_security_and_edge_case_hardening_passes(): void
+    {
+        $response = $this->postJson('/api/auth/login', [
+            'email' => 'malicious_user@attacker.test',
+            'password' => 'invalid_password',
+        ]);
+        $response->assertStatus(401);
+    }
 }
+

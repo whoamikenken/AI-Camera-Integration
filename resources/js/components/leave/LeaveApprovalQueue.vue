@@ -8,6 +8,7 @@
                     <option value="pending">Pending Approval</option>
                     <option value="approved">Approved</option>
                     <option value="rejected">Rejected</option>
+                    <option value="cancelled">Cancelled</option>
                 </select>
 
                 <select aria-label="Filter by leave type" v-model="leaveStore.filters.leave_type_id" @change="leaveStore.fetchLeaveRequests(1)"
@@ -83,7 +84,18 @@
                                         </svg>
                                         <span v-else>✕</span> <span class="ml-1">Reject</span>
                                     </button>
+                                    <button :aria-label="`Cancel leave request for ${req.employee?.first_name || 'Employee'}`" @click="openCancelModal(req)" class="px-2.5 py-1 bg-slate-600 hover:bg-slate-700 text-white rounded-lg text-xs font-semibold transition-colors cursor-pointer shadow-xs inline-flex items-center">
+                                        <span>Cancel</span>
+                                    </button>
                                 </template>
+                                <template v-else-if="req.status === 'approved'">
+                                    <button :aria-label="`Cancel approved leave for ${req.employee?.first_name || 'Employee'}`" @click="openCancelModal(req)" class="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-semibold transition-colors cursor-pointer shadow-xs inline-flex items-center">
+                                        <span>Cancel Leave</span>
+                                    </button>
+                                </template>
+                                <span v-else-if="req.status === 'cancelled'" class="text-xs text-slate-400 italic">
+                                    Cancelled: {{ req.cancellation_reason || 'No reason' }}
+                                </span>
                                 <span v-else class="text-xs text-slate-400 font-medium">Resolved</span>
                             </td>
                         </tr>
@@ -93,11 +105,46 @@
         </div>
 
         <LeaveRequestForm :isOpen="showRequestModal" @close="showRequestModal = false" @saved="leaveStore.fetchLeaveRequests(1)" />
+
+        <!-- Cancellation Modal -->
+        <div v-if="showCancelModal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="cancel-leave-modal-title"
+            tabindex="-1"
+            class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4"
+            @keydown.escape="showCancelModal = false"
+            @click.self="showCancelModal = false">
+            <div class="bg-white rounded-2xl shadow-xl border border-slate-200 max-w-md w-full p-6 space-y-4">
+                <div class="flex items-center justify-between">
+                    <h3 id="cancel-leave-modal-title" class="text-base font-bold text-slate-900">Cancel Leave Request</h3>
+                    <button @click="showCancelModal = false" aria-label="Close dialog" class="text-slate-400 hover:text-slate-600 text-lg leading-none cursor-pointer">&times;</button>
+                </div>
+                <p class="text-xs text-slate-500">
+                    Are you sure you want to cancel this leave request for
+                    <span class="font-semibold text-slate-700">{{ selectedRequest?.employee?.first_name }} {{ selectedRequest?.employee?.last_name || '' }}</span>?
+                    Allocated balances will be restored and attendance status will be recalculated.
+                </p>
+                <div>
+                    <label for="cancel-reason" class="block text-xs font-medium text-slate-700 mb-1">Cancellation Reason</label>
+                    <textarea id="cancel-reason" ref="cancelReasonInput" v-model="cancelReason" rows="3" placeholder="Enter reason for cancellation..." class="w-full text-xs border border-slate-200 rounded-lg p-2.5 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"></textarea>
+                </div>
+                <div class="flex justify-end gap-2 pt-2">
+                    <button @click="showCancelModal = false" class="px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-100 rounded-lg font-medium transition-colors cursor-pointer">
+                        Dismiss
+                    </button>
+                    <button :disabled="cancelling" @click="handleConfirmCancel" class="px-3.5 py-1.5 text-xs bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white rounded-lg font-semibold transition-colors shadow-xs cursor-pointer">
+                        <span v-if="cancelling">Cancelling...</span>
+                        <span v-else>Confirm Cancel</span>
+                    </button>
+                </div>
+            </div>
+        </div>
     </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, nextTick } from 'vue';
 import { useLeaveStore } from '../../stores/leaveStore';
 import LeaveRequestForm from './LeaveRequestForm.vue';
 
@@ -105,6 +152,12 @@ const leaveStore = useLeaveStore();
 const showRequestModal = ref(false);
 const processingRequest = ref(null);
 const processingAction = ref(null);
+
+const showCancelModal = ref(false);
+const selectedRequest = ref(null);
+const cancelReason = ref('');
+const cancelling = ref(false);
+const cancelReasonInput = ref(null);
 
 onMounted(() => {
     leaveStore.fetchLeaveTypes();
@@ -116,6 +169,7 @@ const getStatusBadgeClass = (status) => {
         case 'approved': return 'bg-emerald-50 border border-emerald-200 text-emerald-700';
         case 'rejected': return 'bg-rose-50 border border-rose-200 text-rose-700';
         case 'pending': return 'bg-amber-50 border border-amber-200 text-amber-700';
+        case 'cancelled': return 'bg-slate-100 border border-slate-300 text-slate-600 line-through';
         default: return 'bg-slate-100 border border-slate-200 text-slate-600';
     }
 };
@@ -139,6 +193,28 @@ const handleReject = async (id) => {
     } finally {
         processingRequest.value = null;
         processingAction.value = null;
+    }
+};
+
+const openCancelModal = (req) => {
+    selectedRequest.value = req;
+    cancelReason.value = '';
+    showCancelModal.value = true;
+    nextTick(() => {
+        cancelReasonInput.value?.focus();
+    });
+};
+
+const handleConfirmCancel = async () => {
+    if (!selectedRequest.value) return;
+    cancelling.value = true;
+    try {
+        await leaveStore.cancelLeaveRequest(selectedRequest.value.id, cancelReason.value);
+        showCancelModal.value = false;
+        selectedRequest.value = null;
+        cancelReason.value = '';
+    } finally {
+        cancelling.value = false;
     }
 };
 </script>

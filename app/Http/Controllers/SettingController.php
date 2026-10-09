@@ -7,6 +7,7 @@ use App\Models\Setting;
 use App\Services\SettingService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 
 class SettingController extends Controller
 {
@@ -29,14 +30,18 @@ class SettingController extends Controller
      */
     public function publicSettings(): JsonResponse
     {
-        $publicSettings = Setting::whereNull('organization_id')
-            ->where('is_public', true)
-            ->get();
+        $data = Cache::remember('settings.public', 3600, function () {
+            $publicSettings = Setting::whereNull('organization_id')
+                ->where('is_public', true)
+                ->get();
 
-        $data = [];
-        foreach ($publicSettings as $setting) {
-            $data[$setting->key] = $setting->casted_value;
-        }
+            $data = [];
+            foreach ($publicSettings as $setting) {
+                $data[$setting->key] = $setting->casted_value;
+            }
+
+            return $data;
+        });
 
         return response()->json([
             'success' => true,
@@ -80,6 +85,8 @@ class SettingController extends Controller
                 }
             }
         }
+
+        Cache::forget('settings.public');
 
         return response()->json([
             'success' => true,

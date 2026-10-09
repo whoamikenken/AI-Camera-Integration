@@ -81,8 +81,8 @@ echo -e "${CYAN}→ Starting MQTT Ingestion Daemon (php artisan mqtt:listen)...$
 php artisan mqtt:listen > /dev/null 2>&1 &
 MQTT_PID=$!
 
-# C. Public bore TCP Tunnel for MQTT (enabled by default unless ENABLE_INSECURE_MQTT_TUNNEL=false)
-if [ "${ENABLE_INSECURE_MQTT_TUNNEL:-true}" != "false" ]; then
+# C. Public bore TCP Tunnel for MQTT (disabled by default unless ENABLE_INSECURE_MQTT_TUNNEL=true)
+if [ "${ENABLE_INSECURE_MQTT_TUNNEL:-false}" = "true" ]; then
     echo -e "${RED}⚠ WARNING: Exposing unencrypted MQTT to public bore.pub tunnel...${NC}"
     ./bore local 1883 --to bore.pub --port 35803 > /tmp/bore.log 2>&1 &
     BORE_PID=$!

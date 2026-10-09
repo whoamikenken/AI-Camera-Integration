@@ -2,6 +2,11 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\CancelVisitRequest;
+use App\Http\Requests\CheckInVisitRequest;
+use App\Http\Requests\CreateVisitRequest;
+use App\Http\Requests\StoreVisitorRequest;
+use App\Http\Requests\UpdateVisitorRequest;
 use App\Models\Employee;
 use App\Models\Visit;
 use App\Models\Visitor;
@@ -9,6 +14,7 @@ use App\Services\VisitorSyncService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
 class VisitorController extends Controller
@@ -44,21 +50,9 @@ class VisitorController extends Controller
         return response()->json($query->orderBy('first_name')->paginate($perPage));
     }
 
-    public function store(Request $request): JsonResponse
+    public function store(StoreVisitorRequest $request): JsonResponse
     {
-        $validated = $request->validate([
-            'organization_id' => 'nullable|exists:organizations,id',
-            'first_name' => 'required|string|max:64',
-            'last_name' => 'nullable|string|max:64',
-            'email' => 'nullable|email|max:128',
-            'phone' => 'nullable|string|max:32',
-            'company' => 'nullable|string|max:128',
-            'id_type' => 'nullable|string|max:32',
-            'id_number' => 'nullable|string|max:64',
-            'photo_path' => 'nullable|string|max:255',
-            'is_blocked' => 'nullable|boolean',
-            'block_reason' => 'nullable|string|max:500',
-        ]);
+        $validated = $request->validated();
 
         $visitor = Visitor::create($validated);
 
@@ -75,23 +69,11 @@ class VisitorController extends Controller
         return response()->json(['data' => $visitor]);
     }
 
-    public function update(Request $request, int $id): JsonResponse
+    public function update(UpdateVisitorRequest $request, int $id): JsonResponse
     {
         $visitor = Visitor::findOrFail($id);
 
-        $validated = $request->validate([
-            'organization_id' => 'nullable|exists:organizations,id',
-            'first_name' => 'sometimes|required|string|max:64',
-            'last_name' => 'nullable|string|max:64',
-            'email' => 'nullable|email|max:128',
-            'phone' => 'nullable|string|max:32',
-            'company' => 'nullable|string|max:128',
-            'id_type' => 'nullable|string|max:32',
-            'id_number' => 'nullable|string|max:64',
-            'photo_path' => 'nullable|string|max:255',
-            'is_blocked' => 'nullable|boolean',
-            'block_reason' => 'nullable|string|max:500',
-        ]);
+        $validated = $request->validated();
 
         $visitor->update($validated);
 
@@ -139,22 +121,122 @@ class VisitorController extends Controller
         }
 
         if ($request->filled('date')) {
-            $query->whereDate('expected_arrival', $request->query('date'));
+            try {
+                $date = Carbon::parse($request->query('date'));
+                $startOfDay = $date->copy()->startOfDay();
+                $endOfDay = $date->copy()->endOfDay();
+                $query->whereBetween('expected_arrival', [$startOfDay, $endOfDay]);
+            } catch (\Throwable) {
+                $query->whereRaw('1 = 0');
+            }
         }
 
         $perPage = (int) $request->query('per_page', 20);
-        return response()->json($query->orderBy('expected_arrival', 'desc')->paginate($perPage));
+        $paginated = $query->orderBy('expected_arrival', 'desc')->paginate($perPage);
+
+        $stats = $this->calculateVisitorStats($request);
+        $response = $paginated->toArray();
+        $response['stats'] = $stats;
+        $response['meta'] = [
+            'stats' => $stats,
+        ];
+
+        return response()->json($response);
     }
 
-    public function preRegister(Request $request): JsonResponse
+    /**
+     * Get facility-wide aggregate visitor statistics.
+     */
+    public function stats(Request $request): JsonResponse
     {
-        $validated = $request->validate([
-            'visitor_id' => 'required',
-            'host_employee_id' => 'nullable',
-            'purpose' => 'nullable|string|max:64',
-            'purpose_detail' => 'nullable|string|max:500',
-            'expected_arrival' => 'nullable|date',
+        $stats = $this->calculateVisitorStats($request);
+
+        return response()->json([
+            'data' => $stats,
+            'stats' => $stats,
+            'meta' => [
+                'stats' => $stats,
+            ],
         ]);
+    }
+
+    /**
+     * Calculate facility-wide visitor aggregate statistics.
+     */
+    protected function calculateVisitorStats(Request $request): array
+    {
+        $today = Carbon::today();
+        $isDateFiltered = $request->filled('date');
+
+        if ($isDateFiltered) {
+            try {
+                $targetDate = Carbon::parse($request->query('date'));
+                $startOfDay = $targetDate->copy()->startOfDay();
+                $endOfDay = $targetDate->copy()->endOfDay();
+            } catch (\Throwable) {
+                return [
+                    'expected_today' => 0,
+                    'checked_in' => 0,
+                    'checked_out' => 0,
+                    'overdue' => 0,
+                    'no_show' => 0,
+                    'total' => 0,
+                ];
+            }
+        } else {
+            $startOfDay = $today->copy()->startOfDay();
+            $endOfDay = $today->copy()->endOfDay();
+        }
+
+        $now = Carbon::now();
+
+        $expectedCount = Visit::where('status', 'expected')
+            ->whereBetween('expected_arrival', [$startOfDay, $endOfDay])
+            ->count();
+
+        $checkedInCount = Visit::where('status', 'checked_in')->count();
+
+        $checkedOutCount = Visit::where('status', 'checked_out')
+            ->where(function ($q) use ($startOfDay, $endOfDay) {
+                $q->whereBetween('check_out_time', [$startOfDay, $endOfDay])
+                  ->orWhere(function ($sub) use ($startOfDay, $endOfDay) {
+                      $sub->whereNull('check_out_time')
+                          ->whereBetween('updated_at', [$startOfDay, $endOfDay]);
+                  });
+            })
+            ->count();
+
+        $overdueCount = Visit::where(function ($q) use ($now) {
+            $q->where('status', 'overstayed')
+              ->orWhere(function ($sub) use ($now) {
+                  $sub->where('status', 'checked_in')
+                      ->whereNotNull('expected_departure')
+                      ->where('expected_departure', '<', $now);
+              });
+        })->count();
+
+        $noShowCount = Visit::where('status', 'no_show')
+            ->where(function ($q) use ($startOfDay, $endOfDay) {
+                $q->whereBetween('expected_arrival', [$startOfDay, $endOfDay])
+                  ->orWhereBetween('updated_at', [$startOfDay, $endOfDay]);
+            })
+            ->count();
+
+        $totalCount = Visit::whereBetween('expected_arrival', [$startOfDay, $endOfDay])->count();
+
+        return [
+            'expected_today' => $expectedCount,
+            'checked_in' => $checkedInCount,
+            'checked_out' => $checkedOutCount,
+            'overdue' => $overdueCount,
+            'no_show' => $noShowCount,
+            'total' => $totalCount,
+        ];
+    }
+
+    public function preRegister(CreateVisitRequest $request): JsonResponse
+    {
+        $validated = $request->validated();
 
         $visitor = Visitor::find($validated['visitor_id']);
         if (!$visitor) {
@@ -190,14 +272,11 @@ class VisitorController extends Controller
         ], 201);
     }
 
-    public function checkIn(Request $request, int $id): JsonResponse
+    public function checkIn(CheckInVisitRequest $request, int $id): JsonResponse
     {
         $visit = Visit::findOrFail($id);
 
-        $validated = $request->validate([
-            'badge_number' => 'nullable|string|max:64',
-            'nda_signed' => 'nullable|boolean',
-        ]);
+        $validated = $request->validated();
 
         try {
             $checkedIn = $this->visitorSyncService->checkIn($visit, $validated);
@@ -232,5 +311,59 @@ class VisitorController extends Controller
             'message' => 'Visitor checked out successfully. Biometric access revoked.',
             'data' => $checkedOut,
         ]);
+    }
+
+    public function showVisit(int $id): JsonResponse
+    {
+        $visit = Visit::with(['visitor', 'host', 'personnel'])->findOrFail($id);
+        return response()->json(['data' => $visit]);
+    }
+
+    public function cancel(CancelVisitRequest $request, int $id): JsonResponse
+    {
+        $visit = Visit::findOrFail($id);
+
+        $validated = $request->validated();
+
+        try {
+            $rawReason = $validated['reason'] ?? $request->input('cancellation_reason');
+            $reason = !empty(trim((string) $rawReason)) ? trim((string) $rawReason) : 'Cancelled by user';
+            $cancelledVisit = $this->visitorSyncService->cancelVisit(
+                $visit,
+                $request->user(),
+                $reason
+            );
+
+            return response()->json([
+                'message' => 'Visit cancelled successfully. Biometric access revoked.',
+                'data' => $cancelledVisit,
+            ]);
+        } catch (ValidationException $e) {
+            return response()->json(['message' => $e->getMessage(), 'errors' => $e->errors()], 422);
+        } catch (HttpException $e) {
+            return response()->json(['message' => $e->getMessage()], $e->getStatusCode());
+        }
+    }
+
+    public function cancelVisit(CancelVisitRequest $request, int $id): JsonResponse
+    {
+        return $this->cancel($request, $id);
+    }
+
+    public function overstayed(Request $request): JsonResponse
+    {
+        $query = Visit::with(['visitor', 'host.department', 'personnel'])
+            ->where(function ($q) {
+                $q->where('status', 'overstayed')
+                  ->orWhere(function ($sub) {
+                      $sub->where('status', 'checked_in')
+                          ->whereNotNull('expected_departure')
+                          ->where('expected_departure', '<=', now()->subMinutes(15));
+                  });
+            })
+            ->orderBy('expected_departure', 'asc');
+
+        $perPage = (int) $request->query('per_page', 20);
+        return response()->json($query->paginate($perPage));
     }
 }

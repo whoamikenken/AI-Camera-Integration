@@ -142,4 +142,227 @@ class Tier3CrossFeatureTest extends E2ETestCase
         $service = app('App\Services\AttendanceProcessingService');
         $this->assertNotNull($service);
     }
+
+    // =========================================================================
+    // SECTION 2: Evolution Cross-Feature Combinations (Pairwise Coverage)
+    // =========================================================================
+
+    public function test_cross_access_control_scopes_personnel_synchronization_to_zone(): void
+    {
+        $this->requireClass('App\Services\AccessControlService', 'Milestone 2');
+        $this->requireTable('access_groups', 'Milestone 2');
+        \Illuminate\Support\Facades\Queue::fake([\App\Jobs\SyncDevicePersonnelJob::class]);
+
+        $zoneCam1 = $this->createTestDevice(['device_id' => 'CAM-ZONE-1']);
+        $zoneCam2 = $this->createTestDevice(['device_id' => 'CAM-ZONE-2']);
+        $otherCam = $this->createTestDevice(['device_id' => 'CAM-OTHER']);
+        $personnel = Personnel::withoutEvents(fn () => $this->createTestPersonnel());
+
+        $group = \App\Models\AccessGroup::create([
+            'name' => 'Zone Alpha',
+            'code' => 'ZONE-ALPHA',
+            'is_active' => true,
+        ]);
+        $group->devices()->attach([$zoneCam1->id, $zoneCam2->id]);
+        $group->personnel()->attach($personnel->id);
+
+        dispatch(new \App\Jobs\SyncPersonnelJob($personnel->id, 'ADD'));
+
+        \Illuminate\Support\Facades\Queue::assertPushed(\App\Jobs\SyncDevicePersonnelJob::class, function ($job) use ($zoneCam1) {
+            return $job->deviceId === $zoneCam1->id;
+        });
+        \Illuminate\Support\Facades\Queue::assertPushed(\App\Jobs\SyncDevicePersonnelJob::class, function ($job) use ($zoneCam2) {
+            return $job->deviceId === $zoneCam2->id;
+        });
+        \Illuminate\Support\Facades\Queue::assertNotPushed(\App\Jobs\SyncDevicePersonnelJob::class, function ($job) use ($otherCam) {
+            return $job->deviceId === $otherCam->id;
+        });
+    }
+
+    public function test_cross_leave_cancellation_triggers_attendance_recalculation_from_punches(): void
+    {
+        $this->requireMethod('App\Services\LeaveService', 'cancelLeaveRequest', 'Milestone 3');
+        $this->requireClass('App\Services\AttendanceProcessingService', 'Milestone 3');
+        $this->requireTable('attendance_punches', 'Milestone 3');
+        $this->requireTable('attendance_records', 'Milestone 3');
+
+        $emp = \App\Models\Employee::create([
+            'employee_code' => 'EMP-PAIR-01',
+            'first_name' => 'Pair',
+            'last_name' => 'Worker',
+            'employment_status' => 'active',
+        ]);
+        $device = $this->createTestDevice();
+        $workDate = Carbon::yesterday()->toDateString();
+
+        // 1. Employee punches captured on date
+        \App\Models\AttendancePunch::create([
+            'employee_id' => $emp->id,
+            'device_id' => $device->device_id,
+            'punch_time' => Carbon::parse($workDate)->setHour(9)->setMinute(0),
+            'direction' => 'in',
+            'verification_type' => 'face',
+            'source' => 'camera',
+        ]);
+        \App\Models\AttendancePunch::create([
+            'employee_id' => $emp->id,
+            'device_id' => $device->device_id,
+            'punch_time' => Carbon::parse($workDate)->setHour(18)->setMinute(0),
+            'direction' => 'out',
+            'verification_type' => 'face',
+            'source' => 'camera',
+        ]);
+
+        // 2. Previously marked on_leave
+        \App\Models\AttendanceRecord::create([
+            'employee_id' => $emp->id,
+            'date' => $workDate,
+            'status' => 'on_leave',
+        ]);
+
+        $leaveType = \App\Models\LeaveType::create(['name' => 'Sick', 'code' => 'SL-PAIR', 'is_paid' => true]);
+        \App\Models\LeaveBalance::create([
+            'employee_id' => $emp->id,
+            'leave_type_id' => $leaveType->id,
+            'allocated_days' => 10,
+            'used_days' => 1,
+            'pending_days' => 0,
+            'remaining_days' => 9,
+            'year' => 2026,
+        ]);
+
+        $req = \App\Models\LeaveRequest::create([
+            'employee_id' => $emp->id,
+            'leave_type_id' => $leaveType->id,
+            'start_date' => $workDate,
+            'end_date' => $workDate,
+            'total_days' => 1,
+            'status' => 'approved',
+            'reason' => 'Emergency leave',
+        ]);
+
+        // 3. Cancel leave
+        $leaveService = app(\App\Services\LeaveService::class);
+        $leaveService->cancelLeaveRequest($req, null, 'Employee reported to work');
+
+        // 4. Record must recalculate to present
+        $record = \App\Models\AttendanceRecord::where('employee_id', $emp->id)->where('date', $workDate)->first();
+        $this->assertEquals('present', $record->status);
+    }
+
+    public function test_cross_visitor_overstay_generates_device_alert_and_notifies_security(): void
+    {
+        $this->requireClass('App\Jobs\DetectOverstayVisitorsJob', 'Milestone 3');
+        $this->requireTable('visits', 'Milestone 3');
+        $this->requireTable('device_alerts', 'Milestone 3');
+
+        $device = $this->createTestDevice(['device_id' => 'CAM-SECURITY-GATE']);
+        $visitor = \App\Models\Visitor::create(['first_name' => 'Overstay', 'last_name' => 'Target']);
+        $visit = \App\Models\Visit::create([
+            'visitor_id' => $visitor->id,
+            'purpose' => 'contractor',
+            'status' => 'checked_in',
+            'check_in_time' => now()->subHours(4),
+            'expected_departure' => now()->subMinutes(30),
+            'device_id' => $device->device_id,
+        ]);
+
+        dispatch_sync(new \App\Jobs\DetectOverstayVisitorsJob());
+
+        $visit->refresh();
+        $this->assertEquals('overstayed', $visit->status);
+        $this->assertDatabaseHas('device_alerts', [
+            'device_id' => $device->device_id,
+            'alert_type' => 'visitor_overstay',
+        ]);
+    }
+
+    public function test_cross_bulk_fleet_campaign_correlates_individual_downlink_command_tickets(): void
+    {
+        $this->requireTable('bulk_campaigns', 'Milestone 4');
+        $this->requireTable('device_commands', 'Milestone 5');
+        $this->requireMethod('App\Services\CameraMqttService', 'handleCommandAck', 'Milestone 5');
+
+        $admin = $this->actingAsAdmin();
+        $cam = $this->createTestDevice();
+        $messageId = 'BULK-CMD-' . uniqid();
+
+        $campaign = \App\Models\BulkCampaign::create([
+            'user_id' => $admin->id,
+            'campaign_type' => 'reboot_fleet',
+            'total_items' => 1,
+            'processed_items' => 0,
+            'failed_items' => 0,
+            'status' => 'processing',
+        ]);
+
+        $cmd = \App\Models\DeviceCommand::create([
+            'device_id' => $cam->id,
+            'message_id' => $messageId,
+            'operator' => 'RebootDevice',
+            'status' => 'pending',
+        ]);
+
+        $ack = [
+            'operator' => 'RebootDeviceAck',
+            'messageId' => $messageId,
+            'code' => 0,
+        ];
+
+        $service = app(\App\Services\CameraMqttService::class);
+        $service->handleCommandAck($ack);
+
+        $cmd->refresh();
+        $this->assertEquals('completed', $cmd->status);
+    }
+
+    public function test_cross_visitor_cancellation_dispatches_hardware_face_deletion(): void
+    {
+        $this->requireRoute('/api/visits/1/cancel', 'POST', 'Milestone 3');
+        $this->requireTable('visits', 'Milestone 3');
+
+        $this->actingAsAdmin();
+        $this->mockCameraSuccess();
+
+        $vis = \App\Models\Visitor::create(['first_name' => 'Revoke', 'last_name' => 'Target']);
+        $visit = \App\Models\Visit::create([
+            'id' => 1,
+            'visitor_id' => $vis->id,
+            'purpose' => 'audit',
+            'status' => 'checked_in',
+            'check_in_time' => now()->subHour(),
+            'expected_departure' => now()->addHour(),
+        ]);
+
+        $response = $this->postJson('/api/visits/' . $visit->id . '/cancel', [
+            'reason' => 'Access terminated prematurely',
+        ]);
+
+        $response->assertStatus(200);
+        $visit->refresh();
+        $this->assertEquals('cancelled', $visit->status);
+    }
+
+    public function test_cross_access_group_zone_resync_pushes_all_members_to_all_group_devices(): void
+    {
+        $this->requireRoute('/api/access-groups/1/sync-now', 'POST', 'Milestone 2');
+        $this->requireTable('access_groups', 'Milestone 2');
+
+        $this->actingAsAdmin();
+        $cam = $this->createTestDevice();
+        $personnel = $this->createTestPersonnel();
+
+        $group = \App\Models\AccessGroup::create([
+            'id' => 1,
+            'name' => 'Resync Campus',
+            'code' => 'RESYNC-CAMPUS',
+            'is_active' => true,
+        ]);
+        $group->devices()->attach($cam->id);
+        $group->personnel()->attach($personnel->id);
+
+        $response = $this->postJson('/api/access-groups/' . $group->id . '/sync-now');
+        $response->assertStatus(200);
+    }
 }
+

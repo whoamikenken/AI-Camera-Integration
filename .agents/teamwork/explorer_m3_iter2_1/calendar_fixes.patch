@@ -1,0 +1,39 @@
+--- a/resources/js/components/attendance/EmployeeAttendanceCalendar.vue
++++ b/resources/js/components/attendance/EmployeeAttendanceCalendar.vue
+@@ -104,7 +104,7 @@
+                 <!-- Skeleton Day Cells Grid during Loading (CAL-03) -->
+                 <div v-if="loading" role="status" aria-label="Loading calendar days" class="space-y-1">
+                     <span class="sr-only">Loading attendance records...</span>
+-                    <div v-for="w in 5" :key="`skel-week-${w}`" role="row" class="grid grid-cols-7 gap-1">
++                    <div v-for="w in (calendarWeeks.length || 5)" :key="`skel-week-${w}`" role="row" class="grid grid-cols-7 gap-1">
+                         <div
+                             v-for="d in 7"
+                             :key="`skel-cell-${w}-${d}`"
+@@ -187,7 +187,7 @@
+ const emit = defineEmits(['close']);
+ 
+ const modalRef = ref(null);
+-const currentDate = ref(new Date());
++const currentDate = ref(new Date(new Date().getFullYear(), new Date().getMonth(), 1));
+ const monthRecords = ref([]);
+ const loading = ref(false);
+ 
+@@ -206,16 +206,12 @@
+ 
+ const prevMonth = () => {
+     if (loading.value) return;
+-    const d = new Date(currentDate.value);
+-    d.setMonth(d.getMonth() - 1);
+-    currentDate.value = d;
++    currentDate.value = new Date(currentDate.value.getFullYear(), currentDate.value.getMonth() - 1, 1);
+     fetchMonthData();
+ };
+ 
+ const nextMonth = () => {
+     if (loading.value) return;
+-    const d = new Date(currentDate.value);
+-    d.setMonth(d.getMonth() + 1);
+-    currentDate.value = d;
++    currentDate.value = new Date(currentDate.value.getFullYear(), currentDate.value.getMonth() + 1, 1);
+     fetchMonthData();
+ };

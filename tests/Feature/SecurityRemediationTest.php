@@ -2,32 +2,38 @@
 
 namespace Tests\Feature;
 
+use App\Console\Commands\MqttListenCommand;
 use App\Events\AccessLogReceived;
-use App\Events\DeviceAlertReceived;
 use App\Events\DeviceStatusUpdated;
 use App\Events\StrangerSnapReceived;
+use App\Models\AccessLog;
 use App\Models\Device;
 use App\Models\DeviceAlert;
 use App\Models\Employee;
+use App\Models\LeaveBalance;
 use App\Models\LeaveRequest;
 use App\Models\LeaveType;
 use App\Models\Organization;
 use App\Models\Personnel;
 use App\Models\Role;
+use App\Models\StrangerSnap;
 use App\Models\User;
 use App\Services\CameraHttpService;
 use App\Services\CameraMqttService;
 use App\Services\ImageStorageService;
 use App\Support\CsvSanitizer;
-use Carbon\Carbon;
 use Illuminate\Broadcasting\PrivateChannel;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Laravel\Sanctum\Sanctum;
+use PhpMqtt\Client\MqttClient;
 use Tests\TestCase;
 
 class SecurityRemediationTest extends TestCase
@@ -35,7 +41,9 @@ class SecurityRemediationTest extends TestCase
     use RefreshDatabase;
 
     protected User $superAdmin;
+
     protected User $standardUser;
+
     protected Organization $org;
 
     protected function setUp(): void
@@ -226,7 +234,7 @@ class SecurityRemediationTest extends TestCase
             'is_active' => true,
         ]);
 
-        $log = new \App\Models\AccessLog([
+        $log = new AccessLog([
             'device_id' => $device->device_id,
             'verify_status' => 1,
             'captured_at' => now(),
@@ -237,7 +245,7 @@ class SecurityRemediationTest extends TestCase
         $this->assertInstanceOf(PrivateChannel::class, $channels[0]);
         $this->assertEquals('private-access-logs', $channels[0]->name);
 
-        $snap = new \App\Models\StrangerSnap([
+        $snap = new StrangerSnap([
             'device_id' => $device->device_id,
             'snap_pic_url' => 'https://example.com/snap.jpg',
             'captured_at' => now(),
@@ -361,7 +369,7 @@ class SecurityRemediationTest extends TestCase
     public function test_sec06_notifications_scoped_to_owner_user(): void
     {
         // Insert notification owned by superAdmin
-        $notifId = (string) \Illuminate\Support\Str::uuid();
+        $notifId = (string) Str::uuid();
         DB::table('notifications')->insert([
             'id' => $notifId,
             'type' => 'App\Notifications\SecurityAlert',
@@ -414,7 +422,7 @@ class SecurityRemediationTest extends TestCase
             'max_days_per_year' => 15,
         ]);
 
-        \App\Models\LeaveBalance::create([
+        LeaveBalance::create([
             'employee_id' => $employee2->id,
             'leave_type_id' => $leaveType->id,
             'year' => 2026,
@@ -581,5 +589,426 @@ class SecurityRemediationTest extends TestCase
         $envExample = file_get_contents(base_path('.env.example'));
         $this->assertStringContainsString('APP_KEY=', $envExample);
         $this->assertStringNotContainsString('APP_KEY=base64:2uDSBwXABxqKrme22nL1rR4Acnranb/7QN9hBStcbM8=', $envExample);
+    }
+
+    // =========================================================================
+    // Milestone 2: Edge Ingestion & Input Security (SEC-13, SEC-15, SEC-16, SEC-19)
+    // =========================================================================
+
+    public function test_sec13_insecure_mqtt_tunnel_disabled_by_default(): void
+    {
+        $startDevScript = file_get_contents(base_path('start-dev.sh'));
+        $this->assertStringContainsString('${ENABLE_INSECURE_MQTT_TUNNEL:-false}" = "true"', $startDevScript);
+
+        $envExample = file_get_contents(base_path('.env.example'));
+        $this->assertStringContainsString('ENABLE_INSECURE_MQTT_TUNNEL=false', $envExample);
+
+        $env = file_get_contents(base_path('.env'));
+        $this->assertStringContainsString('ENABLE_INSECURE_MQTT_TUNNEL=false', $env);
+    }
+
+    public function test_sec13_mqtt_listen_drops_telemetry_from_unregistered_or_inactive_device(): void
+    {
+        $command = new class extends MqttListenCommand
+        {
+            public function invokeVerifyPush(?string $deviceId, array $data, array $info, MqttClient $mqtt, ImageStorageService $storage): void
+            {
+                $this->handleVerifyPush($deviceId, $data, $info, $mqtt, $storage);
+            }
+
+            public function invokeStrangerSnapPush(?string $deviceId, array $data, array $info, MqttClient $mqtt, ImageStorageService $storage): void
+            {
+                $this->handleStrangerSnapPush($deviceId, $data, $info, $mqtt, $storage);
+            }
+
+            public function invokeDeviceAlert(?string $deviceId, string $operator, array $data, array $info, MqttClient $mqtt, ImageStorageService $storage): void
+            {
+                $this->handleDeviceAlert($deviceId, $operator, $data, $info, $mqtt, $storage);
+            }
+        };
+
+        $mockMqtt = $this->createMock(MqttClient::class);
+        $mockMqtt->method('isConnected')->willReturn(false);
+
+        $mockStorage = $this->createMock(ImageStorageService::class);
+        $mockStorage->method('storeBase64Image')->willReturn('https://example.com/test.jpg');
+
+        // 1. Unregistered device: VerifyPush should be dropped, but staged with is_active = false
+        $verifyPayload = [
+            'operator' => 'VerifyPush',
+            'info' => [
+                'facesluiceId' => 'ROGUE-MQTT-01',
+                'RecordID' => 1001,
+                'VerifyStatus' => 1,
+                'time' => '2026-10-07 10:00:00',
+            ],
+        ];
+        $command->invokeVerifyPush('ROGUE-MQTT-01', $verifyPayload, $verifyPayload['info'], $mockMqtt, $mockStorage);
+
+        $this->assertEquals(0, AccessLog::where('device_id', 'ROGUE-MQTT-01')->count());
+        $stagedDevice = Device::where('device_id', 'ROGUE-MQTT-01')->first();
+        $this->assertNotNull($stagedDevice);
+        $this->assertFalse((bool) $stagedDevice->is_active);
+
+        // 2. Pre-enrolled but inactive device: stranger snap and alert should be dropped
+        $inactiveDevice = Device::create([
+            'device_id' => 'INACTIVE-CAM-01',
+            'name' => 'Inactive Edge Cam',
+            'ip_address' => '192.168.1.150',
+            'is_active' => false,
+        ]);
+
+        $snapPayload = [
+            'operator' => 'StrSnapPush',
+            'info' => [
+                'facesluiceId' => 'INACTIVE-CAM-01',
+                'SnapID' => 5001,
+                'time' => '2026-10-07 10:01:00',
+            ],
+            'pic' => 'base64pic',
+        ];
+        $command->invokeStrangerSnapPush('INACTIVE-CAM-01', $snapPayload, $snapPayload['info'], $mockMqtt, $mockStorage);
+        $this->assertEquals(0, StrangerSnap::where('device_id', 'INACTIVE-CAM-01')->count());
+
+        $alertPayload = [
+            'operator' => 'ClothHelmetSnapPush',
+            'info' => [
+                'facesluiceId' => 'INACTIVE-CAM-01',
+                'AlarmAction' => 'NO_HELMET',
+                'time' => '2026-10-07 10:02:00',
+            ],
+            'pic' => 'base64pic',
+        ];
+        $command->invokeDeviceAlert('INACTIVE-CAM-01', 'ClothHelmetSnapPush', $alertPayload, $alertPayload['info'], $mockMqtt, $mockStorage);
+        $this->assertEquals(0, DeviceAlert::where('device_id', 'INACTIVE-CAM-01')->count());
+        $this->assertFalse((bool) $inactiveDevice->fresh()->is_active);
+    }
+
+    public function test_sec13_mqtt_listen_heartbeat_stages_unknown_device_as_inactive_and_does_not_reactivate(): void
+    {
+        $command = new class extends MqttListenCommand
+        {
+            public function invokeHeartbeat(?string $deviceId, array $info): void
+            {
+                $this->handleHeartbeat($deviceId, $info);
+            }
+
+            public function invokeOnline(?string $deviceId, string $operator, array $info, MqttClient $mqtt): void
+            {
+                $this->handleOnlineStatus($deviceId, $operator, $info, $mqtt);
+            }
+        };
+
+        $mockMqtt = $this->createMock(MqttClient::class);
+
+        // 1. Unknown heartbeat stages device with is_active = false
+        $command->invokeHeartbeat('UNKNOWN-HB-01', [
+            'facesname' => 'Unknown HB Cam',
+            'ip' => '192.168.1.180',
+        ]);
+        $device = Device::where('device_id', 'UNKNOWN-HB-01')->first();
+        $this->assertNotNull($device);
+        $this->assertFalse((bool) $device->is_active);
+
+        // 2. Existing inactive device receiving heartbeat should NOT become active
+        $inactiveDevice = Device::create([
+            'device_id' => 'MANUALLY-DISABLED-01',
+            'name' => 'Disabled Camera',
+            'ip_address' => '192.168.1.185',
+            'is_active' => false,
+        ]);
+
+        Cache::forget('device_hb_throttle:MANUALLY-DISABLED-01');
+        $command->invokeHeartbeat('MANUALLY-DISABLED-01', ['ip' => '192.168.1.185']);
+        $this->assertFalse((bool) $inactiveDevice->fresh()->is_active);
+
+        // 3. Online status from unapproved device creates device as inactive
+        $command->invokeOnline('UNKNOWN-ONLINE-01', 'Online', ['facesname' => 'Online Cam', 'ip' => '192.168.1.190'], $mockMqtt);
+        $onlineDevice = Device::where('device_id', 'UNKNOWN-ONLINE-01')->first();
+        $this->assertNotNull($onlineDevice);
+        $this->assertFalse((bool) $onlineDevice->is_active);
+    }
+
+    public function test_sec15_personnel_photo_upload_rejects_svg_files(): void
+    {
+        Sanctum::actingAs($this->superAdmin, ['*']);
+
+        $svgFile = UploadedFile::fake()->createWithContent(
+            'avatar.svg',
+            '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>'
+        );
+
+        $response = $this->postJson('/api/personnel', [
+            'name' => 'Malicious SVG User',
+            'person_type' => 0,
+            'photo' => $svgFile,
+        ]);
+
+        $response->assertStatus(422);
+        $response->assertJsonValidationErrors(['photo']);
+
+        // Verify valid raster image is accepted
+        $validImage = UploadedFile::fake()->image('avatar.jpg');
+        $validResponse = $this->postJson('/api/personnel', [
+            'name' => 'Valid Raster User',
+            'person_type' => 0,
+            'photo' => $validImage,
+        ]);
+        $validResponse->assertStatus(201);
+    }
+
+    public function test_sec15_image_storage_service_get_media_rejects_svg_xml_html(): void
+    {
+        $storageService = app(ImageStorageService::class);
+
+        // Put dummy dangerous files on biometrics disk
+        Storage::disk('biometrics')->put('personnel/exploit.svg', '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>');
+        Storage::disk('biometrics')->put('personnel/page.html', '<html><body><script>alert(1)</script></body></html>');
+        Storage::disk('biometrics')->put('personnel/data.xml', '<?xml version="1.0"?><data>test</data>');
+        Storage::disk('biometrics')->put('personnel/valid.jpg', 'fake-jpeg-content');
+
+        $this->assertNull($storageService->getMedia('personnel/exploit.svg'));
+        $this->assertNull($storageService->getMedia('personnel/page.html'));
+        $this->assertNull($storageService->getMedia('personnel/data.xml'));
+
+        $validMedia = $storageService->getMedia('personnel/valid.jpg');
+        $this->assertNotNull($validMedia);
+        $this->assertEquals('fake-jpeg-content', $validMedia['content']);
+    }
+
+    public function test_sec16_personnel_photo_path_rejects_ssrf_urls(): void
+    {
+        Sanctum::actingAs($this->superAdmin, ['*']);
+
+        // 1. Cloud metadata target in photo_path
+        $response1 = $this->postJson('/api/personnel', [
+            'name' => 'Metadata Target',
+            'person_type' => 0,
+            'photo_path' => 'http://169.254.169.254/latest/meta-data/',
+        ]);
+        $response1->assertStatus(422);
+        $response1->assertJsonValidationErrors(['photo_path']);
+
+        // 2. Loopback target in photo_path
+        $response2 = $this->postJson('/api/personnel', [
+            'name' => 'Loopback Target',
+            'person_type' => 0,
+            'photo_path' => 'http://127.0.0.1:8000/secret',
+        ]);
+        $response2->assertStatus(422);
+        $response2->assertJsonValidationErrors(['photo_path']);
+
+        // 3. Private RFC 1918 network in photo_path
+        $response3 = $this->postJson('/api/personnel', [
+            'name' => 'Private IP Target',
+            'person_type' => 0,
+            'photo_path' => 'http://192.168.1.1/admin',
+        ]);
+        $response3->assertStatus(422);
+        $response3->assertJsonValidationErrors(['photo_path']);
+
+        // 4. Update existing record with SSRF in photo_path
+        $person = Personnel::create([
+            'customize_id' => 88123,
+            'name' => 'Existing Personnel',
+            'person_type' => 0,
+        ]);
+
+        $updateResponse = $this->putJson("/api/personnel/{$person->id}", [
+            'name' => 'Updated Name',
+            'person_type' => 0,
+            'photo_path' => 'http://10.0.0.1/sensitive',
+        ]);
+        $updateResponse->assertStatus(422);
+        $updateResponse->assertJsonValidationErrors(['photo_path']);
+    }
+
+    public function test_sec16_personnel_photo_path_allows_valid_relative_paths(): void
+    {
+        Sanctum::actingAs($this->superAdmin, ['*']);
+
+        $response = $this->postJson('/api/personnel', [
+            'name' => 'Relative Path Personnel',
+            'person_type' => 0,
+            'photo_path' => 'strangers/test_stranger_123.jpg',
+        ]);
+
+        $response->assertStatus(201);
+        $this->assertDatabaseHas('personnel', [
+            'name' => 'Relative Path Personnel',
+            'photo_path' => 'strangers/test_stranger_123.jpg',
+        ]);
+    }
+
+    public function test_sec19_webhook_rejects_loopback_ip_bypass_in_production(): void
+    {
+        app()->detectEnvironment(fn () => 'production');
+
+        $device = Device::create([
+            'device_id' => 'CAM-PROD-WEBHOOK-01',
+            'name' => 'Prod Camera',
+            'ip_address' => '192.168.1.200',
+            'is_active' => true,
+        ]);
+
+        // Attacker claims 127.0.0.1 behind reverse proxy, but camera IP is 192.168.1.200
+        $response = $this->withServerVariables(['REMOTE_ADDR' => '127.0.0.1'])
+            ->postJson('/api/Subscribe/Verify', [
+                'DeviceID' => 'CAM-PROD-WEBHOOK-01',
+                'info' => [
+                    'PersonID' => 1,
+                    'VerifyStatus' => 1,
+                ],
+            ]);
+
+        $this->assertEquals(401, $response->status(), 'Loopback IP bypass must be rejected in production environment');
+    }
+
+    public function test_sec19_trusted_proxies_configured(): void
+    {
+        $response = $this->withServerVariables([
+            'REMOTE_ADDR' => '127.0.0.1',
+            'HTTP_X_FORWARDED_FOR' => '203.0.113.195',
+        ])->get('/up');
+
+        $response->assertOk();
+    }
+
+    // =========================================================================
+    // Milestone 3: Content-Security-Policy & Upstream Dependencies (SEC-17, SEC-18)
+    // =========================================================================
+
+    public function test_sec17_content_security_policy_directives_are_hardened(): void
+    {
+        // 1. Production environment: verify strict policy, no eval, no wildcards
+        app()->detectEnvironment(fn () => 'production');
+
+        Config::set('broadcasting.connections.reverb.options.host', 'reverb.internal');
+        Config::set('broadcasting.connections.reverb.options.port', 8080);
+        Config::set('filesystems.disks.s3.url', 'https://s3.ap-southeast-1.amazonaws.com/camera-hub-storage');
+
+        $response = $this->get('/');
+
+        $this->assertTrue($response->headers->has('Content-Security-Policy'), 'CSP header must be present');
+        $csp = $response->headers->get('Content-Security-Policy');
+
+        // Parse directives
+        $directives = [];
+        foreach (explode(';', $csp) as $part) {
+            $part = trim($part);
+            if (! empty($part)) {
+                $tokens = preg_split('/\s+/', $part);
+                $name = array_shift($tokens);
+                $directives[$name] = $tokens;
+            }
+        }
+
+        // script-src: must contain wasm-unsafe-eval, must NOT contain unsafe-eval in production
+        $this->assertArrayHasKey('script-src', $directives);
+        $this->assertContains("'wasm-unsafe-eval'", $directives['script-src']);
+        $this->assertNotContains("'unsafe-eval'", $directives['script-src'], 'Production script-src must not contain unsafe-eval');
+        $this->assertContains('https://static.cloudflareinsights.com', $directives['script-src']);
+
+        // worker-src: must contain 'self' blob:
+        $this->assertArrayHasKey('worker-src', $directives);
+        $this->assertContains("'self'", $directives['worker-src']);
+        $this->assertContains('blob:', $directives['worker-src']);
+
+        // img-src: must NOT contain wildcard https:
+        $this->assertArrayHasKey('img-src', $directives);
+        $this->assertNotContains('https:', $directives['img-src'], 'img-src must not contain wildcard https:');
+        $this->assertContains("'self'", $directives['img-src']);
+        $this->assertContains('data:', $directives['img-src']);
+        $this->assertContains('blob:', $directives['img-src']);
+        $this->assertContains('https://s3.ap-southeast-1.amazonaws.com/camera-hub-storage', $directives['img-src']);
+
+        // connect-src: must NOT contain wildcards https:, ws:, wss:
+        $this->assertArrayHasKey('connect-src', $directives);
+        $this->assertNotContains('https:', $directives['connect-src'], 'connect-src must not contain wildcard https:');
+        $this->assertNotContains('ws:', $directives['connect-src'], 'connect-src must not contain wildcard ws:');
+        $this->assertNotContains('wss:', $directives['connect-src'], 'connect-src must not contain wildcard wss:');
+
+        // connect-src: must scope strictly to 'self', cloudflareinsights, and Reverb endpoints
+        $this->assertContains("'self'", $directives['connect-src']);
+        $this->assertContains('https://cloudflareinsights.com', $directives['connect-src']);
+        $this->assertContains('ws://reverb.internal:8080', $directives['connect-src']);
+        $this->assertContains('wss://reverb.internal:8080', $directives['connect-src']);
+
+        // frame-ancestors: 'none'
+        $this->assertArrayHasKey('frame-ancestors', $directives);
+        $this->assertContains("'none'", $directives['frame-ancestors']);
+
+        // 2. Non-production environment: verify Vite dev origins and dev tooling support
+        app()->detectEnvironment(fn () => 'local');
+
+        $responseDev = $this->get('/');
+        $cspDev = $responseDev->headers->get('Content-Security-Policy');
+
+        $directivesDev = [];
+        foreach (explode(';', $cspDev) as $part) {
+            $part = trim($part);
+            if (! empty($part)) {
+                $tokens = preg_split('/\s+/', $part);
+                $name = array_shift($tokens);
+                $directivesDev[$name] = $tokens;
+            }
+        }
+
+        $this->assertContains("'unsafe-eval'", $directivesDev['script-src'], 'Dev environment must retain unsafe-eval for Vite dev tooling');
+        $this->assertContains('ws://localhost:*', $directivesDev['connect-src']);
+        $this->assertContains('wss://localhost:*', $directivesDev['connect-src']);
+        $this->assertContains('ws://127.0.0.1:*', $directivesDev['connect-src']);
+        $this->assertContains('wss://camera-dev.8gategames.com', $directivesDev['connect-src']);
+    }
+
+    public function test_sec18_dependency_audit_clean(): void
+    {
+        // 1. Verify package.json contains upgraded dependencies and overrides
+        $packageJson = json_decode(file_get_contents(base_path('package.json')), true);
+        $this->assertNotNull($packageJson);
+        $this->assertEquals('^3.5.43', $packageJson['devDependencies']['vue'] ?? null);
+        $this->assertEquals('^1.11.0', $packageJson['overrides']['shell-quote'] ?? null);
+        $this->assertEquals('^1.2.2', $packageJson['overrides']['source-map-js'] ?? null);
+
+        // 2. Verify composer.json contains patched package constraints
+        $composerJson = json_decode(file_get_contents(base_path('composer.json')), true);
+        $this->assertNotNull($composerJson);
+        $this->assertEquals('^13.30', $composerJson['require']['laravel/framework'] ?? null);
+        $this->assertEquals('^2.10.3', $composerJson['require']['league/commonmark'] ?? null);
+        $this->assertEquals('^3.36.0', $composerJson['require']['league/flysystem'] ?? null);
+
+        // 3. Verify composer.lock has resolved secure versions
+        $composerLock = json_decode(file_get_contents(base_path('composer.lock')), true);
+        $this->assertNotNull($composerLock);
+        $installedPackages = collect($composerLock['packages'])->keyBy('name');
+
+        $frameworkVersion = ltrim($installedPackages['laravel/framework']['version'] ?? '', 'v');
+        $this->assertTrue(version_compare($frameworkVersion, '13.30.0', '>='), "laravel/framework version {$frameworkVersion} must be >= 13.30.0");
+
+        $commonmarkVersion = ltrim($installedPackages['league/commonmark']['version'] ?? '', 'v');
+        $this->assertTrue(version_compare($commonmarkVersion, '2.10.3', '>='), "league/commonmark version {$commonmarkVersion} must be >= 2.10.3");
+
+        $flysystemVersion = ltrim($installedPackages['league/flysystem']['version'] ?? '', 'v');
+        $this->assertTrue(version_compare($flysystemVersion, '3.36.0', '>='), "league/flysystem version {$flysystemVersion} must be >= 3.36.0");
+
+        // 4. Verify package-lock.json has resolved secure versions
+        $packageLock = json_decode(file_get_contents(base_path('package-lock.json')), true);
+        $this->assertNotNull($packageLock);
+        $packages = $packageLock['packages'] ?? [];
+
+        $vueVersion = ltrim($packages['node_modules/vue']['version'] ?? '', 'v');
+        $this->assertTrue(version_compare($vueVersion, '3.5.43', '>='), "vue version {$vueVersion} must be >= 3.5.43");
+
+        // Check that shell-quote is >= 1.11.0 everywhere in node_modules
+        foreach ($packages as $pkgPath => $pkgInfo) {
+            if (str_ends_with($pkgPath, 'shell-quote')) {
+                $sqVer = ltrim($pkgInfo['version'] ?? '', 'v');
+                $this->assertTrue(version_compare($sqVer, '1.11.0', '>='), "shell-quote version {$sqVer} must be >= 1.11.0");
+            }
+            if (str_ends_with($pkgPath, 'source-map-js')) {
+                $smVer = ltrim($pkgInfo['version'] ?? '', 'v');
+                $this->assertTrue(version_compare($smVer, '1.2.2', '>='), "source-map-js version {$smVer} must be >= 1.2.2");
+            }
+        }
     }
 }

@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Device;
+use App\Models\DeviceCommand;
 use App\Models\Personnel;
 
 class CameraService
@@ -267,6 +268,11 @@ class CameraService
             'total_count' => count($importedRecords),
             'personnel' => $importedRecords,
         ];
+    }
+
+    public function dispatchCommandAsync(Device $device, string $operator, array $params = []): DeviceCommand
+    {
+        return $this->mqttService->dispatchCommandAsync($device, $operator, $params);
     }
 
     public function getMqttService(): CameraMqttService

@@ -25,6 +25,8 @@ export const useVisitorStore = defineStore('visitor', {
             checked_in: 0,
             checked_out: 0,
             overdue: 0,
+            no_show: 0,
+            total: 0,
         },
     }),
 
@@ -57,7 +59,19 @@ export const useVisitorStore = defineStore('visitor', {
                     this.visits = [];
                 }
 
-                this.computeVisitorStats();
+                const serverStats = data.stats || data.meta?.stats || data.summary;
+                if (serverStats) {
+                    this.stats = {
+                        expected_today: Number(serverStats.expected_today ?? 0),
+                        checked_in: Number(serverStats.checked_in ?? 0),
+                        checked_out: Number(serverStats.checked_out ?? 0),
+                        overdue: Number(serverStats.overdue ?? serverStats.overstayed ?? 0),
+                        no_show: Number(serverStats.no_show ?? 0),
+                        total: Number(serverStats.total ?? 0),
+                    };
+                } else {
+                    this.computeVisitorStats();
+                }
             } catch (err) {
                 notify.error('Visits Fetch Error', err.response?.data?.message || 'Unable to load visits.');
             } finally {
@@ -69,13 +83,42 @@ export const useVisitorStore = defineStore('visitor', {
             const checkedIn = this.visits.filter(v => v.status === 'checked_in').length;
             const checkedOut = this.visits.filter(v => v.status === 'checked_out').length;
             const expected = this.visits.filter(v => v.status === 'expected').length;
+            const noShow = this.visits.filter(v => v.status === 'no_show').length;
+            const overdue = this.visits.filter(v => {
+                if (v.status === 'overstayed' || v.is_overstay) return true;
+                if (v.status === 'checked_in' && v.expected_departure) {
+                    return new Date(v.expected_departure) < new Date();
+                }
+                return false;
+            }).length;
 
             this.stats = {
                 expected_today: expected,
                 checked_in: checkedIn,
                 checked_out: checkedOut,
-                overdue: 0,
+                overdue: overdue,
+                no_show: noShow,
+                total: this.visits.length,
             };
+        },
+
+        async fetchStats() {
+            try {
+                const res = await apiClient.get('/visits/stats');
+                const s = res.data?.stats || res.data?.data || res.data;
+                if (s) {
+                    this.stats = {
+                        expected_today: Number(s.expected_today ?? 0),
+                        checked_in: Number(s.checked_in ?? 0),
+                        checked_out: Number(s.checked_out ?? 0),
+                        overdue: Number(s.overdue ?? s.overstayed ?? 0),
+                        no_show: Number(s.no_show ?? 0),
+                        total: Number(s.total ?? 0),
+                    };
+                }
+            } catch (err) {
+                console.error('Failed to load visitor stats:', err);
+            }
         },
 
         async fetchVisitors(search = '') {
@@ -177,6 +220,31 @@ export const useVisitorStore = defineStore('visitor', {
             }
             this.computeVisitorStats();
             notify.toast(`Visitor Check-out: ${visitData.visitor_name || 'Guest'} departed.`, 'info');
+        },
+
+        async fetchOverstayedVisits() {
+            try {
+                const res = await apiClient.get('/visits/overstayed');
+                return res.data.data || res.data || [];
+            } catch (err) {
+                console.error('Failed to load overstayed visits:', err);
+                return [];
+            }
+        },
+
+        async cancelVisit(visitId, reason = '') {
+            try {
+                const res = await apiClient.post(`/visits/${visitId}/cancel`, {
+                    cancellation_reason: reason,
+                    reason: reason,
+                });
+                notify.toast('Visit cancelled. Camera face revoked.', 'info');
+                await this.fetchVisits(this.pagination.current_page);
+                return res.data;
+            } catch (err) {
+                notify.error('Cancellation Failed', err.response?.data?.message || 'Could not cancel visit.');
+                throw err;
+            }
         },
     },
 });

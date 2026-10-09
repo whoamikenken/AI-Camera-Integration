@@ -729,7 +729,7 @@ onMounted(() => {
   fetchAlerts(1);
 
   // Real-time echo subscription for DeviceAlertReceived and DeviceAlertUpdated
-  echo.channel('device-alerts')
+  echo.private('device-alerts')
     .listen('.DeviceAlertReceived', handleLiveAlertReceived)
     .listen('DeviceAlertReceived', handleLiveAlertReceived)
     .listen('.DeviceAlertUpdated', handleLiveAlertUpdated)
@@ -737,10 +737,10 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
-  echo.channel('device-alerts')
-    .stopListening('.DeviceAlertReceived')
-    .stopListening('DeviceAlertReceived')
-    .stopListening('.DeviceAlertUpdated')
-    .stopListening('DeviceAlertUpdated');
+  echo.private('device-alerts')
+    .stopListening('.DeviceAlertReceived', handleLiveAlertReceived)
+    .stopListening('DeviceAlertReceived', handleLiveAlertReceived)
+    .stopListening('.DeviceAlertUpdated', handleLiveAlertUpdated)
+    .stopListening('DeviceAlertUpdated', handleLiveAlertUpdated);
 });
 </script>

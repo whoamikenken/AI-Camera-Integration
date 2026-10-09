@@ -42,11 +42,12 @@ Broadcast::channel('sync-tasks', function ($user) {
     return $user->hasPermission(['devices.manage', 'devices.view']);
 }, ['guards' => ['web', 'sanctum']]);
 
-Broadcast::channel('notifications', function ($user) {
-    return $user !== null;
-}, ['guards' => ['web', 'sanctum']]);
-
 Broadcast::channel('notifications.{userId}', function ($user, $userId) {
     return (int) $user->id === (int) $userId;
 }, ['guards' => ['web', 'sanctum']]);
+
+Broadcast::channel('device-commands', function ($user) {
+    return $user->hasPermission(['devices.manage', 'devices.view']);
+}, ['guards' => ['web', 'sanctum']]);
+
 

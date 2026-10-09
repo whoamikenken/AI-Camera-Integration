@@ -64,8 +64,9 @@ class DashboardStatsController extends Controller
             $whitelisted = (int) ($personnelStats->whitelisted ?? 0);
             $blacklisted = (int) ($personnelStats->blacklisted ?? 0);
 
-            // Optimize sync task queries into a single query
+            // Optimize sync task queries into a single query scoped to active/failed statuses
             $syncTaskStats = SyncTask::toBase()
+                ->whereIn('status', ['PENDING', 'PROCESSING', 'FAILED'])
                 ->selectRaw('sum(case when status in (?, ?) then 1 else 0 end) as pending', ['PENDING', 'PROCESSING'])
                 ->selectRaw('sum(case when status = ? then 1 else 0 end) as failed', ['FAILED'])
                 ->first();

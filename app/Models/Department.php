@@ -7,12 +7,24 @@ use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Department extends Model
 {
     use Auditable, HasFactory, SoftDeletes;
+
+    protected static function boot()
+    {
+        parent::boot();
+
+        static::creating(function (Department $department) {
+            if (empty($department->organization_id)) {
+                $department->organization_id = Organization::first()?->id ?? Organization::create(['name' => 'Default Org', 'code' => 'ORG-DEFAULT'])->id;
+            }
+        });
+    }
 
     protected $fillable = [
         'organization_id',
@@ -27,6 +39,11 @@ class Department extends Model
     protected $casts = [
         'is_active' => 'boolean',
     ];
+
+    public function accessGroups(): BelongsToMany
+    {
+        return $this->belongsToMany(AccessGroup::class, 'access_group_department');
+    }
 
     public function organization(): BelongsTo
     {

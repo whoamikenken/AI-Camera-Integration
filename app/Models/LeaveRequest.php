@@ -23,6 +23,9 @@ class LeaveRequest extends Model
         'approved_by',
         'rejection_reason',
         'approved_at',
+        'cancellation_reason',
+        'cancelled_by',
+        'cancelled_at',
     ];
 
     protected $casts = [
@@ -30,6 +33,7 @@ class LeaveRequest extends Model
         'end_date' => 'date',
         'total_days' => 'float',
         'approved_at' => 'datetime',
+        'cancelled_at' => 'datetime',
     ];
 
     public function employee(): BelongsTo
@@ -45,5 +49,10 @@ class LeaveRequest extends Model
     public function approver(): BelongsTo
     {
         return $this->belongsTo(User::class, 'approved_by');
+    }
+
+    public function canceller(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'cancelled_by');
     }
 }

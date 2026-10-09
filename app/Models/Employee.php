@@ -193,7 +193,7 @@ class Employee extends Model
     /**
      * Determine if a given date is a Rest Day (non-working day) for this employee.
      */
-    public function isRestDay(Carbon|string $date): bool
+    public function isRestDay(Carbon|string $date, ?iterable $preloadedAssignments = null): bool
     {
         $carbon = is_string($date) ? Carbon::parse($date) : $date->copy();
         $dateStr = $carbon->toDateString();
@@ -202,15 +202,37 @@ class Employee extends Model
         $dayName = strtolower($carbon->format('l'));
         $dayShort = strtolower($carbon->format('D'));
 
-        $assignment = $this->shiftAssignments()
-            ->whereDate('effective_from', '<=', $dateStr)
-            ->where(function ($query) use ($dateStr) {
-                $query->whereNull('effective_to')
-                      ->orWhereDate('effective_to', '>=', $dateStr);
-            })
-            ->orderBy('effective_from', 'desc')
-            ->orderBy('id', 'desc')
-            ->first();
+        if ($preloadedAssignments !== null || $this->relationLoaded('shiftAssignments')) {
+            $assignments = $preloadedAssignments !== null
+                ? ($preloadedAssignments instanceof \Illuminate\Support\Collection ? $preloadedAssignments : collect($preloadedAssignments))
+                : $this->shiftAssignments;
+
+            $assignment = $assignments
+                ->filter(function ($a) use ($dateStr) {
+                    $from = is_string($a->effective_from) ? $a->effective_from : $a->effective_from?->toDateString();
+                    $to = is_string($a->effective_to) ? $a->effective_to : $a->effective_to?->toDateString();
+                    return $from <= $dateStr && ($to === null || $to >= $dateStr);
+                })
+                ->sort(function ($a, $b) {
+                    $fromA = is_string($a->effective_from) ? $a->effective_from : $a->effective_from?->toDateString();
+                    $fromB = is_string($b->effective_from) ? $b->effective_from : $b->effective_from?->toDateString();
+                    if ($fromA !== $fromB) {
+                        return strcmp((string) $fromB, (string) $fromA);
+                    }
+                    return ($b->id ?? 0) <=> ($a->id ?? 0);
+                })
+                ->first();
+        } else {
+            $assignment = $this->shiftAssignments()
+                ->whereDate('effective_from', '<=', $dateStr)
+                ->where(function ($query) use ($dateStr) {
+                    $query->whereNull('effective_to')
+                          ->orWhereDate('effective_to', '>=', $dateStr);
+                })
+                ->orderBy('effective_from', 'desc')
+                ->orderBy('id', 'desc')
+                ->first();
+        }
 
         $days = $assignment?->assigned_days;
 

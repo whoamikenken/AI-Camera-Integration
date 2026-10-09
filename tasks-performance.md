@@ -12,10 +12,10 @@ The Intelligent AI Camera Hub manages high-throughput bidirectional edge-to-clou
 
 | Category | Primary Root Cause | Scale Impact | Status |
 | :--- | :--- | :--- | :--- |
-| **Database & Schema** | N+1 queries in finalizer & shift assignment; unindexed sorting; full-table counts | High (table locks, pool exhaustion) | ✅ Completed |
-| **Compute & Memory** | Unbuffered CSV/JSON exports; duplicate queries; in-memory roster maps | High (OOM errors under load) | ✅ Completed |
-| **Caching & Async** | `ShouldBroadcastNow` blocking daemons; heartbeat write bypass; missing cache eviction | High (daemon stalls, WAL saturation) | ✅ Completed |
-| **Client-Side Runtime** | Redundant 4s polling over active WebSockets; AudioContext leak; bundle bloat | Medium (client CPU/memory leak) | ✅ Completed |
+| **Database & Schema** | Non-SARGable `whereDate()`; missing telemetry composite indexes; unpaginated balances | High (table scans, memory exhaustion) | ✅ Completed |
+| **Compute & Memory** | Day loop queries in rest days; linear collection scans; sequential bulk updates | High (connection pool saturation) | ✅ Completed |
+| **Caching & Async** | Blocking Redis `KEYS` in loops; redundant `Device::firstOrCreate` per MQTT event | High (Redis lockups, daemon stalls) | ✅ Completed |
+| **Client-Side Runtime** | Private channel mismatch on alerts; KPI stat pagination desync | Medium (metrics desync, missing events) | ✅ Completed |
 
 ---
 
@@ -221,3 +221,112 @@ The Intelligent AI Camera Hub manages high-throughput bidirectional edge-to-clou
   - **Details:**
     - Explicitly call `gl.deleteTexture()`, `gl.deleteBuffer()`, `gl.deleteProgram()`, and `gl.deleteShader()` prior to `loseContext()` in `WebGLYUVRenderer::destroy()`.
   - **Verification:** Verified in `cameraHqPlayer.js` and `npm run build`.
+
+---
+
+## Phase 6: Deep Performance & Architecture Audit Backlog (New Audit Scope)
+
+### 1. Database & Schema Optimization (P0/P1)
+
+- [x] **Task 6.1: Eliminate Non-SARGable `whereDate()` Expressions Across Attendance & Visitor Engines**
+  - **Files:** `app/Services/AttendanceProcessingService.php:59-63`, `app/Http/Controllers/VisitorController.php:142-144`
+  - **Details:**
+    - Replace `AttendancePunch::where('employee_id', $empId)->whereDate('punch_time', $date)->first()` with SARGable range query `whereBetween('punch_time', [$startOfDay, $endOfDay])` to utilize composite index `['employee_id', 'punch_time']`.
+    - Replace `Visit::whereDate('expected_arrival', $date)` with `whereBetween('expected_arrival', [$startOfDay, $endOfDay])` to leverage `idx_visits_expected_arrival_status`.
+  - **Scale Impact:** High (prevents full-table scans / unindexed expression scans in high-frequency queries).
+
+- [x] **Task 6.2: Add Missing Composite & Foreign Key Indexes for Telemetry & Punches**
+  - **Files:** `database/migrations/2026_10_07_000001_add_telemetry_and_punch_performance_indexes.php`
+  - **Details:**
+    - Add composite index on `access_logs(device_id, captured_at DESC)` to eliminate filesorts on camera telemetry feeds (`DeviceController::audit` & telemetry endpoints).
+    - Add foreign key index on `attendance_punches(device_id)` to accelerate device-specific attendance queries.
+    - Add composite index on `notifications(notifiable_type, notifiable_id, created_at DESC)` and `notifications(notifiable_type, notifiable_id, read_at)` to accelerate user notification lookups.
+  - **Scale Impact:** High (removes memory filesorts and table scans as telemetry scales to millions of records).
+
+- [x] **Task 6.3: Optimize Unbounded Table Scan on `sync_tasks` in Dashboard Stats**
+  - **Files:** `app/Http/Controllers/DashboardStatsController.php:68-74`
+  - **Details:**
+    - Scope `SyncTask::toBase()->selectRaw(...)` with `whereIn('status', ['PENDING', 'PROCESSING', 'FAILED'])` to allow PostgreSQL to use the `sync_tasks_status_index` instead of sequentially scanning the entire historical table.
+  - **Scale Impact:** Medium (avoids linear scan latency as sync tasks accumulate).
+
+- [x] **Task 6.4: Paginate and Column-Constrain Wide Read Endpoints in Leave & Organization Modules**
+  - **Files:** `app/Http/Controllers/LeaveController.php:99-120`, `app/Http/Controllers/OrganizationController.php:123-137, 222-243, 290-309`
+  - **Details:**
+    - Paginate `LeaveController::listBalances()` with `paginate($perPage)` and constrain relationships: `with(['employee:id,first_name,last_name,employee_code', 'leaveType:id,name,code'])`.
+    - Add pagination and column constraints to `listLocations()`, `listDepartments()`, and `listDesignations()`.
+  - **Scale Impact:** High (prevents worker OOM crashes when organizations scale to thousands of employees).
+
+---
+
+### 2. Application Runtime & Compute (P0/P1)
+
+- [x] **Task 6.5: Eliminate $O(N)$ Database Queries in `Employee::isRestDay` Inside Summary Loop**
+  - **Files:** `app/Http/Controllers/EmployeeController.php:263-269`, `app/Models/Employee.php:205-213`
+  - **Details:**
+    - `EmployeeController::attendanceSummary` loops through 30+ days and executes a database query on `shift_assignments` for every day.
+    - Pre-fetch all overlapping `EmployeeShiftAssignment` records for the requested range once into memory and evaluate rest days against the collection.
+  - **Scale Impact:** High (reduces 30+ SQL queries per attendance summary request to 1).
+
+- [x] **Task 6.6: Eliminate Linear $O(N \times M)$ Collection Scan and Large Outbox Pull in `DeviceController::audit()`**
+  - **Files:** `app/Http/Controllers/DeviceController.php:509-514, 562-564`
+  - **Details:**
+    - Key `$localPersonnel` by `customize_id` (`$localPersonnel->keyBy('customize_id')`) to convert `$localPersonnel->contains('customize_id', $cId)` from an $O(N)$ linear scan into an $O(1)$ hash map lookup.
+    - Fetch only the most recent sync task per personnel for the device via SQL (`DISTINCT ON (personnel_id)` on PostgreSQL or subquery) instead of loading all historical device sync tasks and grouping in PHP collection memory.
+  - **Scale Impact:** High (eliminates memory spikes and $O(N^2)$ CPU overhead on device audits).
+
+- [x] **Task 6.7: Batch Multi-Record SQL Updates in `DeviceAlertController::bulkUpdateStatus`**
+  - **Files:** `app/Http/Controllers/DeviceAlertController.php:117-122`
+  - **Details:**
+    - Replace the `foreach ($alerts as $alert) { $alert->update(...); }` loop with a single bulk query: `DeviceAlert::whereIn('id', $validated['ids'])->update($updateData)`.
+    - Dispatch a single batched event or queue individual broadcasts asynchronously.
+  - **Scale Impact:** Medium (replaces hundreds of sequential database writes with 1 atomic SQL query).
+
+---
+
+### 3. Caching & Asynchronous Processing (P0/P1)
+
+- [x] **Task 6.8: Eliminate Blocking Redis `KEYS` Command in Bulk Shift Assignment**
+  - **Files:** `app/Http/Controllers/ShiftController.php:298-311`
+  - **Details:**
+    - Remove `$redis->keys($prefix . $cachePattern)` inside the `foreach ($employeeIds)` loop. `KEYS` is a blocking $O(N)$ Redis operation that scans the entire Redis database, locking the event loop and freezing queues and WebSocket traffic under load.
+    - Implement versioned cache keys (`emp_shift_v:{$employeeId}` counter where eviction is an $O(1)$ `INCR`), or track active keys in a Redis set per employee.
+  - **Scale Impact:** High (prevents complete Redis event loop freezes during bulk shift operations).
+
+- [x] **Task 6.9: Cache Pre-Enrolled Device Existence in High-Frequency MQTT Telemetry Stream**
+  - **Files:** `app/Console/Commands/MqttListenCommand.php:243-246, 333-336, 410-413`
+  - **Details:**
+    - `MqttListenCommand` executes `Device::firstOrCreate(['device_id' => $deviceId], ...)` on every incoming `VerifyPush`, `StrSnapPush`, and `DeviceAlert`.
+    - Cache known active `device_id` values in memory or Redis for 10 minutes (`device_registered:{$deviceId}`) to eliminate redundant database SELECT queries during 100+ events/sec telemetry bursts.
+  - **Scale Impact:** High (removes 100+ DB queries/sec from the database connection pool).
+
+- [x] **Task 6.10: Cache Biometric `customize_id` to Employee Mapping in Punch Ingestion**
+  - **Files:** `app/Jobs/ProcessAttendancePunchJob.php:33-46`
+  - **Details:**
+    - Pre-cache the bidirectional identity bridge (`emp_custom_id:{$customizeId} => $employeeId`) in Redis with 1-hour TTL, evicting on `EmployeeObserver` and `PersonnelObserver` changes.
+    - Prevents 2 sequential SQL lookups on every single verification punch job.
+  - **Scale Impact:** Medium (speeds up attendance punch processing throughput).
+
+- [x] **Task 6.11: Cache Invalidation Engine for Device Alerts & Public Settings**
+  - **Files:** `app/Http/Controllers/DeviceAlertController.php:96, 120`, `app/Http/Controllers/SettingController.php:30-45`, `app/Services/SettingService.php:60-89`
+  - **Details:**
+    - Invalidate `Cache::forget('device_alert_stats')` and `Cache::forget('dashboard_telemetry_stats')` upon alert status changes (`updateStatus` and `bulkUpdateStatus`).
+    - Cache public branding settings (`SettingController::publicSettings`) in Redis with 1-hour TTL (`settings.public`) and invalidate upon setting updates.
+  - **Scale Impact:** Medium (eliminates stale KPI counts and uncached DB queries on every page load).
+
+---
+
+### 4. Frontend Runtime & Real-Time Sync (P2)
+
+- [x] **Task 6.12: Fix Echo Channel Type Mismatch in `DeviceAlertsCenter.vue`**
+  - **Files:** `resources/js/views/DeviceAlertsCenter.vue:732-736`
+  - **Details:**
+    - `DeviceAlertsCenter.vue` calls `echo.channel('device-alerts')` (public channel), but `DeviceAlertReceived` broadcasts on `PrivateChannel('device-alerts')`.
+    - Update to `echo.private('device-alerts')` or consume directly from `cameraStore.deviceAlerts` to avoid silent WebSocket dropouts.
+  - **Scale Impact:** Medium (ensures real-time alerts update without manual page reloads).
+
+- [x] **Task 6.13: Correct Metric Binding in `attendanceStore` from Server Summary**
+  - **Files:** `resources/js/stores/attendanceStore.js:80-82, 91-100`
+  - **Details:**
+    - `attendanceStore` currently looks for `data.stats` (which does not exist; backend returns `data.summary`), causing it to fall back to `computeLocalStats()` on the current page subset (only 50 items).
+    - Map `data.summary` directly into `this.stats` to accurately reflect workforce attendance rates regardless of pagination.
+  - **Scale Impact:** Low/Medium (fixes metric calculation on paginated workforce views).

@@ -84,6 +84,7 @@ class SettingService
         } else {
             Cache::forget("settings.global.{$key}");
         }
+        Cache::forget('settings.public');
 
         return $setting;
     }
@@ -137,6 +138,8 @@ class SettingService
                 Cache::forget("settings.global.{$setting->key}");
             }
         }
+
+        Cache::forget('settings.public');
     }
 
     public static function inferType(mixed $val): string

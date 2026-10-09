@@ -2,6 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\AssignShiftRequest;
+use App\Http\Requests\BulkAssignShiftRequest;
+use App\Http\Requests\StoreShiftRequest;
+use App\Http\Requests\UpdateShiftRequest;
 use App\Models\Employee;
 use App\Models\EmployeeShiftAssignment;
 use App\Models\Shift;
@@ -37,32 +41,9 @@ class ShiftController extends Controller
         return response()->json($query->orderBy('name')->get());
     }
 
-    public function store(Request $request): JsonResponse
+    public function store(StoreShiftRequest $request): JsonResponse
     {
-        $validated = $request->validate([
-            'organization_id' => 'nullable|exists:organizations,id',
-            'name' => 'required|string|max:128',
-            'code' => [
-                'required',
-                'string',
-                'max:64',
-                Rule::unique('shifts')->where(function ($query) use ($request) {
-                    $orgId = $request->input('organization_id');
-                    return $orgId ? $query->where('organization_id', $orgId) : $query->whereNull('organization_id');
-                }),
-            ],
-            'shift_start' => ['required', 'regex:/^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/'],
-            'shift_end' => ['required', 'regex:/^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/'],
-            'grace_period_minutes' => 'nullable|integer|min:0',
-            'early_out_threshold_minutes' => 'nullable|integer|min:0',
-            'half_day_threshold_hours' => 'nullable|numeric|min:0',
-            'min_hours_full_day' => 'nullable|numeric|min:0',
-            'is_overnight' => 'nullable|boolean',
-            'break_duration_minutes' => 'nullable|integer|min:0',
-            'is_flexible' => 'nullable|boolean',
-            'color' => 'nullable|string|max:32',
-            'is_active' => 'nullable|boolean',
-        ]);
+        $validated = $request->validated();
 
         $isOvernight = !empty($validated['is_overnight']);
         $startNorm = strlen($validated['shift_start']) === 5 ? $validated['shift_start'] . ':00' : $validated['shift_start'];
@@ -92,35 +73,11 @@ class ShiftController extends Controller
         return response()->json(['data' => $shift]);
     }
 
-    public function update(Request $request, int $id): JsonResponse
+    public function update(UpdateShiftRequest $request, int $id): JsonResponse
     {
         $shift = Shift::findOrFail($id);
 
-        $validated = $request->validate([
-            'organization_id' => 'nullable|exists:organizations,id',
-            'name' => 'sometimes|required|string|max:128',
-            'code' => [
-                'sometimes',
-                'required',
-                'string',
-                'max:64',
-                Rule::unique('shifts')->where(function ($query) use ($request, $shift) {
-                    $orgId = $request->input('organization_id', $shift->organization_id);
-                    return $orgId ? $query->where('organization_id', $orgId) : $query->whereNull('organization_id');
-                })->ignore($shift->id),
-            ],
-            'shift_start' => ['sometimes', 'required', 'regex:/^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/'],
-            'shift_end' => ['sometimes', 'required', 'regex:/^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/'],
-            'grace_period_minutes' => 'nullable|integer|min:0',
-            'early_out_threshold_minutes' => 'nullable|integer|min:0',
-            'half_day_threshold_hours' => 'nullable|numeric|min:0',
-            'min_hours_full_day' => 'nullable|numeric|min:0',
-            'is_overnight' => 'nullable|boolean',
-            'break_duration_minutes' => 'nullable|integer|min:0',
-            'is_flexible' => 'nullable|boolean',
-            'color' => 'nullable|string|max:32',
-            'is_active' => 'nullable|boolean',
-        ]);
+        $validated = $request->validated();
 
         $start = $validated['shift_start'] ?? $shift->shift_start;
         $end = $validated['shift_end'] ?? $shift->shift_end;
@@ -161,17 +118,11 @@ class ShiftController extends Controller
     }
 
     // Direct assignment to specific employee IDs
-    public function assign(Request $request, int $id): JsonResponse
+    public function assign(AssignShiftRequest $request, int $id): JsonResponse
     {
         $shift = Shift::findOrFail($id);
 
-        $validated = $request->validate([
-            'employee_ids' => 'required|array',
-            'employee_ids.*' => 'exists:employees,id',
-            'effective_from' => 'required|date',
-            'effective_to' => 'nullable|date|after_or_equal:effective_from',
-            'assigned_days' => 'nullable|array',
-        ]);
+        $validated = $request->validated();
 
         $assignments = $this->performShiftAssignment(
             $shift,
@@ -189,18 +140,9 @@ class ShiftController extends Controller
     }
 
     // Bulk assign endpoint supporting employees or entire departments
-    public function bulkAssign(Request $request): JsonResponse
+    public function bulkAssign(BulkAssignShiftRequest $request): JsonResponse
     {
-        $validated = $request->validate([
-            'shift_id' => 'required|exists:shifts,id',
-            'employee_ids' => 'nullable|array',
-            'employee_ids.*' => 'exists:employees,id',
-            'department_ids' => 'nullable|array',
-            'department_ids.*' => 'exists:departments,id',
-            'effective_from' => 'required|date',
-            'effective_to' => 'nullable|date|after_or_equal:effective_from',
-            'assigned_days' => 'nullable|array',
-        ]);
+        $validated = $request->validated();
 
         $shift = Shift::findOrFail($validated['shift_id']);
         $targetIds = $validated['employee_ids'] ?? [];
@@ -294,21 +236,11 @@ class ShiftController extends Controller
                 ->get()
                 ->toArray();
 
-            // Invalidate employee shift cache
-            foreach ($employeeIds as $employeeId) {
-                $cachePattern = "emp_shift:{$employeeId}:*";
-                try {
-                    if (config('cache.default') === 'redis') {
-                        $redis = \Illuminate\Support\Facades\Redis::connection();
-                        $prefix = config('database.redis.options.prefix', '');
-                        $keys = $redis->keys($prefix . $cachePattern);
-                        foreach ($keys as $key) {
-                            $redis->del(str_replace($prefix, '', $key));
-                        }
-                    }
-                } catch (\Throwable $e) {
-                    // Ignore cache errors
-                }
+            // Invalidate employee shift cache in O(1) without blocking Redis KEYS
+            try {
+                app(\App\Services\AttendanceProcessingService::class)->invalidateShiftCacheForEmployees($employeeIds);
+            } catch (\Throwable $e) {
+                // Ignore cache errors
             }
         });
 

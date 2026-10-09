@@ -1,8 +1,10 @@
 <?php
 
+use App\Http\Controllers\AccessGroupController;
 use App\Http\Controllers\AccessLogController;
 use App\Http\Controllers\AttendanceController;
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\BulkCampaignController;
 use App\Http\Controllers\DashboardStatsController;
 use App\Http\Controllers\DeviceController;
 use App\Http\Controllers\EmployeeController;
@@ -144,15 +146,39 @@ Route::middleware(['auth:sanctum', 'active', 'throttle:api'])->group(function ()
     Route::post('devices/{device}/upgrade', [DeviceController::class, 'upgradeFirmware'])->middleware('permission:devices.manage');
     Route::get('devices/{device}/audit', [DeviceController::class, 'audit'])->middleware('permission:devices.view,devices.audit,devices.manage');
 
+    // Fleet Bulk Operations (Milestone M4)
+    Route::post('devices/bulk-reboot', [DeviceController::class, 'bulkReboot'])->middleware('permission:devices.manage');
+    Route::post('devices/bulk-sync-mqtt', [DeviceController::class, 'bulkSyncMqtt'])->middleware('permission:devices.manage');
+
+    // Device Downlink Command Tickets (Milestone M5)
+    Route::get('device-commands/{command}', [DeviceController::class, 'commandStatus'])->middleware('permission:devices.view,devices.manage');
+
     // Personnel / Face Library
     Route::get('personnel', [PersonnelController::class, 'index'])->middleware('permission:personnel.view');
     Route::post('personnel', [PersonnelController::class, 'store'])->middleware('permission:personnel.create');
+
+    // Personnel Bulk Operations (Milestone M4)
+    Route::post('personnel/bulk-sync', [PersonnelController::class, 'bulkSync'])->middleware('permission:personnel.sync,devices.manage');
+    Route::post('personnel/bulk-delete', [PersonnelController::class, 'bulkDelete'])->middleware('permission:personnel.delete');
+
     Route::get('personnel/{personnel}', [PersonnelController::class, 'show'])->middleware('permission:personnel.view');
     Route::put('personnel/{personnel}', [PersonnelController::class, 'update'])->middleware('permission:personnel.edit');
     Route::post('personnel/{personnel}', [PersonnelController::class, 'update'])->middleware('permission:personnel.edit');
     Route::delete('personnel/{personnel}', [PersonnelController::class, 'destroy'])->middleware('permission:personnel.delete');
     Route::post('personnel/{personnel}/sync-now', [PersonnelController::class, 'syncNow'])->middleware('permission:personnel.sync');
     Route::post('personnel/{personnel}/convert-to-employee', [PersonnelController::class, 'convertToEmployee'])->middleware('permission:personnel.edit,employees.create');
+
+    // Bulk Campaign Progress & Inspection (Milestone M4)
+    Route::get('bulk-campaigns', [BulkCampaignController::class, 'index'])->middleware('permission:devices.view,personnel.view,devices.manage');
+    Route::get('bulk-campaigns/{id}', [BulkCampaignController::class, 'show'])->middleware('permission:devices.view,personnel.view,devices.manage');
+
+    // Access Control Groups & Security Zones (Milestone M2)
+    Route::get('access-groups', [AccessGroupController::class, 'index'])->middleware('permission:devices.view,devices.manage,personnel.view');
+    Route::post('access-groups', [AccessGroupController::class, 'store'])->middleware('permission:devices.manage');
+    Route::get('access-groups/{id}', [AccessGroupController::class, 'show'])->middleware('permission:devices.view,devices.manage,personnel.view');
+    Route::put('access-groups/{id}', [AccessGroupController::class, 'update'])->middleware('permission:devices.manage');
+    Route::delete('access-groups/{id}', [AccessGroupController::class, 'destroy'])->middleware('permission:devices.manage');
+    Route::post('access-groups/{id}/sync-now', [AccessGroupController::class, 'syncNow'])->middleware('permission:devices.manage,personnel.sync');
 
     // Verification & Stranger Logs
     Route::get('access-logs', [AccessLogController::class, 'index'])->middleware('permission:attendance.view,devices.view');
@@ -245,12 +271,14 @@ Route::middleware(['auth:sanctum', 'active', 'throttle:api'])->group(function ()
     Route::post('leave-requests', [LeaveController::class, 'storeRequest'])->middleware('permission:leaves.apply,leaves.manage');
     Route::put('leave-requests/{id}/approve', [LeaveController::class, 'approveRequest'])->middleware('permission:leaves.approve,leaves.manage');
     Route::put('leave-requests/{id}/reject', [LeaveController::class, 'rejectRequest'])->middleware('permission:leaves.approve,leaves.manage');
+    Route::match(['post', 'put'], 'leave-requests/{id}/cancel', [LeaveController::class, 'cancelRequest'])->middleware('permission:leaves.apply,leaves.manage');
 
     // Attendance Regularization (Self-Service & Manager Approvals)
     Route::get('regularization-requests', [RegularizationController::class, 'index'])->middleware('permission:selfservice.view,attendance.view');
     Route::post('regularization-requests', [RegularizationController::class, 'store'])->middleware('permission:selfservice.view,attendance.view');
     Route::put('regularization-requests/{id}/approve', [RegularizationController::class, 'approve'])->middleware('permission:attendance.approve,attendance.manage');
     Route::put('regularization-requests/{id}/reject', [RegularizationController::class, 'reject'])->middleware('permission:attendance.approve,attendance.manage');
+    Route::match(['post', 'put'], 'regularization-requests/{id}/cancel', [RegularizationController::class, 'cancel'])->middleware('permission:selfservice.view,attendance.view,attendance.manage');
 
     // Visitor Management System
     Route::get('visitors', [VisitorController::class, 'index'])->middleware('permission:visitors.view');
@@ -259,12 +287,15 @@ Route::middleware(['auth:sanctum', 'active', 'throttle:api'])->group(function ()
     Route::put('visitors/{id}', [VisitorController::class, 'update'])->middleware('permission:visitors.manage');
     Route::post('visitors/{id}/block', [VisitorController::class, 'block'])->middleware('permission:visitors.manage');
 
+    Route::get('visits/stats', [VisitorController::class, 'stats'])->middleware('permission:visitors.view');
+    Route::get('visits/overstayed', [VisitorController::class, 'overstayed'])->middleware('permission:visitors.view');
     Route::get('visits', [VisitorController::class, 'listVisits'])->middleware('permission:visitors.view');
     Route::post('visits', [VisitorController::class, 'preRegister'])->middleware('permission:visitors.preregister,visitors.checkin,visitors.manage');
     Route::post('visits/pre-register', [VisitorController::class, 'preRegister'])->middleware('permission:visitors.preregister,visitors.checkin,visitors.manage');
     Route::get('visits/{id}', [VisitorController::class, 'showVisit'])->middleware('permission:visitors.view');
     Route::put('visits/{id}/check-in', [VisitorController::class, 'checkIn'])->middleware('permission:visitors.checkin,visitors.manage');
     Route::put('visits/{id}/check-out', [VisitorController::class, 'checkOut'])->middleware('permission:visitors.checkout,visitors.manage');
+    Route::match(['post', 'put'], 'visits/{id}/cancel', [VisitorController::class, 'cancel'])->middleware('permission:visitors.preregister,visitors.checkin,visitors.manage');
 
     // In-App Notifications
     Route::get('notifications', [NotificationController::class, 'index'])->middleware('permission:selfservice.view,attendance.view');
@@ -279,20 +310,52 @@ Route::middleware(['auth:sanctum', 'active', 'throttle:api'])->group(function ()
     // Payroll Export
     Route::get('payroll/export', [PayrollExportController::class, 'export'])->middleware('permission:reports.payroll,reports.view');
 
-    // Secure media retrieval for biometric photos & surveillance captures (SEC-11)
-    Route::get('media/{path}', function (\Illuminate\Http\Request $request, string $path, \App\Services\ImageStorageService $storage) {
-        $media = $storage->getMedia($path);
-        if (!$media) {
-            abort(404, 'Media not found.');
-        }
-        return response($media['content'], 200, [
-            'Content-Type' => $media['mime_type'],
-            'Cache-Control' => 'private, no-cache, no-store, must-revalidate',
-            'X-Content-Type-Options' => 'nosniff',
-        ]);
-    })->where('path', '.*')->middleware('permission:personnel.view,devices.view,attendance.view,visitors.view');
-
     // Sync Tasks Outbox
     Route::get('sync-tasks', [SyncTaskController::class, 'index'])->middleware('permission:devices.manage');
     Route::post('sync-tasks/{syncTask}/retry', [SyncTaskController::class, 'retry'])->middleware('permission:personnel.sync,devices.manage');
 });
+
+/*
+|--------------------------------------------------------------------------
+| Tier 4: Secure Media Streaming (Signed URL OR Authenticated Bearer) (SEC-14)
+|--------------------------------------------------------------------------
+*/
+Route::get('media/{path}', function (\Illuminate\Http\Request $request, string $path, \App\Services\ImageStorageService $storage) {
+    $hasValidSignature = $request->hasValidSignature();
+    $user = auth('sanctum')->user();
+
+    if (!$hasValidSignature) {
+        if (!$user) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthenticated.',
+            ], 401);
+        }
+
+        if (!$user->is_active) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Your account has been deactivated.',
+            ], 403);
+        }
+
+        if (!$user->hasPermission(['personnel.view', 'devices.view', 'attendance.view', 'visitors.view'])) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized.',
+            ], 403);
+        }
+    }
+
+    $media = $storage->getMedia($path);
+    if (!$media) {
+        abort(404, 'Media not found.');
+    }
+
+    return response($media['content'], 200, [
+        'Content-Type' => $media['mime_type'],
+        'Cache-Control' => 'private, no-cache, no-store, must-revalidate',
+        'X-Content-Type-Options' => 'nosniff',
+    ]);
+})->where('path', '.*')->name('media.show')->middleware('throttle:api');
+

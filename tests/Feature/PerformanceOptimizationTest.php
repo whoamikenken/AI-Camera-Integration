@@ -11,15 +11,22 @@ use App\Models\AccessLog;
 use App\Models\AttendancePunch;
 use App\Models\AttendanceRecord;
 use App\Models\Department;
+use App\Models\Designation;
 use App\Models\Device;
 use App\Models\DeviceAlert;
 use App\Models\Employee;
 use App\Models\Holiday;
+use App\Models\LeaveBalance;
+use App\Models\LeaveType;
+use App\Models\Location;
 use App\Models\Organization;
 use App\Models\Personnel;
 use App\Models\Role;
 use App\Models\Shift;
+use App\Models\SyncTask;
 use App\Models\User;
+use App\Models\Visit;
+use App\Models\Visitor;
 use App\Observers\EmployeeObserver;
 use App\Services\AttendanceProcessingService;
 use App\Services\CameraMqttService;
@@ -870,6 +877,841 @@ class PerformanceOptimizationTest extends TestCase
         $resp = $this->getJson('/api/devices');
         $resp->assertOk();
         $this->assertTrue(Cache::has("device_counts:{$device->device_id}"));
+    }
+
+    /**
+     * Phase 6 Task 6.1: Assert query log on /api/visits and /api/attendance/punches
+     * uses SARGable range clauses (whereBetween) and does NOT wrap columns in strftime() or whereDate().
+     */
+    public function test_phase6_attendance_and_visitor_queries_use_sargable_ranges(): void
+    {
+        $shift = Shift::create([
+            'organization_id' => $this->org->id,
+            'name' => 'General Shift',
+            'code' => 'GEN-SARG-01',
+            'shift_start' => '09:00:00',
+            'shift_end' => '18:00:00',
+            'is_overnight' => false,
+        ]);
+
+        $employee = Employee::create([
+            'organization_id' => $this->org->id,
+            'shift_id' => $shift->id,
+            'employee_code' => 'EMP-SARG-01',
+            'first_name' => 'Sarah',
+            'last_name' => 'Connor',
+            'employment_status' => 'active',
+        ]);
+
+        $device = Device::create([
+            'device_id' => 'CAM-SARG-01',
+            'name' => 'Turnstile 1',
+            'ip_address' => '192.168.1.180',
+            'device_role' => 'bidirectional',
+            'is_active' => true,
+        ]);
+
+        $visitor = Visitor::create([
+            'organization_id' => $this->org->id,
+            'first_name' => 'John',
+            'last_name' => 'Doe',
+            'email' => 'visitor-sarg@example.com',
+        ]);
+
+        Visit::create([
+            'visitor_id' => $visitor->id,
+            'host_employee_id' => $employee->id,
+            'expected_arrival' => '2026-10-04 10:30:00',
+            'status' => 'expected',
+        ]);
+
+        AttendancePunch::create([
+            'employee_id' => $employee->id,
+            'device_id' => $device->device_id,
+            'punch_time' => '2026-10-04 09:15:00',
+            'direction' => 'in',
+            'source' => 'camera_auto',
+        ]);
+
+        // 1. Verify /api/visits SARGability
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+
+        $visitResp = $this->getJson('/api/visits?date=2026-10-04');
+        $visitResp->assertOk();
+
+        $queries = DB::getQueryLog();
+        DB::disableQueryLog();
+
+        $visitQueries = array_filter($queries, fn($q) => str_contains(strtolower($q['query']), 'visits'));
+        $this->assertNotEmpty($visitQueries, 'Expected queries against visits table');
+
+        foreach ($visitQueries as $q) {
+            $sql = strtolower($q['query']);
+            $this->assertStringNotContainsString('strftime', $sql, 'Visits query must not use strftime()');
+            $this->assertStringNotContainsString('expected_arrival"::date', $sql, 'Visits query must not use ::date function wrap');
+            if (str_contains($sql, 'expected_arrival')) {
+                $this->assertStringContainsString('between', $sql, 'Visits query must use SARGable BETWEEN clause');
+            }
+        }
+
+        // 2. Verify /api/attendance/punches SARGability
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+
+        $punchResp = $this->getJson('/api/attendance/punches?date=2026-10-04');
+        $punchResp->assertOk();
+
+        $queries = DB::getQueryLog();
+        DB::disableQueryLog();
+
+        $punchQueries = array_filter($queries, fn($q) => str_contains(strtolower($q['query']), 'attendance_punches'));
+        $this->assertNotEmpty($punchQueries, 'Expected queries against attendance_punches table');
+
+        foreach ($punchQueries as $q) {
+            $sql = strtolower($q['query']);
+            $this->assertStringNotContainsString('strftime', $sql, 'Punches query must not use strftime()');
+            $this->assertStringNotContainsString('punch_time"::date', $sql, 'Punches query must not use ::date function wrap');
+            if (str_contains($sql, 'punch_time') && !str_contains($sql, 'order by')) {
+                $this->assertStringContainsString('between', $sql, 'Punches query must use SARGable BETWEEN clause');
+            }
+        }
+
+        // 3. Defensive date parsing check: unparseable date strings safely return empty data instead of 500 error
+        $badVisitResp = $this->getJson('/api/visits?date=unparseable-date');
+        $badVisitResp->assertOk();
+        $this->assertEmpty($badVisitResp->json('data'));
+
+        $badPunchResp = $this->getJson('/api/attendance/punches?date=unparseable-date');
+        $badPunchResp->assertOk();
+        $this->assertEmpty($badPunchResp->json('data'));
+    }
+
+    /**
+     * Phase 6 Task 6.2: Assert idx_access_logs_device_id_captured_at, idx_attendance_punches_device_id,
+     * idx_notifications_notifiable_created_at, idx_notifications_notifiable_read_at exist in schema.
+     */
+    public function test_phase6_composite_and_foreign_key_indexes_exist(): void
+    {
+        $this->assertTrue(Schema::hasTable('access_logs'));
+        $this->assertTrue(Schema::hasTable('attendance_punches'));
+        $this->assertTrue(Schema::hasTable('notifications'));
+
+        if (DB::getDriverName() === 'sqlite') {
+            $accessLogIndexes = collect(DB::select("PRAGMA index_list('access_logs')"))->pluck('name')->all();
+            $this->assertContains('idx_access_logs_device_id_captured_at', $accessLogIndexes);
+
+            $punchIndexes = collect(DB::select("PRAGMA index_list('attendance_punches')"))->pluck('name')->all();
+            $this->assertContains('idx_attendance_punches_device_id', $punchIndexes);
+
+            $notifIndexes = collect(DB::select("PRAGMA index_list('notifications')"))->pluck('name')->all();
+            $this->assertContains('idx_notifications_notifiable_created_at', $notifIndexes);
+            $this->assertContains('idx_notifications_notifiable_read_at', $notifIndexes);
+        } elseif (DB::getDriverName() === 'pgsql') {
+            $indexes = collect(DB::select("SELECT indexname FROM pg_indexes WHERE schemaname = 'public'"))->pluck('indexname')->all();
+            $this->assertContains('idx_access_logs_device_id_captured_at', $indexes);
+            $this->assertContains('idx_attendance_punches_device_id', $indexes);
+            $this->assertContains('idx_notifications_notifiable_created_at', $indexes);
+            $this->assertContains('idx_notifications_notifiable_read_at', $indexes);
+        }
+    }
+
+    /**
+     * Phase 6 Task 6.3: Assert /api/dashboard/stats filters sync_tasks query
+     * with whereIn('status', ['PENDING', 'PROCESSING', 'FAILED']).
+     */
+    public function test_phase6_sync_tasks_dashboard_stats_query_filters_active_statuses(): void
+    {
+        Cache::forget('dashboard_telemetry_stats');
+
+        // Dynamically ensure /api/dashboard/stats route exists pointing to DashboardStatsController
+        \Illuminate\Support\Facades\Route::get('/api/dashboard/stats', [DashboardStatsController::class, 'index']);
+
+        $device = Device::create([
+            'device_id' => 'CAM-SYNC-TEST-01',
+            'name' => 'Sync Test Cam',
+            'ip_address' => '192.168.1.188',
+            'is_active' => true,
+        ]);
+
+        $personnel = Personnel::create([
+            'name' => 'Sync Person 1',
+            'person_type' => 0,
+        ]);
+
+        SyncTask::create([
+            'device_id' => $device->device_id,
+            'personnel_id' => $personnel->id,
+            'action' => 'ADD',
+            'status' => 'COMPLETED',
+        ]);
+
+        SyncTask::create([
+            'device_id' => $device->device_id,
+            'personnel_id' => $personnel->id,
+            'action' => 'ADD',
+            'status' => 'PENDING',
+        ]);
+
+        SyncTask::create([
+            'device_id' => $device->device_id,
+            'personnel_id' => $personnel->id,
+            'action' => 'EDIT',
+            'status' => 'PROCESSING',
+        ]);
+
+        SyncTask::create([
+            'device_id' => $device->device_id,
+            'personnel_id' => $personnel->id,
+            'action' => 'ADD',
+            'status' => 'FAILED',
+        ]);
+
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+
+        $response = $this->getJson('/api/dashboard/stats');
+        $response->assertOk();
+        $response->assertJsonPath('sync.pending', 2);
+        $response->assertJsonPath('sync.failed', 1);
+
+        $queries = DB::getQueryLog();
+        DB::disableQueryLog();
+
+        $syncQueries = array_filter($queries, fn($q) => str_contains(strtolower($q['query']), 'sync_tasks'));
+        $this->assertNotEmpty($syncQueries, 'Expected query against sync_tasks');
+
+        foreach ($syncQueries as $q) {
+            $sql = strtolower($q['query']);
+            $this->assertStringContainsString('status', $sql);
+            $this->assertStringContainsString('in (?, ?, ?)', $sql);
+            $bindings = array_map('strtoupper', $q['bindings']);
+            $this->assertContains('PENDING', $bindings);
+            $this->assertContains('PROCESSING', $bindings);
+            $this->assertContains('FAILED', $bindings);
+            $this->assertNotContains('COMPLETED', $bindings);
+        }
+
+        // Also verify /api/stats route produces identical filtered query when cache cleared
+        Cache::forget('dashboard_telemetry_stats');
+        $respStats = $this->getJson('/api/stats');
+        $respStats->assertOk();
+        $respStats->assertJsonPath('sync.pending', 2);
+        $respStats->assertJsonPath('sync.failed', 1);
+    }
+
+    /**
+     * Phase 6 Task 6.4: Assert paginated response structure and constrained columns
+     * for /api/leave-balances, /api/locations, /api/departments, and /api/designations.
+     */
+    public function test_phase6_wide_read_endpoints_are_paginated_and_column_constrained(): void
+    {
+        // 1. Leave Balances
+        $leaveType = LeaveType::create([
+            'organization_id' => $this->org->id,
+            'name' => 'Paid Time Off',
+            'code' => 'PTO-P6',
+            'max_days_per_year' => 20,
+        ]);
+
+        $employee = Employee::create([
+            'organization_id' => $this->org->id,
+            'employee_code' => 'EMP-P6-LEAVE',
+            'first_name' => 'Diana',
+            'last_name' => 'Prince',
+            'employment_status' => 'active',
+        ]);
+
+        LeaveBalance::create([
+            'employee_id' => $employee->id,
+            'leave_type_id' => $leaveType->id,
+            'year' => 2026,
+            'allocated' => 20,
+            'used' => 5,
+            'pending' => 2,
+            'carried_over' => 0,
+        ]);
+
+        $leaveResp = $this->getJson('/api/leave-balances');
+        $leaveResp->assertOk();
+        $leaveResp->assertJsonStructure([
+            'current_page',
+            'data',
+            'first_page_url',
+            'from',
+            'last_page',
+            'per_page',
+            'to',
+            'total',
+        ]);
+
+        $leaveData = $leaveResp->json('data.0');
+        $this->assertNotNull($leaveData);
+        $this->assertArrayHasKey('id', $leaveData);
+        $this->assertArrayHasKey('employee_id', $leaveData);
+        $this->assertArrayHasKey('leave_type_id', $leaveData);
+        $this->assertArrayHasKey('year', $leaveData);
+        $this->assertArrayHasKey('allocated', $leaveData);
+        // Verify relationship column constraints
+        $this->assertArrayHasKey('first_name', $leaveData['employee']);
+        $this->assertArrayHasKey('employee_code', $leaveData['employee']);
+        $this->assertArrayNotHasKey('bank_account_number', $leaveData['employee']);
+        $this->assertArrayHasKey('name', $leaveData['leave_type']);
+        $this->assertArrayHasKey('code', $leaveData['leave_type']);
+
+        // 2. Locations
+        Location::create([
+            'organization_id' => $this->org->id,
+            'name' => 'Metro Site Alpha',
+            'code' => 'MSA-01',
+            'address' => '456 Ayala Ave',
+            'timezone' => 'Asia/Manila',
+        ]);
+
+        $locResp = $this->getJson('/api/locations');
+        $locResp->assertOk();
+        $locResp->assertJsonStructure([
+            'current_page',
+            'data',
+            'first_page_url',
+            'per_page',
+            'total',
+        ]);
+
+        $locData = $locResp->json('data.0');
+        $this->assertNotNull($locData);
+        $this->assertArrayHasKey('id', $locData);
+        $this->assertArrayHasKey('name', $locData);
+        $this->assertArrayHasKey('code', $locData);
+        $this->assertArrayHasKey('organization', $locData);
+        $this->assertArrayHasKey('name', $locData['organization']);
+        $this->assertArrayNotHasKey('settings', $locData['organization']);
+
+        // 3. Departments
+        Department::create([
+            'organization_id' => $this->org->id,
+            'name' => 'Data Engineering',
+            'code' => 'DE-01',
+            'description' => 'Big data analytics and pipelines',
+        ]);
+
+        $deptResp = $this->getJson('/api/departments');
+        $deptResp->assertOk();
+        $deptResp->assertJsonStructure([
+            'current_page',
+            'data',
+            'first_page_url',
+            'per_page',
+            'total',
+        ]);
+
+        $deptData = $deptResp->json('data.0');
+        $this->assertNotNull($deptData);
+        $this->assertArrayHasKey('id', $deptData);
+        $this->assertArrayHasKey('name', $deptData);
+        $this->assertArrayHasKey('code', $deptData);
+        $this->assertArrayHasKey('description', $deptData);
+
+        // 4. Designations
+        Designation::create([
+            'organization_id' => $this->org->id,
+            'name' => 'Principal Architect',
+            'code' => 'PR-ARCH',
+            'level' => 5,
+            'description' => 'Lead system architect',
+        ]);
+
+        $desigResp = $this->getJson('/api/designations');
+        $desigResp->assertOk();
+        $desigResp->assertJsonStructure([
+            'current_page',
+            'data',
+            'first_page_url',
+            'per_page',
+            'total',
+        ]);
+
+        $desigData = $desigResp->json('data.0');
+        $this->assertNotNull($desigData);
+        $this->assertArrayHasKey('id', $desigData);
+        $this->assertArrayHasKey('name', $desigData);
+        $this->assertArrayHasKey('code', $desigData);
+        $this->assertArrayHasKey('level', $desigData);
+        $this->assertArrayHasKey('organization', $desigData);
+        $this->assertArrayHasKey('name', $desigData['organization']);
+        $this->assertArrayNotHasKey('settings', $desigData['organization']);
+    }
+
+    /**
+     * Phase 6 Task 6.5: Verify employee attendance summary pre-fetches shift assignments in a single O(1) query.
+     */
+    public function test_phase6_employee_attendance_summary_preloads_shift_assignments(): void
+    {
+        $dept = Department::create([
+            'organization_id' => $this->org->id,
+            'name' => 'Engineering',
+            'code' => 'ENG',
+        ]);
+
+        $person = Personnel::create([
+            'customize_id' => 7101,
+            'name' => 'Summary Worker',
+            'person_type' => 0,
+        ]);
+
+        $employee = Employee::create([
+            'organization_id' => $this->org->id,
+            'department_id' => $dept->id,
+            'personnel_id' => $person->id,
+            'employee_code' => 'EMP-P6-7101',
+            'first_name' => 'Summary',
+            'last_name' => 'Worker',
+            'employment_status' => 'active',
+        ]);
+
+        $shift = Shift::create([
+            'organization_id' => $this->org->id,
+            'name' => 'Standard Day Shift',
+            'code' => 'STD-DAY',
+            'shift_start' => '09:00:00',
+            'shift_end' => '18:00:00',
+            'is_active' => true,
+        ]);
+
+        // Assign shift starting Oct 1, 2026, Monday-Friday (1, 2, 3, 4, 5)
+        \App\Models\EmployeeShiftAssignment::create([
+            'employee_id' => $employee->id,
+            'shift_id' => $shift->id,
+            'effective_from' => '2026-10-01',
+            'effective_to' => null,
+            'assigned_days' => [1, 2, 3, 4, 5],
+        ]);
+
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+
+        $response = $this->getJson("/api/employees/{$employee->id}/attendance-summary?from=2026-10-01&to=2026-10-31");
+        $response->assertOk();
+
+        $queries = DB::getQueryLog();
+        DB::disableQueryLog();
+
+        $shiftAssignmentQueries = array_filter($queries, function ($q) {
+            return str_contains(strtolower($q['query']), 'shift_assignments');
+        });
+
+        // Exactly 1 query on shift_assignments across 31 days
+        $this->assertCount(1, $shiftAssignmentQueries, 'Expected exactly 1 query on shift_assignments for a 31-day date window.');
+        $this->assertEquals(22, $response->json('total_working_days'), 'October 2026 Mon-Fri schedule should calculate exactly 22 working days.');
+    }
+
+    /**
+     * Phase 6 Task 6.6: Verify device audit uses MAX(id) subquery for sync tasks and O(1) hash map matching.
+     */
+    public function test_phase6_device_audit_uses_hash_map_and_latest_sync_task_query(): void
+    {
+        $device = Device::create([
+            'device_id' => 'CAM-AUDIT-P6',
+            'name' => 'Audit P6 Camera',
+            'ip_address' => '192.168.1.199',
+            'is_active' => true,
+        ]);
+
+        $person1 = Personnel::create([
+            'customize_id' => 8201,
+            'name' => 'Audit Person One',
+            'person_type' => 0,
+        ]);
+
+        $person2 = Personnel::create([
+            'customize_id' => 8202,
+            'name' => 'Audit Person Two',
+            'person_type' => 0,
+        ]);
+
+        // Historical tasks for person1: task 1 FAILED, task 2 PENDING, task 3 COMPLETED
+        SyncTask::create([
+            'device_id' => $device->device_id,
+            'personnel_id' => $person1->id,
+            'action' => 'ADD',
+            'status' => 'FAILED',
+            'created_at' => now()->subHours(3),
+        ]);
+        SyncTask::create([
+            'device_id' => $device->device_id,
+            'personnel_id' => $person1->id,
+            'action' => 'EDIT',
+            'status' => 'PENDING',
+            'created_at' => now()->subHours(2),
+        ]);
+        SyncTask::create([
+            'device_id' => $device->device_id,
+            'personnel_id' => $person1->id,
+            'action' => 'EDIT',
+            'status' => 'COMPLETED',
+            'created_at' => now()->subHour(),
+        ]);
+
+        // Single task for person2: PENDING
+        SyncTask::create([
+            'device_id' => $device->device_id,
+            'personnel_id' => $person2->id,
+            'action' => 'ADD',
+            'status' => 'PENDING',
+            'created_at' => now()->subMinutes(10),
+        ]);
+
+        // Mock edge roster in cache
+        Cache::put("camera_edge_roster:{$device->device_id}", ['8201', '8202', '9999'], 60);
+
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+
+        $response = $this->getJson("/api/devices/{$device->id}/audit");
+        $response->assertOk();
+
+        $queries = DB::getQueryLog();
+        DB::disableQueryLog();
+
+        $syncTaskQueries = array_filter($queries, fn($q) => str_contains(strtolower($q['query']), 'sync_tasks'));
+        $this->assertNotEmpty($syncTaskQueries);
+
+        $hasMaxSubquery = false;
+        foreach ($syncTaskQueries as $q) {
+            $sql = strtolower($q['query']);
+            if (str_contains($sql, 'max(id)') || str_contains($sql, 'max("id")')) {
+                $hasMaxSubquery = true;
+                break;
+            }
+        }
+        $this->assertTrue($hasMaxSubquery, 'Device audit must query sync tasks using a MAX(id) subquery to select only latest tasks.');
+
+        $userRoster = $response->json('face_audit.user_roster');
+        $this->assertIsArray($userRoster);
+
+        $auditP1 = collect($userRoster)->firstWhere('customize_id', 8201);
+        $this->assertNotNull($auditP1);
+        $this->assertEquals('SYNCED', $auditP1['status']);
+        $this->assertEquals('COMPLETED', $auditP1['sync_task_status']);
+
+        $auditP2 = collect($userRoster)->firstWhere('customize_id', 8202);
+        $this->assertNotNull($auditP2);
+        $this->assertEquals('SYNCED', $auditP2['status']);
+
+        $untracked = collect($userRoster)->firstWhere('customize_id', 9999);
+        $this->assertNotNull($untracked);
+        $this->assertEquals('UNTRACKED', $untracked['status']);
+    }
+
+    /**
+     * Phase 6 Task 6.7: Verify bulk status update issues a single atomic SQL UPDATE and evicts stats cache.
+     */
+    public function test_phase6_device_alert_bulk_update_status_is_atomic(): void
+    {
+        $device = Device::create([
+            'device_id' => 'CAM-ALERT-ATOMIC-01',
+            'name' => 'Atomic Alert Camera',
+            'ip_address' => '192.168.1.205',
+            'is_active' => true,
+        ]);
+
+        $alertIds = [];
+        for ($i = 1; $i <= 5; $i++) {
+            $alert = DeviceAlert::create([
+                'device_id' => $device->device_id,
+                'alert_type' => 'STRANGER_LOITERING',
+                'severity' => 'HIGH',
+                'title' => "Atomic Alert #{$i}",
+                'status' => 'NEW',
+                'captured_at' => now()->subMinutes($i * 5),
+            ]);
+            $alertIds[] = $alert->id;
+        }
+
+        Cache::put('device_alert_stats', ['total' => 10], 3600);
+        Cache::put('dashboard_telemetry_stats', ['telemetry' => 'active'], 3600);
+
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+
+        $response = $this->postJson('/api/device-alerts/bulk-status', [
+            'ids' => $alertIds,
+            'status' => 'RESOLVED',
+        ]);
+        $response->assertOk();
+
+        $queries = DB::getQueryLog();
+        DB::disableQueryLog();
+
+        $updateQueries = array_filter($queries, function ($q) {
+            $sql = strtolower($q['query']);
+            return str_starts_with($sql, 'update') && str_contains($sql, 'device_alerts');
+        });
+
+        $this->assertCount(1, $updateQueries, 'bulkUpdateStatus must execute exactly 1 atomic SQL UPDATE statement.');
+        $this->assertEquals(5, DeviceAlert::whereIn('id', $alertIds)->where('status', 'RESOLVED')->count());
+        $this->assertEquals(5, DeviceAlert::whereIn('id', $alertIds)->whereNotNull('resolved_at')->count());
+
+        $this->assertFalse(Cache::has('device_alert_stats'));
+        $this->assertFalse(Cache::has('dashboard_telemetry_stats'));
+    }
+
+    /**
+     * Phase 6 Task 6.8: Verify bulk shift assignment uses non-blocking O(1) version counter and tracked key invalidation.
+     */
+    public function test_phase6_bulk_shift_assignment_uses_non_blocking_cache_invalidation(): void
+    {
+        $shiftA = Shift::create([
+            'organization_id' => $this->org->id,
+            'name' => 'Original Morning Shift',
+            'code' => 'S-ORIG-P6',
+            'shift_start' => '08:00:00',
+            'shift_end' => '17:00:00',
+            'is_active' => true,
+        ]);
+
+        $shiftB = Shift::create([
+            'organization_id' => $this->org->id,
+            'name' => 'Replacement Evening Shift',
+            'code' => 'S-REPL-P6',
+            'shift_start' => '16:00:00',
+            'shift_end' => '01:00:00',
+            'is_active' => true,
+        ]);
+
+        $emp1 = Employee::create([
+            'organization_id' => $this->org->id,
+            'shift_id' => $shiftA->id,
+            'employee_code' => 'EMP-P6-NB1',
+            'first_name' => 'NonBlocking',
+            'last_name' => 'Worker1',
+            'employment_status' => 'active',
+        ]);
+
+        $emp2 = Employee::create([
+            'organization_id' => $this->org->id,
+            'shift_id' => $shiftA->id,
+            'employee_code' => 'EMP-P6-NB2',
+            'first_name' => 'NonBlocking',
+            'last_name' => 'Worker2',
+            'employment_status' => 'active',
+        ]);
+
+        /** @var AttendanceProcessingService $service */
+        $service = app(AttendanceProcessingService::class);
+
+        // 1. Warm cache for effective shift on date
+        $resolvedA = $service->resolveEffectiveShift($emp1, '2026-11-01');
+        $this->assertEquals($shiftA->id, $resolvedA->id);
+        $this->assertTrue(Cache::has("emp_shift:{$emp1->id}:2026-11-01"));
+
+        // 2. Perform bulk shift assignment
+        $response = $this->postJson('/api/shifts/bulk-assign', [
+            'shift_id' => $shiftB->id,
+            'employee_ids' => [$emp1->id, $emp2->id],
+            'effective_from' => '2026-11-01',
+            'effective_to' => null,
+            'assigned_days' => [1, 2, 3, 4, 5],
+        ]);
+        $response->assertStatus(201);
+
+        // 3. Assert version counter was incremented in O(1)
+        $version = (int) Cache::get("emp_shift_v:{$emp1->id}", 0);
+        $this->assertGreaterThanOrEqual(1, $version);
+
+        // 4. Assert old cache key was evicted without Redis KEYS scan
+        $this->assertFalse(Cache::has("emp_shift:{$emp1->id}:2026-11-01"));
+
+        // 5. Subsequent call returns Shift B
+        $resolvedB = $service->resolveEffectiveShift($emp1, '2026-11-01');
+        $this->assertEquals($shiftB->id, $resolvedB->id);
+    }
+
+    /**
+     * Phase 6 Task 6.9: Verify MQTT listener caches registered device existence and skips redundant SELECTs.
+     */
+    public function test_phase6_mqtt_listener_caches_registered_device_existence(): void
+    {
+        $device = Device::create([
+            'device_id' => 'CAM-MQTT-CACHE-01',
+            'name' => 'Cache Test Camera',
+            'ip_address' => '192.168.1.200',
+            'is_active' => true,
+        ]);
+
+        // DeviceObserver warms cache upon creation
+        $this->assertTrue((bool) Cache::get("device_registered:CAM-MQTT-CACHE-01"));
+
+        // Forget to test lazy resolution in MqttListenCommand
+        Cache::forget("device_registered:CAM-MQTT-CACHE-01");
+
+        $command = new class extends \App\Console\Commands\MqttListenCommand {
+            public function testCheckDevice(string $deviceId): bool {
+                return $this->isDeviceRegisteredAndActive($deviceId);
+            }
+        };
+
+        // First call queries DB and populates cache
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+        $isActiveFirst = $command->testCheckDevice('CAM-MQTT-CACHE-01');
+        $this->assertTrue($isActiveFirst);
+        $this->assertTrue((bool) Cache::get('device_registered:CAM-MQTT-CACHE-01'));
+        $queriesFirst = array_filter(DB::getQueryLog(), fn($q) => str_contains($q['query'], 'devices'));
+        $this->assertNotEmpty($queriesFirst);
+
+        // Second call hits cache with 0 DB queries to devices
+        DB::flushQueryLog();
+        $isActiveSecond = $command->testCheckDevice('CAM-MQTT-CACHE-01');
+        $this->assertTrue($isActiveSecond);
+        $queriesSecond = array_filter(DB::getQueryLog(), fn($q) => str_contains($q['query'], 'devices'));
+        $this->assertCount(0, $queriesSecond);
+
+        // Deactivation via DeviceObserver must immediately update cache to false
+        $device->update(['is_active' => false]);
+        $this->assertFalse((bool) Cache::get('device_registered:CAM-MQTT-CACHE-01'));
+        $this->assertFalse($command->testCheckDevice('CAM-MQTT-CACHE-01'));
+    }
+
+    /**
+     * Phase 6 Task 6.10: Verify ProcessAttendancePunchJob caches customize_id to employee mapping.
+     */
+    public function test_phase6_punch_job_caches_customize_id_to_employee_bridge(): void
+    {
+        $shift = Shift::create([
+            'organization_id' => $this->org->id,
+            'name' => 'General Day Shift',
+            'code' => 'GEN-DAY-P6',
+            'shift_start' => '08:00:00',
+            'shift_end' => '17:00:00',
+        ]);
+
+        $personnel = Personnel::create([
+            'customize_id' => 8801,
+            'name' => 'Alice Cache',
+            'person_type' => 0,
+        ]);
+
+        $employee = Employee::create([
+            'personnel_id' => $personnel->id,
+            'organization_id' => $this->org->id,
+            'shift_id' => $shift->id,
+            'employee_code' => 'EMP-8801',
+            'first_name' => 'Alice',
+            'last_name' => 'Cache',
+            'employment_status' => 'active',
+        ]);
+
+        $device = Device::create([
+            'device_id' => 'CAM-PUNCH-8801',
+            'name' => 'Punch In Camera',
+            'ip_address' => '192.168.1.105',
+            'device_role' => 'entry',
+            'is_active' => true,
+        ]);
+
+        $log = AccessLog::create([
+            'device_id' => $device->device_id,
+            'customize_id' => 8801,
+            'verify_status' => 1,
+            'captured_at' => '2026-10-08 08:01:00',
+        ]);
+
+        $job = new \App\Jobs\ProcessAttendancePunchJob($log);
+        $job->handle(app(AttendanceProcessingService::class));
+
+        // Assert cache bridge exists
+        $this->assertTrue(Cache::has('emp_custom_id:8801'));
+        $cachedData = Cache::get('emp_custom_id:8801');
+        $this->assertEquals($employee->id, $cachedData['employee_id']);
+        $this->assertEquals($personnel->id, $cachedData['personnel_id']);
+
+        // Second punch for another log must not query Personnel table for customize_id
+        $log2 = AccessLog::create([
+            'device_id' => $device->device_id,
+            'customize_id' => 8801,
+            'verify_status' => 1,
+            'captured_at' => '2026-10-08 17:05:00',
+        ]);
+
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+        $job2 = new \App\Jobs\ProcessAttendancePunchJob($log2);
+        $job2->handle(app(AttendanceProcessingService::class));
+
+        $queries = collect(DB::getQueryLog());
+        $personnelQueries = $queries->filter(fn ($q) => str_contains($q['query'], 'personnel') && str_contains($q['query'], 'customize_id'));
+        $this->assertCount(0, $personnelQueries, 'Personnel customize_id lookup was bypassed via Redis cache bridge.');
+
+        // Mutation of Employee must evict the cache
+        $employee->update(['first_name' => 'Alice Renamed']);
+        $this->assertFalse(Cache::has('emp_custom_id:8801'), 'Cache key emp_custom_id:8801 evicted on Employee update.');
+    }
+
+    /**
+     * Phase 6 Task 6.11: Verify alert status mutations and public settings caching and invalidation engine.
+     */
+    public function test_phase6_alert_status_mutations_and_public_settings_caching_and_invalidation(): void
+    {
+        // 1. Device Alert Invalidation Verification
+        Cache::put('device_alert_stats', ['cached' => true], 60);
+        Cache::put('dashboard_telemetry_stats', ['cached' => true], 60);
+
+        $device = Device::create([
+            'device_id' => 'CAM-ALERT-611',
+            'name' => 'Alert 611 Camera',
+            'ip_address' => '192.168.1.206',
+            'is_active' => true,
+        ]);
+
+        $alert = DeviceAlert::create([
+            'device_id' => $device->device_id,
+            'alert_type' => 'TAMPER_DETECTED',
+            'severity' => 'CRITICAL',
+            'title' => 'Camera Tampering Detected',
+            'status' => 'NEW',
+            'captured_at' => now(),
+        ]);
+
+        $putResp = $this->patchJson("/api/device-alerts/{$alert->id}/status", [
+            'status' => 'ACKNOWLEDGED',
+        ]);
+        $putResp->assertOk();
+        $this->assertFalse(Cache::has('device_alert_stats'));
+        $this->assertFalse(Cache::has('dashboard_telemetry_stats'));
+
+        Cache::put('device_alert_stats', ['cached' => true], 60);
+        Cache::put('dashboard_telemetry_stats', ['cached' => true], 60);
+
+        $bulkResp = $this->postJson('/api/device-alerts/bulk-status', [
+            'ids' => [$alert->id],
+            'status' => 'RESOLVED',
+        ]);
+        $bulkResp->assertOk();
+        $this->assertFalse(Cache::has('device_alert_stats'));
+        $this->assertFalse(Cache::has('dashboard_telemetry_stats'));
+
+        // 2. Public Branding Settings Caching & Invalidation Verification
+        \App\Models\Setting::create([
+            'key' => 'system.company_name',
+            'value' => 'Test Hub',
+            'group' => 'system',
+            'type' => 'string',
+            'is_public' => true,
+        ]);
+
+        $pubResp1 = $this->getJson('/api/settings/public');
+        $pubResp1->assertOk();
+        $this->assertEquals('Test Hub', $pubResp1->json('data')['system.company_name']);
+        $this->assertTrue(Cache::has('settings.public'));
+
+        \App\Services\SettingService::set('system.company_name', 'Brand New Hub');
+        $this->assertFalse(Cache::has('settings.public'));
+
+        $pubResp2 = $this->getJson('/api/settings/public');
+        $pubResp2->assertOk();
+        $this->assertEquals('Brand New Hub', $pubResp2->json('data')['system.company_name']);
+        $this->assertTrue(Cache::has('settings.public'));
     }
 }
 

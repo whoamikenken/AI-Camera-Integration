@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Str;
 
@@ -87,6 +88,12 @@ class Personnel extends Model
     public function employee(): \Illuminate\Database\Eloquent\Relations\HasOne
     {
         return $this->hasOne(Employee::class);
+    }
+
+    public function accessGroups(): BelongsToMany
+    {
+        return $this->belongsToMany(AccessGroup::class, 'access_group_personnel')
+            ->withPivot('schedule_rule_id');
     }
 
     public function getPhotoUrlAttribute(): ?string

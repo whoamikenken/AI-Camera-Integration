@@ -10,23 +10,53 @@
             </div>
 
             <!-- Segmented Pill Tabs -->
-            <div class="flex items-center bg-slate-100 p-1.5 rounded-xl border border-slate-200 overflow-x-auto">
-                <button @click="activeSubTab = 'dashboard'"
+            <div role="tablist" aria-label="Attendance navigation tabs" class="flex flex-wrap items-center bg-slate-100 p-1.5 rounded-xl border border-slate-200 gap-1">
+                <button
+                    type="button"
+                    role="tab"
+                    id="attendance-tab-dashboard"
+                    :aria-selected="activeSubTab === 'dashboard' ? 'true' : 'false'"
+                    aria-controls="attendance-panel-dashboard"
+                    @click="activeSubTab = 'dashboard'"
                     :class="activeSubTab === 'dashboard' ? 'bg-white text-indigo-600 shadow-xs font-bold' : 'text-slate-600 hover:text-slate-900'"
-                    class="px-4 py-2 rounded-lg transition-all text-xs cursor-pointer flex items-center gap-1.5 font-medium">
+                    class="px-4 py-2 rounded-lg transition-all text-xs cursor-pointer flex items-center gap-1.5 font-medium"
+                >
                     <span>📈</span> Overview Dashboard
                 </button>
-                <button @click="activeSubTab = 'roster'"
+                <button
+                    type="button"
+                    role="tab"
+                    id="attendance-tab-roster"
+                    :aria-selected="activeSubTab === 'roster' ? 'true' : 'false'"
+                    aria-controls="attendance-panel-roster"
+                    @click="activeSubTab = 'roster'"
                     :class="activeSubTab === 'roster' ? 'bg-white text-indigo-600 shadow-xs font-bold' : 'text-slate-600 hover:text-slate-900'"
-                    class="px-4 py-2 rounded-lg transition-all text-xs cursor-pointer flex items-center gap-1.5 font-medium">
+                    class="px-4 py-2 rounded-lg transition-all text-xs cursor-pointer flex items-center gap-1.5 font-medium"
+                >
                     <span>📋</span> Daily Roster &amp; Records
                 </button>
             </div>
         </div>
 
         <!-- Sub Tabs Content -->
-        <AttendanceDashboard v-if="activeSubTab === 'dashboard'" />
-        <DailyAttendanceRoster v-else-if="activeSubTab === 'roster'" />
+        <div
+            v-if="activeSubTab === 'dashboard'"
+            id="attendance-panel-dashboard"
+            role="tabpanel"
+            aria-labelledby="attendance-tab-dashboard"
+            tabindex="0"
+        >
+            <AttendanceDashboard />
+        </div>
+        <div
+            v-else-if="activeSubTab === 'roster'"
+            id="attendance-panel-roster"
+            role="tabpanel"
+            aria-labelledby="attendance-tab-roster"
+            tabindex="0"
+        >
+            <DailyAttendanceRoster />
+        </div>
     </div>
 </template>
 

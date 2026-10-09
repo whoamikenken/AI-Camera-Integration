@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\StoreAttendancePunchRequest;
 use App\Jobs\DailyAttendanceFinalizerJob;
 use App\Models\AttendancePunch;
 use App\Models\AttendanceRecord;
@@ -113,7 +114,12 @@ class AttendanceController extends Controller
         }
 
         if ($request->filled('date')) {
-            $query->whereDate('punch_time', $request->query('date'));
+            try {
+                $date = Carbon::parse($request->query('date'));
+                $query->whereBetween('punch_time', [$date->copy()->startOfDay(), $date->copy()->endOfDay()]);
+            } catch (\Throwable) {
+                $query->whereRaw('1 = 0');
+            }
         }
 
         if ($request->filled('direction')) {
@@ -127,14 +133,9 @@ class AttendanceController extends Controller
     /**
      * HR manual punch entry.
      */
-    public function manualEntry(Request $request): JsonResponse
+    public function manualEntry(StoreAttendancePunchRequest $request): JsonResponse
     {
-        $validated = $request->validate([
-            'employee_id' => 'required',
-            'punch_time' => 'required|date',
-            'direction' => 'required|string|in:in,out',
-            'reason' => 'required|string|max:255',
-        ]);
+        $validated = $request->validated();
 
         $employee = Employee::findOrFail($validated['employee_id']);
 

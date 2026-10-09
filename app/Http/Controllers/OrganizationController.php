@@ -122,18 +122,16 @@ class OrganizationController extends Controller
 
     public function listLocations(Request $request): JsonResponse
     {
-        $query = Location::with('organization');
+        $query = Location::with('organization:id,name,code')
+            ->select(['id', 'organization_id', 'name', 'code', 'address', 'timezone', 'coordinates', 'is_active', 'created_at', 'updated_at']);
 
         if ($request->has('organization_id')) {
             $query->where('organization_id', $request->organization_id);
         }
 
-        $locations = $query->orderBy('name')->get();
+        $perPage = (int) $request->query('per_page', 50);
 
-        return response()->json([
-            'success' => true,
-            'data' => $locations,
-        ]);
+        return response()->json($query->orderBy('name')->paginate($perPage));
     }
 
     public function storeLocation(Request $request): JsonResponse
@@ -220,7 +218,10 @@ class OrganizationController extends Controller
 
     public function listDepartments(Request $request): JsonResponse
     {
-        $query = Department::with(['parent', 'children']);
+        $query = Department::with([
+            'parent:id,name,code',
+            'children:id,name,code,parent_id',
+        ])->select(['id', 'organization_id', 'name', 'code', 'parent_id', 'head_id', 'description', 'is_active', 'created_at', 'updated_at']);
 
         if ($request->has('organization_id')) {
             $query->where('organization_id', $request->organization_id);
@@ -234,12 +235,9 @@ class OrganizationController extends Controller
             });
         }
 
-        $departments = $query->orderBy('name')->get();
+        $perPage = (int) $request->query('per_page', 50);
 
-        return response()->json([
-            'success' => true,
-            'data' => $departments,
-        ]);
+        return response()->json($query->orderBy('name')->paginate($perPage));
     }
 
     public function departmentTree(Request $request): JsonResponse
@@ -379,18 +377,16 @@ class OrganizationController extends Controller
 
     public function listDesignations(Request $request): JsonResponse
     {
-        $query = Designation::with('organization');
+        $query = Designation::with('organization:id,name,code')
+            ->select(['id', 'organization_id', 'name', 'code', 'level', 'description', 'is_active', 'created_at', 'updated_at']);
 
         if ($request->has('organization_id')) {
             $query->where('organization_id', $request->organization_id);
         }
 
-        $designations = $query->orderBy('level')->orderBy('name')->get();
+        $perPage = (int) $request->query('per_page', 50);
 
-        return response()->json([
-            'success' => true,
-            'data' => $designations,
-        ]);
+        return response()->json($query->orderBy('level')->orderBy('name')->paginate($perPage));
     }
 
     public function storeDesignation(Request $request): JsonResponse

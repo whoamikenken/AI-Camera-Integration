@@ -2,6 +2,11 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\CancelLeaveRequest;
+use App\Http\Requests\ReviewLeaveRequest;
+use App\Http\Requests\StoreLeaveTypeRequest;
+use App\Http\Requests\SubmitLeaveRequest;
+use App\Http\Requests\UpdateLeaveTypeRequest;
 use App\Models\Employee;
 use App\Models\LeaveBalance;
 use App\Models\LeaveRequest;
@@ -33,19 +38,9 @@ class LeaveController extends Controller
         return response()->json($query->orderBy('name')->get());
     }
 
-    public function storeLeaveType(Request $request): JsonResponse
+    public function storeLeaveType(StoreLeaveTypeRequest $request): JsonResponse
     {
-        $validated = $request->validate([
-            'organization_id' => 'nullable|exists:organizations,id',
-            'name' => 'required|string|max:128',
-            'code' => 'required|string|max:64|unique:leave_types,code',
-            'max_days_per_year' => 'nullable|numeric|min:0',
-            'is_paid' => 'nullable|boolean',
-            'is_carry_forward' => 'nullable|boolean',
-            'max_carry_forward_days' => 'nullable|numeric|min:0',
-            'description' => 'nullable|string|max:500',
-            'is_active' => 'nullable|boolean',
-        ]);
+        $validated = $request->validated();
 
         $leaveType = LeaveType::create($validated);
 
@@ -60,21 +55,11 @@ class LeaveController extends Controller
         return response()->json(['data' => LeaveType::findOrFail($id)]);
     }
 
-    public function updateLeaveType(Request $request, int $id): JsonResponse
+    public function updateLeaveType(UpdateLeaveTypeRequest $request, int $id): JsonResponse
     {
         $leaveType = LeaveType::findOrFail($id);
 
-        $validated = $request->validate([
-            'organization_id' => 'nullable|exists:organizations,id',
-            'name' => 'sometimes|required|string|max:128',
-            'code' => 'sometimes|required|string|max:64|unique:leave_types,code,' . $leaveType->id,
-            'max_days_per_year' => 'nullable|numeric|min:0',
-            'is_paid' => 'nullable|boolean',
-            'is_carry_forward' => 'nullable|boolean',
-            'max_carry_forward_days' => 'nullable|numeric|min:0',
-            'description' => 'nullable|string|max:500',
-            'is_active' => 'nullable|boolean',
-        ]);
+        $validated = $request->validated();
 
         $leaveType->update($validated);
 
@@ -98,7 +83,14 @@ class LeaveController extends Controller
 
     public function listBalances(Request $request): JsonResponse
     {
-        $query = LeaveBalance::with(['employee', 'leaveType']);
+        $query = LeaveBalance::with([
+            'employee:id,first_name,last_name,employee_code',
+            'leaveType:id,name,code',
+        ])->select([
+            'id', 'employee_id', 'leave_type_id', 'year',
+            'allocated', 'used', 'pending', 'carried_over',
+            'created_at', 'updated_at',
+        ]);
 
         $user = $request->user();
         if ($user) {
@@ -116,7 +108,9 @@ class LeaveController extends Controller
             $query->where('year', $request->query('year'));
         }
 
-        return response()->json($query->get());
+        $perPage = (int) $request->query('per_page', 50);
+
+        return response()->json($query->paginate($perPage));
     }
 
     public function allocateBalance(Request $request): JsonResponse
@@ -172,15 +166,9 @@ class LeaveController extends Controller
         return response()->json($query->orderBy('created_at', 'desc')->paginate($perPage));
     }
 
-    public function storeRequest(Request $request): JsonResponse
+    public function storeRequest(SubmitLeaveRequest $request): JsonResponse
     {
-        $validated = $request->validate([
-            'employee_id' => 'required',
-            'leave_type_id' => 'required',
-            'start_date' => 'required|date',
-            'end_date' => 'required|date|after_or_equal:start_date',
-            'reason' => 'nullable|string|max:500',
-        ]);
+        $validated = $request->validated();
 
         $user = $request->user();
         $canManageLeaves = $user && ($user->hasRole(['super-admin', 'admin', 'hr-manager']) || $user->hasPermission('leaves.manage'));
@@ -242,7 +230,7 @@ class LeaveController extends Controller
         ]);
     }
 
-    public function rejectRequest(Request $request, int $id): JsonResponse
+    public function rejectRequest(ReviewLeaveRequest $request, int $id): JsonResponse
     {
         $leaveRequest = LeaveRequest::findOrFail($id);
 
@@ -259,5 +247,42 @@ class LeaveController extends Controller
             'message' => 'Leave request rejected.',
             'data' => $rejected,
         ]);
+    }
+
+    public function cancelRequest(CancelLeaveRequest $request, int $id): JsonResponse
+    {
+        $leaveRequest = LeaveRequest::findOrFail($id);
+
+        $user = $request->user();
+        $canManageLeaves = $user && ($user->hasRole(['super-admin', 'admin', 'hr-manager']) || $user->hasPermission('leaves.manage'));
+
+        if (!$canManageLeaves && $user) {
+            $userEmployee = $user->employee;
+            if (!$userEmployee) {
+                return response()->json([
+                    'message' => 'User is not associated with an active employee record.',
+                ], 403);
+            }
+            if ((int) $leaveRequest->employee_id !== (int) $userEmployee->id) {
+                return response()->json([
+                    'message' => 'You cannot cancel leave requests for other employees.',
+                ], 403);
+            }
+        }
+
+        if (!in_array($leaveRequest->status, ['pending', 'approved'])) {
+            return response()->json([
+                'message' => "Cannot cancel leave request with status '{$leaveRequest->status}'.",
+            ], 422);
+        }
+
+        $rawReason = $request->input('reason') ?? $request->input('cancellation_reason');
+        $reason = !empty(trim((string) $rawReason)) ? trim((string) $rawReason) : 'Cancelled by user';
+        $cancelled = $this->leaveService->cancelLeaveRequest($leaveRequest, $user, $reason);
+
+        return response()->json([
+            'message' => 'Leave request cancelled successfully.',
+            'data' => $cancelled->fresh(['employee', 'leaveType']),
+        ], 200);
     }
 }

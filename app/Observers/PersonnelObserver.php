@@ -5,11 +5,16 @@ namespace App\Observers;
 use App\Events\PersonnelUpdated;
 use App\Jobs\SyncPersonnelJob;
 use App\Models\Personnel;
+use Illuminate\Support\Facades\Cache;
 
 class PersonnelObserver
 {
     public function created(Personnel $personnel): void
     {
+        if ($personnel->customize_id) {
+            Cache::forget("emp_custom_id:{$personnel->customize_id}");
+        }
+
         SyncPersonnelJob::dispatch($personnel->id, 'ADD');
         broadcast(new PersonnelUpdated(
             action: 'created',
@@ -22,6 +27,16 @@ class PersonnelObserver
 
     public function updated(Personnel $personnel): void
     {
+        if ($personnel->customize_id) {
+            Cache::forget("emp_custom_id:{$personnel->customize_id}");
+        }
+        if ($personnel->isDirty('customize_id')) {
+            $oldCustomizeId = $personnel->getOriginal('customize_id');
+            if ($oldCustomizeId) {
+                Cache::forget("emp_custom_id:{$oldCustomizeId}");
+            }
+        }
+
         SyncPersonnelJob::dispatch($personnel->id, 'EDIT');
         broadcast(new PersonnelUpdated(
             action: 'updated',
@@ -34,6 +49,10 @@ class PersonnelObserver
 
     public function deleting(Personnel $personnel): void
     {
+        if ($personnel->customize_id) {
+            Cache::forget("emp_custom_id:{$personnel->customize_id}");
+        }
+
         // Telemetry access logs are preserved as immutable compliance audit records
 
         \App\Models\SyncTask::where('personnel_id', $personnel->id)->delete();

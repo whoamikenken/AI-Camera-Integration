@@ -10,4 +10,6 @@ Artisan::command('inspire', function () {
 
 Schedule::command('camera:sync-personnel')->everyFiveMinutes();
 Schedule::command('sanctum:prune-expired --hours=24')->daily();
+Schedule::job(new \App\Jobs\DetectOverstayVisitorsJob())->everyFifteenMinutes();
+Schedule::job(new \App\Jobs\ExpireNoShowVisitsJob())->dailyAt('00:00');
 

@@ -1,0 +1,258 @@
+diff --git a/app/Http/Controllers/VisitorController.php b/app/Http/Controllers/VisitorController.php
+--- a/app/Http/Controllers/VisitorController.php
++++ b/app/Http/Controllers/VisitorController.php
+@@ -151,7 +151,106 @@
+         }
+ 
+         $perPage = (int) $request->query('per_page', 20);
+-        return response()->json($query->orderBy('expected_arrival', 'desc')->paginate($perPage));
++        $paginated = $query->orderBy('expected_arrival', 'desc')->paginate($perPage);
++
++        $stats = $this->calculateVisitorStats($request);
++        $response = $paginated->toArray();
++        $response['stats'] = $stats;
++        $response['meta'] = [
++            'stats' => $stats,
++        ];
++
++        return response()->json($response);
++    }
++
++    /**
++     * Get facility-wide aggregate visitor statistics.
++     */
++    public function stats(Request $request): JsonResponse
++    {
++        $stats = $this->calculateVisitorStats($request);
++
++        return response()->json([
++            'data' => $stats,
++            'stats' => $stats,
++            'meta' => [
++                'stats' => $stats,
++            ],
++        ]);
++    }
++
++    /**
++     * Calculate facility-wide visitor aggregate statistics.
++     */
++    protected function calculateVisitorStats(Request $request): array
++    {
++        $today = Carbon::today();
++        $isDateFiltered = $request->filled('date');
++
++        if ($isDateFiltered) {
++            try {
++                $targetDate = Carbon::parse($request->query('date'));
++                $startOfDay = $targetDate->copy()->startOfDay();
++                $endOfDay = $targetDate->copy()->endOfDay();
++            } catch (\Throwable) {
++                return [
++                    'expected_today' => 0,
++                    'checked_in' => 0,
++                    'checked_out' => 0,
++                    'overdue' => 0,
++                    'no_show' => 0,
++                    'total' => 0,
++                ];
++            }
++        } else {
++            $startOfDay = $today->copy()->startOfDay();
++            $endOfDay = $today->copy()->endOfDay();
++        }
++
++        $now = Carbon::now();
++
++        $expectedCount = Visit::where('status', 'expected')
++            ->whereBetween('expected_arrival', [$startOfDay, $endOfDay])
++            ->count();
++
++        $checkedInCount = Visit::where('status', 'checked_in')->count();
++
++        $checkedOutCount = Visit::where('status', 'checked_out')
++            ->where(function ($q) use ($startOfDay, $endOfDay) {
++                $q->whereBetween('check_out_time', [$startOfDay, $endOfDay])
++                  ->orWhere(function ($sub) use ($startOfDay, $endOfDay) {
++                      $sub->whereNull('check_out_time')
++                          ->whereBetween('updated_at', [$startOfDay, $endOfDay]);
++                  });
++            })
++            ->count();
++
++        $overdueCount = Visit::where(function ($q) use ($now) {
++            $q->where('status', 'overstayed')
++              ->orWhere(function ($sub) use ($now) {
++                  $sub->where('status', 'checked_in')
++                      ->whereNotNull('expected_departure')
++                      ->where('expected_departure', '<', $now);
++              });
++        })->count();
++
++        $noShowCount = Visit::where('status', 'no_show')
++            ->where(function ($q) use ($startOfDay, $endOfDay) {
++                $q->whereBetween('expected_arrival', [$startOfDay, $endOfDay])
++                  ->orWhereBetween('updated_at', [$startOfDay, $endOfDay]);
++            })
++            ->count();
++
++        $totalCount = Visit::whereBetween('expected_arrival', [$startOfDay, $endOfDay])->count();
++
++        return [
++            'expected_today' => $expectedCount,
++            'checked_in' => $checkedInCount,
++            'checked_out' => $checkedOutCount,
++            'overdue' => $overdueCount,
++            'no_show' => $noShowCount,
++            'total' => $totalCount,
++        ];
+     }
+ 
+     public function preRegister(Request $request): JsonResponse
+diff --git a/routes/api.php b/routes/api.php
+--- a/routes/api.php
++++ b/routes/api.php
+@@ -270,6 +270,7 @@
+     Route::put('visitors/{id}', [VisitorController::class, 'update'])->middleware('permission:visitors.manage');
+     Route::post('visitors/{id}/block', [VisitorController::class, 'block'])->middleware('permission:visitors.manage');
+ 
++    Route::get('visits/stats', [VisitorController::class, 'stats'])->middleware('permission:visitors.view');
+     Route::get('visits/overstayed', [VisitorController::class, 'overstayed'])->middleware('permission:visitors.view');
+     Route::get('visits', [VisitorController::class, 'listVisits'])->middleware('permission:visitors.view');
+     Route::post('visits', [VisitorController::class, 'preRegister'])->middleware('permission:visitors.preregister,visitors.checkin,visitors.manage');
+diff --git a/resources/js/stores/visitorStore.js b/resources/js/stores/visitorStore.js
+--- a/resources/js/stores/visitorStore.js
++++ b/resources/js/stores/visitorStore.js
+@@ -25,6 +25,8 @@
+             checked_in: 0,
+             checked_out: 0,
+             overdue: 0,
++            no_show: 0,
++            total: 0,
+         },
+     }),
+ 
+@@ -57,7 +59,19 @@
+                     this.visits = [];
+                 }
+ 
+-                this.computeVisitorStats();
++                const serverStats = data.stats || data.meta?.stats || data.summary;
++                if (serverStats) {
++                    this.stats = {
++                        expected_today: Number(serverStats.expected_today ?? 0),
++                        checked_in: Number(serverStats.checked_in ?? 0),
++                        checked_out: Number(serverStats.checked_out ?? 0),
++                        overdue: Number(serverStats.overdue ?? serverStats.overstayed ?? 0),
++                        no_show: Number(serverStats.no_show ?? 0),
++                        total: Number(serverStats.total ?? 0),
++                    };
++                } else {
++                    this.computeVisitorStats();
++                }
+             } catch (err) {
+                 notify.error('Visits Fetch Error', err.response?.data?.message || 'Unable to load visits.');
+             } finally {
+@@ -69,6 +83,7 @@
+             const checkedIn = this.visits.filter(v => v.status === 'checked_in').length;
+             const checkedOut = this.visits.filter(v => v.status === 'checked_out').length;
+             const expected = this.visits.filter(v => v.status === 'expected').length;
++            const noShow = this.visits.filter(v => v.status === 'no_show').length;
+             const overdue = this.visits.filter(v => {
+                 if (v.status === 'overstayed' || v.is_overstay) return true;
+                 if (v.status === 'checked_in' && v.expected_departure) {
+@@ -82,7 +97,28 @@
+                 checked_in: checkedIn,
+                 checked_out: checkedOut,
+                 overdue: overdue,
++                no_show: noShow,
++                total: this.visits.length,
+             };
++        },
++
++        async fetchStats() {
++            try {
++                const res = await apiClient.get('/visits/stats');
++                const s = res.data?.stats || res.data?.data || res.data;
++                if (s) {
++                    this.stats = {
++                        expected_today: Number(s.expected_today ?? 0),
++                        checked_in: Number(s.checked_in ?? 0),
++                        checked_out: Number(s.checked_out ?? 0),
++                        overdue: Number(s.overdue ?? s.overstayed ?? 0),
++                        no_show: Number(s.no_show ?? 0),
++                        total: Number(s.total ?? 0),
++                    };
++                }
++            } catch (err) {
++                console.error('Failed to load visitor stats:', err);
++            }
+         },
+ 
+         async fetchVisitors(search = '') {
+diff --git a/resources/js/components/visitors/VisitorDashboard.vue b/resources/js/components/visitors/VisitorDashboard.vue
+--- a/resources/js/components/visitors/VisitorDashboard.vue
++++ b/resources/js/components/visitors/VisitorDashboard.vue
+@@ -46,6 +46,7 @@
+                         <option value="overstayed">Overstayed</option>
+                         <option value="expected">Expected</option>
+                         <option value="checked_out">Checked Out</option>
++                        <option value="no_show">No Show</option>
+                         <option value="cancelled">Cancelled</option>
+                     </select>
+                     <button aria-label="Refresh visits" @click="visitorStore.fetchVisits(1)" class="p-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg border border-slate-200 text-xs cursor-pointer transition-colors" title="Refresh">
+@@ -101,6 +102,9 @@
+                                 <span v-else-if="visit.status === 'checked_out'" class="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-slate-100 border border-slate-200 text-slate-600">
+                                     Checked Out
+                                 </span>
++                                <span v-else-if="visit.status === 'no_show'" class="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-amber-50 border border-amber-200 text-amber-700">
++                                    No Show
++                                </span>
+                                 <span v-else-if="visit.status === 'cancelled'" class="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-slate-100 border border-slate-300 text-slate-500 line-through">
+                                     Cancelled
+                                 </span>
+@@ -128,6 +132,32 @@
+                         </tr>
+                     </tbody>
+                 </table>
++            </div>
++
++            <!-- Pagination Controls -->
++            <div v-if="visitorStore.pagination.last_page > 1" class="flex items-center justify-between pt-3 border-t border-slate-100 text-xs text-slate-500">
++                <div>
++                    Page {{ visitorStore.pagination.current_page }} of {{ visitorStore.pagination.last_page }}
++                    ({{ visitorStore.pagination.total }} total)
++                </div>
++                <div class="flex items-center gap-1.5">
++                    <button
++                        :disabled="visitorStore.pagination.current_page <= 1"
++                        @click="visitorStore.fetchVisits(visitorStore.pagination.current_page - 1)"
++                        aria-label="Previous page"
++                        class="px-3 py-1 bg-white border border-slate-200 hover:bg-slate-50 disabled:opacity-40 rounded-lg cursor-pointer transition-colors shadow-xs"
++                    >
++                        Previous
++                    </button>
++                    <button
++                        :disabled="visitorStore.pagination.current_page >= visitorStore.pagination.last_page"
++                        @click="visitorStore.fetchVisits(visitorStore.pagination.current_page + 1)"
++                        aria-label="Next page"
++                        class="px-3 py-1 bg-white border border-slate-200 hover:bg-slate-50 disabled:opacity-40 rounded-lg cursor-pointer transition-colors shadow-xs"
++                    >
++                        Next
++                    </button>
++                </div>
+             </div>
+         </div>
+ 
+diff --git a/app/Services/AttendanceProcessingService.php b/app/Services/AttendanceProcessingService.php
+--- a/app/Services/AttendanceProcessingService.php
++++ b/app/Services/AttendanceProcessingService.php
+@@ -204,7 +204,7 @@
+     public function isHoliday(Carbon $date, ?Employee $employee = null): bool
+     {
+         $year = $date->year;
+-        $holidayIds = Cache::remember("holiday_ids_{$year}", 3600, function () use ($year) {
++        $holidayIds = Cache::remember("holidays_{$year}", 3600, function () use ($year) {
+             return Holiday::whereYear('date', $year)->orWhere('is_recurring', true)->pluck('id')->toArray();
+         });
+         $holidays = Holiday::whereIn('id', $holidayIds)->get();

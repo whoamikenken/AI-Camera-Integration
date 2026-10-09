@@ -1,7 +1,14 @@
 <template>
     <div class="space-y-6">
         <!-- KPI Metrics Grid -->
-        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+        <div v-if="attendanceStore.loading" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4" aria-hidden="true">
+            <div v-for="i in 6" :key="`skel-kpi-${i}`" class="bg-white border border-slate-200/80 p-4 rounded-2xl shadow-xs animate-pulse motion-reduce:animate-none space-y-2">
+                <div class="h-3 bg-slate-200 rounded w-20"></div>
+                <div class="h-8 bg-slate-200 rounded w-16"></div>
+                <div class="h-2.5 bg-slate-100 rounded w-24"></div>
+            </div>
+        </div>
+        <div v-else class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
             <div class="bg-white border border-slate-200/80 p-4 rounded-2xl shadow-xs">
                 <div class="text-[11px] text-slate-500 uppercase font-bold tracking-wider">Total Scheduled</div>
                 <div class="text-2xl font-bold text-slate-900 mt-1 font-mono">{{ attendanceStore.stats.total_employees }}</div>
@@ -40,7 +47,7 @@
             <div class="lg:col-span-2 bg-white border border-slate-200/80 rounded-2xl p-5 space-y-4 shadow-xs">
                 <div class="flex items-center justify-between border-b border-slate-100 pb-3">
                     <div class="flex items-center space-x-2">
-                        <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                        <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse motion-reduce:animate-none"></span>
                         <h3 class="font-bold text-slate-900 text-base">Live Attendance Clock-In Stream</h3>
                     </div>
                     <span class="text-xs text-slate-400 font-mono">Channel: attendance</span>
@@ -107,13 +114,19 @@
 </template>
 
 <script setup>
-import { ref } from 'vue';
+import { ref, onMounted } from 'vue';
 import { useAttendanceStore } from '../../stores/attendanceStore';
 import ManualAttendanceEntry from './ManualAttendanceEntry.vue';
 import notify from '../../utils/notify';
 
 const attendanceStore = useAttendanceStore();
 const showManualModal = ref(false);
+
+onMounted(() => {
+    if (!attendanceStore.dailyRoster.length && !attendanceStore.loading) {
+        attendanceStore.fetchDailyAttendance();
+    }
+});
 
 const triggerFinalize = async () => {
     const confirmed = await notify.confirm(

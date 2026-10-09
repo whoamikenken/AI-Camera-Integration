@@ -20,6 +20,12 @@ class TelemetryDeduplicationTest extends TestCase
     {
         Cache::flush();
 
+        Device::firstOrCreate(['device_id' => '1026230'], [
+            'name' => 'Edge Camera 1026230',
+            'ip_address' => '127.0.0.1',
+            'is_active' => true,
+        ]);
+
         $command = new class extends MqttListenCommand {
             public function testHandleStrangerSnap(?string $deviceId, array $data, array $info, MqttClient $mqtt, ImageStorageService $storageService): void
             {
@@ -56,6 +62,12 @@ class TelemetryDeduplicationTest extends TestCase
     public function test_mqtt_listen_deduplicates_verify_push(): void
     {
         Cache::flush();
+
+        Device::firstOrCreate(['device_id' => '1026230'], [
+            'name' => 'Edge Camera 1026230',
+            'ip_address' => '127.0.0.1',
+            'is_active' => true,
+        ]);
 
         $command = new class extends MqttListenCommand {
             public function testHandleVerify(?string $deviceId, array $data, array $info, MqttClient $mqtt, ImageStorageService $storageService): void

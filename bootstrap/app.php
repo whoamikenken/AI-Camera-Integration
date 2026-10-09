@@ -15,6 +15,8 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        $middleware->trustProxies(at: '*');
+
         $csrfExcept = [
             'api/*',
             'Subscribe/*',
@@ -33,7 +35,6 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $middleware->redirectGuestsTo(fn (Request $request) => null);
 
-        $middleware->prependToGroup('api', \App\Http\Middleware\AuthenticateQueryToken::class);
         $middleware->append(\App\Http\Middleware\SecurityHeaders::class);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

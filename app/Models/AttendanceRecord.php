@@ -40,6 +40,17 @@ class AttendanceRecord extends Model
         'early_out_minutes' => 'integer',
     ];
 
+    public function setDateAttribute($value): void
+    {
+        if ($value instanceof \DateTimeInterface) {
+            $this->attributes['date'] = $value->format('Y-m-d');
+        } elseif (is_string($value) && strlen($value) >= 10) {
+            $this->attributes['date'] = substr($value, 0, 10);
+        } else {
+            $this->attributes['date'] = $value;
+        }
+    }
+
     public function employee(): BelongsTo
     {
         return $this->belongsTo(Employee::class);

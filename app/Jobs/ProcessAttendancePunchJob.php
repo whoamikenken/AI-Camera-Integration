@@ -11,6 +11,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 
 class ProcessAttendancePunchJob implements ShouldQueue
@@ -29,25 +30,52 @@ class ProcessAttendancePunchJob implements ShouldQueue
         }
 
         // Find linked employee via customize_id or personnel_id
-        $personnel = null;
-        if ($this->accessLog->customize_id) {
-            $personnel = Personnel::where('customize_id', $this->accessLog->customize_id)->first();
-        }
-
-        $employee = null;
-        if ($personnel) {
-            $employee = Employee::where('personnel_id', $personnel->id)->first();
-        }
-
-        if (!$employee && $this->accessLog->customize_id) {
-            $employee = Employee::where('employee_code', (string) $this->accessLog->customize_id)
-                ->orWhere('id', $this->accessLog->customize_id)
-                ->first();
-        }
-
-        if (!$employee) {
-            Log::info("No employee linked for access log #{$this->accessLog->id} (customize_id: {$this->accessLog->customize_id})");
+        $customizeId = $this->accessLog->customize_id;
+        if (!$customizeId) {
+            Log::info("No customize_id on access log #{$this->accessLog->id}");
             return;
+        }
+
+        $cacheKey = "emp_custom_id:{$customizeId}";
+        $cached = Cache::remember($cacheKey, 3600, function () use ($customizeId) {
+            $personnel = Personnel::where('customize_id', $customizeId)->first();
+            $employee = null;
+            if ($personnel) {
+                $employee = Employee::where('personnel_id', $personnel->id)->first();
+            }
+
+            if (!$employee) {
+                $employee = Employee::where('employee_code', (string) $customizeId)
+                    ->orWhere('id', $customizeId)
+                    ->first();
+            }
+
+            return [
+                'employee_id' => $employee?->id,
+                'personnel_id' => $personnel?->id ?? $employee?->personnel_id,
+            ];
+        });
+
+        $employeeId = $cached['employee_id'] ?? null;
+        if (!$employeeId) {
+            Log::info("No employee linked for access log #{$this->accessLog->id} (customize_id: {$customizeId})");
+            return;
+        }
+
+        $employee = Employee::find($employeeId);
+        if (!$employee) {
+            Cache::forget($cacheKey);
+            Log::info("Employee #{$employeeId} not found in database for access log #{$this->accessLog->id}");
+            return;
+        }
+
+        if (!empty($cached['personnel_id'])) {
+            $personnel = Cache::remember("personnel_cache:{$cached['personnel_id']}", 3600, function () use ($cached) {
+                return Personnel::find($cached['personnel_id']);
+            });
+            if ($personnel) {
+                $employee->setRelation('personnel', $personnel);
+            }
         }
 
         $device = $this->accessLog->device;

@@ -28,6 +28,21 @@ class EmployeeShiftAssignment extends Model
         'assigned_days' => 'array',
     ];
 
+    protected static function booted(): void
+    {
+        static::saved(function (EmployeeShiftAssignment $assignment) {
+            if ($assignment->employee_id) {
+                app(\App\Services\AttendanceProcessingService::class)->invalidateEmployeeShiftCache((int) $assignment->employee_id);
+            }
+        });
+
+        static::deleted(function (EmployeeShiftAssignment $assignment) {
+            if ($assignment->employee_id) {
+                app(\App\Services\AttendanceProcessingService::class)->invalidateEmployeeShiftCache((int) $assignment->employee_id);
+            }
+        });
+    }
+
     // Helper to test if assignment applies to a specific day of week
     public function appliesToDay(Carbon|string $date): bool
     {

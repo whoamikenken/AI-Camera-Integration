@@ -127,7 +127,7 @@
                                     item.id === 'alerts' &&
                                     store.stats.telemetry?.unresolved_alerts > 0
                                 "
-                                class="px-1.5 py-0.5 rounded-full text-[10px] font-mono font-bold animate-pulse"
+                                class="px-1.5 py-0.5 rounded-full text-[10px] font-mono font-bold animate-pulse motion-reduce:animate-none"
                                 :class="
                                     currentTab === item.id
                                         ? 'bg-white/20 text-white'
@@ -309,7 +309,7 @@
                     <div
                         v-for="i in 6"
                         :key="i"
-                        class="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-xs animate-pulse space-y-2"
+                        class="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-xs animate-pulse motion-reduce:animate-none space-y-2"
                     >
                         <div class="h-3 bg-slate-200 rounded w-20"></div>
                         <div class="h-7 bg-slate-200 rounded w-14"></div>
@@ -388,7 +388,7 @@
                                 v-if="
                                     store.stats.telemetry?.unresolved_alerts > 0
                                 "
-                                class="w-2 h-2 rounded-full bg-rose-500 animate-ping"
+                                class="w-2 h-2 rounded-full bg-rose-500 animate-ping motion-reduce:animate-none"
                             ></span>
                         </div>
                         <div
@@ -848,10 +848,12 @@ const initTelemetry = () => {
             visitorStore.handleLiveVisitorCheckOut(e),
         );
 
-    echo.private("notifications")
-        .listen(".NotificationCreated", (e) =>
-            notificationStore.handleLiveNotification(e),
-        );
+    if (authStore.user?.id) {
+        echo.private(`notifications.${authStore.user.id}`)
+            .listen(".NotificationCreated", (e) =>
+                notificationStore.handleLiveNotification(e),
+            );
+    }
 
     if (echo.connector?.pusher?.connection) {
         if (!window.onEchoConnected) {
@@ -887,7 +889,9 @@ const cleanupTelemetry = () => {
     echo.leave("sync-tasks");
     echo.leave("attendance");
     echo.leave("visitors");
-    echo.leave("notifications");
+    if (authStore.user?.id) {
+        echo.leave(`notifications.${authStore.user.id}`);
+    }
 };
 
 onMounted(async () => {

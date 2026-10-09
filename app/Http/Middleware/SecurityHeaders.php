@@ -26,13 +26,68 @@ class SecurityHeaders
             $response->headers->set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
         }
 
-        $csp = "default-src 'self'; "
-            . "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://static.cloudflareinsights.com; "
-            . "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
-            . "img-src 'self' data: blob: https:; "
-            . "font-src 'self' data: https://fonts.gstatic.com; "
-            . "connect-src 'self' ws: wss: https: https://cloudflareinsights.com; "
-            . "frame-ancestors 'none';";
+        $isProd = app()->environment('production');
+
+        $scriptSrc = ["'self'", "'unsafe-inline'"];
+        if (! $isProd) {
+            $scriptSrc[] = "'unsafe-eval'";
+        }
+        $scriptSrc[] = "'wasm-unsafe-eval'";
+        $scriptSrc[] = 'https://static.cloudflareinsights.com';
+
+        $workerSrc = ["'self'", 'blob:'];
+
+        $styleSrc = ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'];
+
+        $imgSrc = ["'self'", 'data:', 'blob:'];
+        $s3Url = config('filesystems.disks.s3.url');
+        if (! empty($s3Url)) {
+            $imgSrc[] = $s3Url;
+        }
+        $s3Endpoint = config('filesystems.disks.s3.endpoint');
+        if (! empty($s3Endpoint)) {
+            $imgSrc[] = $s3Endpoint;
+        }
+
+        $fontSrc = ["'self'", 'data:', 'https://fonts.gstatic.com'];
+
+        $connectSrc = ["'self'", 'https://cloudflareinsights.com'];
+        $reverbHost = config('broadcasting.connections.reverb.options.host') ?: env('VITE_REVERB_HOST');
+        $reverbPort = config('broadcasting.connections.reverb.options.port') ?: env('VITE_REVERB_PORT', 8080);
+
+        $hosts = array_filter(array_unique([
+            $reverbHost,
+            $request->getHost(),
+        ]));
+
+        foreach ($hosts as $host) {
+            if (! empty($host)) {
+                $connectSrc[] = "ws://{$host}:{$reverbPort}";
+                $connectSrc[] = "wss://{$host}:{$reverbPort}";
+                $connectSrc[] = "ws://{$host}";
+                $connectSrc[] = "wss://{$host}";
+            }
+        }
+
+        if (! $isProd) {
+            $connectSrc[] = 'ws://localhost:*';
+            $connectSrc[] = 'wss://localhost:*';
+            $connectSrc[] = 'ws://127.0.0.1:*';
+            $connectSrc[] = 'wss://camera-dev.8gategames.com';
+        }
+
+        $cspDirectives = [
+            "default-src 'self'",
+            'script-src '.implode(' ', array_unique($scriptSrc)),
+            'worker-src '.implode(' ', array_unique($workerSrc)),
+            'style-src '.implode(' ', array_unique($styleSrc)),
+            'img-src '.implode(' ', array_unique($imgSrc)),
+            'font-src '.implode(' ', array_unique($fontSrc)),
+            'connect-src '.implode(' ', array_unique($connectSrc)),
+            "frame-ancestors 'none'",
+        ];
+
+        $csp = implode('; ', $cspDirectives).';';
 
         $response->headers->set('Content-Security-Policy', $csp);
 

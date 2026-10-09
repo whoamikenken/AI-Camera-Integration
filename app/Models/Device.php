@@ -6,6 +6,7 @@ use App\Traits\Auditable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Device extends Model
@@ -122,6 +123,11 @@ class Device extends Model
     public function syncTasks(): HasMany
     {
         return $this->hasMany(SyncTask::class, 'device_id', 'device_id');
+    }
+
+    public function accessGroups(): BelongsToMany
+    {
+        return $this->belongsToMany(AccessGroup::class, 'access_group_device');
     }
 
     public function getEndpointUrlAttribute(): string

@@ -44,12 +44,78 @@
       </select>
     </div>
 
+    <!-- Floating Personnel Batch Action Toolbar -->
+    <transition name="fade">
+      <div 
+        v-if="selectedPersonnelCount > 0"
+        role="region"
+        aria-label="Personnel batch actions toolbar"
+        class="sticky top-4 z-40 bg-slate-900 text-white p-3.5 rounded-2xl shadow-xl border border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3"
+      >
+        <div class="flex items-center gap-3">
+          <div class="flex items-center gap-2">
+            <span class="w-6 h-6 rounded-full bg-indigo-500/20 text-indigo-400 flex items-center justify-center text-xs font-bold font-mono">
+              {{ selectedPersonnelCount }}
+            </span>
+            <span class="text-xs font-semibold text-slate-200">
+              {{ selectedPersonnelCount === 1 ? '1 person selected' : `${selectedPersonnelCount} personnel selected` }}
+            </span>
+          </div>
+          <span class="text-slate-600 text-xs hidden sm:inline">|</span>
+          <span class="text-[11px] text-slate-400 hidden sm:inline">Bulk Personnel Operations</span>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2 w-full sm:w-auto justify-end">
+          <!-- Sync to Cameras -->
+          <button 
+            @click="executeBulkSyncPersonnel" 
+            :disabled="bulkActionLoading"
+            class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-lg shadow-sm transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+            aria-label="Sync selected personnel to edge cameras"
+          >
+            <span aria-hidden="true">⚡</span>
+            <span>Sync to Cameras ({{ selectedPersonnelCount }})</span>
+          </button>
+
+          <!-- Delete Selected -->
+          <button 
+            @click="confirmBulkDeletePersonnel" 
+            :disabled="bulkActionLoading"
+            class="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold rounded-lg shadow-sm transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+            aria-label="Delete selected personnel records"
+          >
+            <span aria-hidden="true">🗑️</span>
+            <span>Delete Selected ({{ selectedPersonnelCount }})</span>
+          </button>
+
+          <!-- Clear Selection -->
+          <button 
+            @click="clearPersonnelSelection"
+            class="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium rounded-lg transition-colors cursor-pointer"
+            aria-label="Clear personnel selection"
+          >
+            ✕ Clear
+          </button>
+        </div>
+      </div>
+    </transition>
+
     <!-- Personnel Data Table -->
     <div class="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-xs">
       <div class="overflow-x-auto">
         <table class="w-full text-left text-xs text-slate-700">
           <thead class="bg-slate-50 text-slate-500 uppercase text-[11px] font-semibold border-b border-slate-200">
             <tr>
+              <th scope="col" class="py-3 px-4 w-10 text-center">
+                <input 
+                  type="checkbox" 
+                  :checked="isAllPersonnelSelected" 
+                  :indeterminate.prop="isPersonnelIndeterminate"
+                  @change="toggleSelectAllPersonnel"
+                  aria-label="Select all personnel on this page"
+                  class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 h-4 w-4 cursor-pointer"
+                />
+              </th>
               <th scope="col" class="py-3 px-4">Photo</th>
               <th scope="col" class="py-3 px-4">Custom ID</th>
               <th scope="col" class="py-3 px-4">Name</th>
@@ -62,6 +128,7 @@
           <tbody class="divide-y divide-slate-100">
             <template v-if="loading">
               <tr v-for="i in 5" :key="i" class="animate-pulse" aria-busy="true">
+                <td class="py-3 px-4 text-center"><div class="h-4 w-4 bg-slate-200 rounded mx-auto"></div></td>
                 <td class="py-3 px-4"><div class="w-10 h-10 rounded-full bg-slate-200"></div></td>
                 <td class="py-3 px-4"><div class="h-4 bg-slate-200 rounded w-16"></div></td>
                 <td class="py-3 px-4"><div class="h-4 bg-slate-200 rounded w-28"></div></td>
@@ -72,9 +139,23 @@
               </tr>
             </template>
             <tr v-else-if="records.length === 0">
-              <td colspan="7" class="py-12 text-center text-slate-500">No personnel records found. Click "Enroll New Person" to add one.</td>
+              <td colspan="8" class="py-12 text-center text-slate-500">No personnel records found. Click "Enroll New Person" to add one.</td>
             </tr>
-            <tr v-for="person in records" :key="person.id" class="hover:bg-slate-50 transition-colors">
+            <tr 
+              v-for="person in records" 
+              :key="person.id" 
+              :class="selectedPersonnelIds.includes(person.id) ? 'bg-indigo-50/40' : 'hover:bg-slate-50'"
+              class="transition-colors"
+            >
+              <td class="py-3 px-4 text-center">
+                <input 
+                  type="checkbox" 
+                  :value="person.id" 
+                  v-model="selectedPersonnelIds"
+                  :aria-label="`Select ${person.name}`"
+                  class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 h-4 w-4 cursor-pointer"
+                />
+              </td>
               <td class="py-3 px-4">
                 <div class="w-10 h-10 rounded-full bg-slate-100 border border-slate-200 overflow-hidden shrink-0">
                   <img v-if="person.photo_path || person.photo_base64" :src="person.photo_path ? `/storage/${person.photo_path}` : person.photo_base64" class="w-full h-full object-cover" />
@@ -282,14 +363,85 @@
         </form>
       </div>
     </div>
+
+    <!-- Bulk Campaign Progress Modal Integration -->
+    <BulkCampaignProgressModal 
+      :show="campaignStore.modalVisible"
+      :title="campaignStore.modalTitle"
+      :campaign="campaignStore.activeCampaign"
+      @close="campaignStore.closeModal"
+    />
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { useBulkCampaignStore } from '../stores/bulkCampaignStore';
+import BulkCampaignProgressModal from '../components/BulkCampaignProgressModal.vue';
 import notify from '../utils/notify';
 import apiClient from '../api/client';
 import echo from '../echo';
+
+const campaignStore = useBulkCampaignStore();
+const selectedPersonnelIds = ref([]);
+const bulkActionLoading = ref(false);
+
+const selectedPersonnelCount = computed(() => selectedPersonnelIds.value.length);
+const isAllPersonnelSelected = computed(() => {
+  return records.value.length > 0 && selectedPersonnelIds.value.length === records.value.length;
+});
+const isPersonnelIndeterminate = computed(() => {
+  return selectedPersonnelIds.value.length > 0 && selectedPersonnelIds.value.length < records.value.length;
+});
+
+function toggleSelectAllPersonnel() {
+  if (isAllPersonnelSelected.value) {
+    selectedPersonnelIds.value = [];
+  } else {
+    selectedPersonnelIds.value = records.value.map(p => p.id);
+  }
+}
+
+function clearPersonnelSelection() {
+  selectedPersonnelIds.value = [];
+}
+
+async function executeBulkSyncPersonnel() {
+  if (selectedPersonnelIds.value.length === 0) return;
+  bulkActionLoading.value = true;
+  try {
+    await campaignStore.startPersonnelSync(selectedPersonnelIds.value);
+    clearPersonnelSelection();
+  } catch (err) {
+    notify.error('Bulk Sync Error', err.response?.data?.message || 'Failed to dispatch bulk sync.');
+  } finally {
+    bulkActionLoading.value = false;
+  }
+}
+
+async function confirmBulkDeletePersonnel() {
+  if (selectedPersonnelIds.value.length === 0) return;
+  const confirmed = await notify.confirm(
+    `Delete ${selectedPersonnelCount.value} Personnel Records?`,
+    `This will permanently delete the selected personnel records and wipe their face templates from all edge cameras. This action cannot be undone.`,
+    'Yes, Delete Selected',
+    'Cancel',
+    true
+  );
+
+  if (!confirmed) return;
+
+  bulkActionLoading.value = true;
+  try {
+    await campaignStore.startPersonnelDelete(selectedPersonnelIds.value);
+    clearPersonnelSelection();
+    fetchPersonnel(pagination.value.current_page);
+  } catch (err) {
+    notify.error('Bulk Delete Error', err.response?.data?.message || 'Failed to dispatch bulk deletion.');
+  } finally {
+    bulkActionLoading.value = false;
+  }
+}
 
 const records = ref([]);
 const loading = ref(false);
@@ -333,6 +485,9 @@ const form = ref({
 });
 
 async function fetchPersonnel(page = 1) {
+  if (page === 1) {
+    clearPersonnelSelection();
+  }
   loading.value = true;
   try {
     const params = {

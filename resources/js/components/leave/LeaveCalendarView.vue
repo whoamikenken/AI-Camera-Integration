@@ -7,7 +7,24 @@
             <span class="text-xs text-slate-500">Out-of-Office Calendar</span>
         </div>
 
-        <div v-if="approvedLeaves.length === 0" class="py-10 text-center text-slate-500 text-xs">
+        <!-- Skeleton Loading State (prevents premature "No approved leaves" flash & CLS) -->
+        <div v-if="leaveStore.loading" class="space-y-2.5" aria-hidden="true">
+            <div v-for="i in 3" :key="`skel-leave-${i}`" class="flex items-center justify-between p-3.5 bg-slate-50 border border-slate-200/80 rounded-xl animate-pulse motion-reduce:animate-none">
+                <div class="flex items-center space-x-3">
+                    <div class="w-8 h-8 bg-slate-200 rounded-lg shrink-0"></div>
+                    <div class="space-y-1.5">
+                        <div class="h-4 bg-slate-200 rounded w-28"></div>
+                        <div class="h-3 bg-slate-100 rounded w-36"></div>
+                    </div>
+                </div>
+                <div class="space-y-1.5 text-right">
+                    <div class="h-3 bg-slate-200 rounded w-24 ml-auto"></div>
+                    <div class="h-3 bg-slate-100 rounded w-14 ml-auto"></div>
+                </div>
+            </div>
+        </div>
+
+        <div v-else-if="approvedLeaves.length === 0" class="py-10 text-center text-slate-500 text-xs">
             No approved leaves scheduled for this period.
         </div>
         <div v-else class="space-y-2.5">
@@ -29,12 +46,18 @@
 </template>
 
 <script setup>
-import { computed } from 'vue';
+import { computed, onMounted } from 'vue';
 import { useLeaveStore } from '../../stores/leaveStore';
 
 const leaveStore = useLeaveStore();
 
 const approvedLeaves = computed(() => {
     return leaveStore.leaveRequests.filter(r => r.status === 'approved');
+});
+
+onMounted(() => {
+    if (!leaveStore.leaveRequests.length && !leaveStore.loading) {
+        leaveStore.fetchLeaveRequests(1);
+    }
 });
 </script>

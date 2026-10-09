@@ -76,4 +76,9 @@ class Organization extends Model
     {
         return $this->hasMany(Holiday::class);
     }
+
+    public function accessGroups(): HasMany
+    {
+        return $this->hasMany(AccessGroup::class);
+    }
 }

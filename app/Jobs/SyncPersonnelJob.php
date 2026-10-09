@@ -5,6 +5,7 @@ namespace App\Jobs;
 use App\Models\Device;
 use App\Models\Personnel;
 use App\Models\SyncTask;
+use App\Services\AccessControlService;
 use App\Services\CameraMqttService;
 use App\Services\CameraService;
 use App\Services\CameraHttpService;
@@ -42,18 +43,24 @@ class SyncPersonnelJob implements ShouldQueue
         $this->onQueue('camera-sync');
     }
 
-    public function handle(CameraMqttService $cameraService): void
+    public function handle(CameraMqttService $cameraService, ?AccessControlService $accessControlService = null): void
     {
-        $devices = $this->targetDeviceId
-            ? Device::where('id', $this->targetDeviceId)->where('is_active', true)->get()
-            : Device::where('is_active', true)->get();
+        $accessControlService = $accessControlService ?? app(AccessControlService::class);
+        $person = $this->personnelId ? Personnel::find($this->personnelId) : null;
+
+        if ($this->targetDeviceId) {
+            $devices = Device::where('id', $this->targetDeviceId)->where('is_active', true)->get();
+        } elseif ($person) {
+            $devices = $accessControlService->getAuthorizedDevicesForPersonnel($person);
+        } else {
+            $devices = Device::where('is_active', true)->get();
+        }
 
         if ($devices->isEmpty()) {
             Log::info("SyncPersonnelJob: No active devices found for personnel {$this->personnelId}");
             return;
         }
 
-        $person = $this->personnelId ? Personnel::find($this->personnelId) : null;
         $cId = (int) ($this->customizeIdToDelete ?? ($person ? $person->customize_id : $this->personnelId));
 
         foreach ($devices as $device) {

@@ -51,7 +51,7 @@
         <!-- Import CSV -->
         <button
           type="button"
-          @click="showImportModal = true"
+          @click="openImportModal"
           class="px-3 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 rounded-xl transition-colors cursor-pointer shadow-xs inline-flex items-center gap-1.5"
         >
           <span>📤</span> Import
@@ -162,10 +162,95 @@
       </div>
     </div>
 
-    <!-- Loading Skeleton -->
-    <div v-if="store.loading" class="bg-white rounded-2xl p-12 text-center border border-slate-200 shadow-xs">
-      <div class="inline-block animate-spin text-2xl text-indigo-600 mb-2">⏳</div>
-      <div class="text-xs font-semibold text-slate-600">Loading workforce directory...</div>
+    <!-- Loading Skeletons (EMP-07) -->
+    <div v-if="store.loading" role="status" aria-label="Loading workforce directory">
+      <span class="sr-only">Loading workforce directory...</span>
+
+      <!-- Mode 1: Table Skeleton (5 animated rows matching column geometry) -->
+      <div v-if="store.viewMode === 'table'" class="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs" aria-hidden="true">
+            <thead class="bg-slate-50/80 border-b border-slate-200/80 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+              <tr>
+                <th scope="col" class="px-5 py-3.5">Employee</th>
+                <th scope="col" class="px-4 py-3.5">Code</th>
+                <th scope="col" class="px-4 py-3.5">Department &amp; Role</th>
+                <th scope="col" class="px-4 py-3.5">Shift Schedule</th>
+                <th scope="col" class="px-4 py-3.5">Status</th>
+                <th scope="col" class="px-4 py-3.5">Camera Face Biometrics</th>
+                <th scope="col" class="px-5 py-3.5 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+              <tr v-for="i in 5" :key="`skel-emp-${i}`" class="animate-pulse motion-reduce:animate-none">
+                <td class="px-5 py-3.5">
+                  <div class="flex items-center gap-3">
+                    <div class="w-9 h-9 rounded-xl bg-slate-200 shrink-0"></div>
+                    <div class="space-y-1.5">
+                      <div class="h-3.5 bg-slate-200 rounded w-28"></div>
+                      <div class="h-2.5 bg-slate-100 rounded w-20"></div>
+                    </div>
+                  </div>
+                </td>
+                <td class="px-4 py-3.5">
+                  <div class="h-3.5 bg-slate-200 rounded w-16"></div>
+                </td>
+                <td class="px-4 py-3.5">
+                  <div class="space-y-1.5">
+                    <div class="h-3.5 bg-slate-200 rounded w-24"></div>
+                    <div class="h-2.5 bg-slate-100 rounded w-16"></div>
+                  </div>
+                </td>
+                <td class="px-4 py-3.5">
+                  <div class="h-5 bg-slate-200 rounded-lg w-24"></div>
+                </td>
+                <td class="px-4 py-3.5">
+                  <div class="h-5 bg-slate-200 rounded-full w-16"></div>
+                </td>
+                <td class="px-4 py-3.5">
+                  <div class="h-5 bg-slate-200 rounded-full w-24"></div>
+                </td>
+                <td class="px-5 py-3.5 text-right">
+                  <div class="inline-flex items-center gap-1 justify-end">
+                    <div class="w-7 h-7 bg-slate-200 rounded-lg"></div>
+                    <div class="w-7 h-7 bg-slate-200 rounded-lg"></div>
+                    <div class="w-7 h-7 bg-slate-200 rounded-lg"></div>
+                    <div class="w-7 h-7 bg-slate-200 rounded-lg"></div>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Mode 2: Grid Skeleton (6 animated cards matching card geometry) -->
+      <div v-else class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4" aria-hidden="true">
+        <div
+          v-for="i in 6"
+          :key="`skel-card-${i}`"
+          class="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex flex-col justify-between animate-pulse motion-reduce:animate-none"
+        >
+          <div class="flex items-start gap-4">
+            <div class="w-14 h-14 rounded-2xl bg-slate-200 shrink-0"></div>
+            <div class="flex-1 min-w-0 space-y-2">
+              <div class="flex items-center justify-between gap-2">
+                <div class="h-4 bg-slate-200 rounded w-28"></div>
+                <div class="h-4 bg-slate-200 rounded-full w-14 shrink-0"></div>
+              </div>
+              <div class="h-3 bg-slate-200 rounded w-16"></div>
+              <div class="h-3 bg-slate-100 rounded w-32"></div>
+            </div>
+          </div>
+          <div class="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
+            <div class="h-3 bg-slate-200 rounded w-20"></div>
+            <div class="flex items-center gap-1">
+              <div class="h-6 w-12 bg-slate-200 rounded-lg"></div>
+              <div class="h-6 w-12 bg-slate-200 rounded-lg"></div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- Empty State -->
@@ -306,9 +391,11 @@
                     <span aria-hidden="true">⏱️</span>
                   </button>
                   <button
+                    type="button"
                     @click="confirmDelete(emp)"
+                    :disabled="store.deleting"
                     :aria-label="`Delete record for ${emp.first_name} ${emp.last_name || ''}`"
-                    class="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-rose-500"
+                    class="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-rose-500"
                     title="Archive / Soft Delete"
                   >
                     <span aria-hidden="true">🗑️</span>
@@ -430,17 +517,39 @@
       @saved="handleSaved"
     />
 
-    <!-- 3. Assign Shift Modal -->
-    <div v-if="showShiftModal && selectedEmployee" class="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+    <!-- 3. Assign Shift Modal (EMP-08) -->
+    <div
+      v-if="showShiftModal && selectedEmployee"
+      ref="shiftModalRef"
+      role="dialog"
+      aria-modal="true"
+      tabindex="-1"
+      aria-labelledby="assign-shift-modal-title"
+      @click.self="closeShiftModal"
+      @keydown.escape="closeShiftModal"
+      class="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4"
+    >
       <div class="bg-white rounded-2xl shadow-xl border border-slate-200 max-w-md w-full p-6 space-y-4">
-        <h3 class="text-sm font-bold text-slate-900">
-          Assign Shift Schedule: {{ selectedEmployee.first_name }} {{ selectedEmployee.last_name }}
-        </h3>
+        <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+          <h3 id="assign-shift-modal-title" class="text-sm font-bold text-slate-900">
+            Assign Shift Schedule: {{ selectedEmployee.first_name }} {{ selectedEmployee.last_name || '' }}
+          </h3>
+          <button
+            type="button"
+            @click="closeShiftModal"
+            aria-label="Close dialog"
+            class="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          >
+            ✕
+          </button>
+        </div>
 
         <div class="space-y-3 text-xs">
           <div>
-            <label class="block font-semibold text-slate-700 mb-1">Target Shift</label>
+            <label for="assign_shift_id" class="block font-semibold text-slate-700 mb-1">Target Shift</label>
             <select
+              id="assign_shift_id"
+              ref="shiftSelectRef"
               v-model="shiftForm.shift_id"
               class="w-full px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 bg-white"
             >
@@ -451,8 +560,9 @@
           </div>
 
           <div>
-            <label class="block font-semibold text-slate-700 mb-1">Effective From</label>
+            <label for="assign_effective_from" class="block font-semibold text-slate-700 mb-1">Effective From</label>
             <input
+              id="assign_effective_from"
               v-model="shiftForm.effective_from"
               type="date"
               class="w-full px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
@@ -460,8 +570,9 @@
           </div>
 
           <div>
-            <label class="block font-semibold text-slate-700 mb-1">Effective To (Optional)</label>
+            <label for="assign_effective_to" class="block font-semibold text-slate-700 mb-1">Effective To (Optional)</label>
             <input
+              id="assign_effective_to"
               v-model="shiftForm.effective_to"
               type="date"
               placeholder="Indefinite"
@@ -473,52 +584,105 @@
         <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
           <button
             type="button"
-            @click="showShiftModal = false"
+            @click="closeShiftModal"
             class="px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-100 rounded-lg cursor-pointer"
           >
             Cancel
           </button>
           <button
             type="button"
+            :disabled="isSubmittingShift || !shiftForm.shift_id || !shiftForm.effective_from"
             @click="submitAssignShift"
-            class="px-4 py-1.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg cursor-pointer shadow-xs"
+            class="px-4 py-1.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 rounded-lg cursor-pointer shadow-xs inline-flex items-center gap-1.5"
           >
-            Apply Shift
+            <svg
+              v-if="isSubmittingShift"
+              class="animate-spin h-3 w-3 text-white motion-reduce:animate-none"
+              fill="none"
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+            >
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            <span>{{ isSubmittingShift ? 'Applying...' : 'Apply Shift' }}</span>
           </button>
         </div>
       </div>
     </div>
 
-    <!-- 4. CSV Import Modal -->
-    <div v-if="showImportModal" class="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+    <!-- 4. CSV Import Modal (EMP-08) -->
+    <div
+      v-if="showImportModal"
+      ref="importModalRef"
+      role="dialog"
+      aria-modal="true"
+      tabindex="-1"
+      aria-labelledby="csv-import-modal-title"
+      aria-describedby="csv-import-modal-desc"
+      @click.self="closeImportModal"
+      @keydown.escape="closeImportModal"
+      class="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4"
+    >
       <div class="bg-white rounded-2xl shadow-xl border border-slate-200 max-w-md w-full p-6 space-y-4">
-        <h3 class="text-sm font-bold text-slate-900">Bulk Import Employees from CSV</h3>
-        <p class="text-xs text-slate-500">
+        <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+          <h3 id="csv-import-modal-title" class="text-sm font-bold text-slate-900">
+            Bulk Import Employees from CSV
+          </h3>
+          <button
+            type="button"
+            @click="closeImportModal"
+            aria-label="Close dialog"
+            class="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          >
+            ✕
+          </button>
+        </div>
+
+        <p id="csv-import-modal-desc" class="text-xs text-slate-500">
           Upload a CSV file containing workforce headers: <code>employee_code</code>, <code>first_name</code>, <code>last_name</code>, <code>work_email</code>.
         </p>
 
-        <input
-          type="file"
-          accept=".csv,.txt"
-          @change="importFile = $event.target.files?.[0]"
-          class="block w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer"
-        />
+        <div>
+          <label for="csv_import_file" class="block font-semibold text-slate-700 mb-1 text-xs">
+            Select CSV File
+          </label>
+          <input
+            id="csv_import_file"
+            ref="fileInputRef"
+            type="file"
+            accept=".csv,.txt"
+            aria-describedby="csv-import-modal-desc"
+            @change="importFile = $event.target.files?.[0]"
+            class="block w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer"
+          />
+        </div>
 
         <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
           <button
             type="button"
-            @click="showImportModal = false"
+            @click="closeImportModal"
             class="px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-100 rounded-lg cursor-pointer"
           >
             Cancel
           </button>
           <button
             type="button"
-            :disabled="!importFile"
+            :disabled="!importFile || isImporting"
             @click="submitImport"
-            class="px-4 py-1.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 rounded-lg cursor-pointer shadow-xs"
+            class="px-4 py-1.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 rounded-lg cursor-pointer shadow-xs inline-flex items-center gap-1.5"
           >
-            Upload &amp; Import
+            <svg
+              v-if="isImporting"
+              class="animate-spin h-3 w-3 text-white motion-reduce:animate-none"
+              fill="none"
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+            >
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            <span>{{ isImporting ? 'Importing...' : 'Upload & Import' }}</span>
           </button>
         </div>
       </div>
@@ -527,10 +691,11 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue';
+import { ref, reactive, onMounted, onUnmounted, nextTick } from 'vue';
 import { useEmployeeStore } from '../../stores/employeeStore';
 import EmployeeProfileModal from './EmployeeProfileModal.vue';
 import EmployeeFormModal from './EmployeeFormModal.vue';
+import notify from '../../utils/notify';
 
 const store = useEmployeeStore();
 
@@ -545,15 +710,40 @@ const showImportModal = ref(false);
 const selectedEmployee = ref(null);
 const importFile = ref(null);
 
+// Focus and submission management references
+const shiftModalRef = ref(null);
+const shiftSelectRef = ref(null);
+const importModalRef = ref(null);
+const fileInputRef = ref(null);
+let lastFocusedElement = null;
+
+const isSubmittingShift = ref(false);
+const isImporting = ref(false);
+
 const shiftForm = reactive({
   shift_id: '',
   effective_from: new Date().toISOString().slice(0, 10),
   effective_to: '',
 });
 
+function handleGlobalKeydown(e) {
+  if (e.key === 'Escape') {
+    if (showShiftModal.value) {
+      closeShiftModal();
+    } else if (showImportModal.value) {
+      closeImportModal();
+    }
+  }
+}
+
 onMounted(async () => {
+  window.addEventListener('keydown', handleGlobalKeydown);
   await store.fetchMetadata();
   await store.fetchEmployees(1);
+});
+
+onUnmounted(() => {
+  window.removeEventListener('keydown', handleGlobalKeydown);
 });
 
 function handleSearch() {
@@ -589,31 +779,86 @@ function editFromProfile(emp) {
 }
 
 function openAssignShiftModal(emp) {
+  lastFocusedElement = document.activeElement;
   selectedEmployee.value = emp;
   shiftForm.shift_id = emp.shift_id || (store.shifts[0]?.id ?? '');
   shiftForm.effective_from = new Date().toISOString().slice(0, 10);
   shiftForm.effective_to = '';
   showShiftModal.value = true;
+  nextTick(() => {
+    shiftSelectRef.value?.focus();
+  });
+}
+
+function closeShiftModal() {
+  showShiftModal.value = false;
+  nextTick(() => {
+    if (lastFocusedElement && typeof lastFocusedElement.focus === 'function') {
+      lastFocusedElement.focus();
+    }
+  });
 }
 
 async function submitAssignShift() {
-  if (!shiftForm.shift_id || !shiftForm.effective_from) return;
-  await store.assignShift(selectedEmployee.value.id, shiftForm);
-  showShiftModal.value = false;
-}
-
-async function confirmDelete(emp) {
-  const confirmed = confirm(`Are you sure you want to delete ${emp.first_name} ${emp.last_name}? This will revoke camera biometric access.`);
-  if (confirmed) {
-    await store.deleteEmployee(emp.id);
+  if (!shiftForm.shift_id || !shiftForm.effective_from || isSubmittingShift.value) return;
+  isSubmittingShift.value = true;
+  try {
+    await store.assignShift(selectedEmployee.value.id, shiftForm);
+    closeShiftModal();
+  } catch (err) {
+    console.error('Assign shift error:', err);
+  } finally {
+    isSubmittingShift.value = false;
   }
 }
 
-async function submitImport() {
-  if (!importFile.value) return;
-  await store.importCsv(importFile.value);
+function openImportModal() {
+  lastFocusedElement = document.activeElement;
+  showImportModal.value = true;
+  nextTick(() => {
+    fileInputRef.value?.focus();
+  });
+}
+
+function closeImportModal() {
   showImportModal.value = false;
   importFile.value = null;
+  nextTick(() => {
+    if (lastFocusedElement && typeof lastFocusedElement.focus === 'function') {
+      lastFocusedElement.focus();
+    }
+  });
+}
+
+async function submitImport() {
+  if (!importFile.value || isImporting.value) return;
+  isImporting.value = true;
+  try {
+    await store.importCsv(importFile.value);
+    closeImportModal();
+  } catch (err) {
+    console.error('CSV import error:', err);
+  } finally {
+    isImporting.value = false;
+  }
+}
+
+async function confirmDelete(emp) {
+  if (store.deleting) return;
+  const confirmed = await notify.confirm(
+    'Delete Employee Record',
+    `Are you sure you want to delete ${emp.first_name} ${emp.last_name || ''}? This will revoke camera biometric access.`,
+    'Yes, Delete',
+    'Cancel',
+    true
+  );
+  if (confirmed) {
+    try {
+      await store.deleteEmployee(emp.id);
+    } catch (err) {
+      console.error('Failed to delete employee:', err);
+    }
+  }
 }
 
 function handleSaved() {

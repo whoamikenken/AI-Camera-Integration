@@ -345,6 +345,7 @@
 <script setup>
 import { ref, reactive, computed, watch, onMounted, onUnmounted } from 'vue';
 import { useEmployeeStore } from '../../stores/employeeStore';
+import { useBiometricCapture } from '../../composables/useBiometricCapture';
 
 const props = defineProps({
   show: Boolean,
@@ -355,10 +356,16 @@ const emit = defineEmits(['close', 'saved']);
 const store = useEmployeeStore();
 
 const isEditing = computed(() => !!props.employee?.id);
-const hasWebcamSupport = ref(!!navigator.mediaDevices?.getUserMedia);
-const webcamActive = ref(false);
 const videoRef = ref(null);
-let mediaStream = null;
+
+const {
+  isStreaming: webcamActive,
+  hasSupport: hasWebcamSupport,
+  startCamera,
+  stopCamera,
+  capturePhoto,
+  processImageFile,
+} = useBiometricCapture({ targetSize: 480, minDimensions: 200 });
 
 const form = reactive({
   employee_code: '',
@@ -435,16 +442,22 @@ function generateCode() {
   form.employee_code = 'EMP-' + Math.floor(1000 + Math.random() * 9000);
 }
 
-function handleFileUpload(e) {
+async function handleFileUpload(e) {
   const file = e.target.files?.[0];
   if (!file) return;
 
-  const reader = new FileReader();
-  reader.onload = (event) => {
-    form.photo_base64 = event.target?.result;
-    form.avatar = event.target?.result;
-  };
-  reader.readAsDataURL(file);
+  try {
+    const dataUrl = await processImageFile(file);
+    form.photo_base64 = dataUrl;
+    form.avatar = dataUrl;
+  } catch (err) {
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      form.photo_base64 = event.target?.result;
+      form.avatar = event.target?.result;
+    };
+    reader.readAsDataURL(file);
+  }
 }
 
 function clearPhoto() {
@@ -453,39 +466,23 @@ function clearPhoto() {
 }
 
 async function openWebcam() {
-  try {
-    mediaStream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } });
-    webcamActive.value = true;
-    setTimeout(() => {
-      if (videoRef.value) {
-        videoRef.value.srcObject = mediaStream;
-      }
-    }, 100);
-  } catch (err) {
-    console.warn('Webcam access failed:', err);
+  const ok = await startCamera(videoRef);
+  if (!ok) {
     alert('Could not access webcam. Please check browser permissions.');
   }
 }
 
 function captureFrame() {
-  if (!videoRef.value) return;
-  const canvas = document.createElement('canvas');
-  canvas.width = 480;
-  canvas.height = 480;
-  const ctx = canvas.getContext('2d');
-  ctx.drawImage(videoRef.value, 80, 0, 480, 480, 0, 0, 480, 480);
-  const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
-  form.photo_base64 = dataUrl;
-  form.avatar = dataUrl;
-  stopWebcam();
+  const dataUrl = capturePhoto(videoRef);
+  if (dataUrl) {
+    form.photo_base64 = dataUrl;
+    form.avatar = dataUrl;
+    stopWebcam();
+  }
 }
 
 function stopWebcam() {
-  if (mediaStream) {
-    mediaStream.getTracks().forEach(track => track.stop());
-    mediaStream = null;
-  }
-  webcamActive.value = false;
+  stopCamera();
 }
 
 async function handleSubmit() {

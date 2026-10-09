@@ -2,8 +2,13 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\BulkRebootDeviceRequest;
+use App\Http\Requests\BulkSyncMqttDeviceRequest;
+use App\Http\Requests\StoreDeviceRequest;
+use App\Http\Requests\UpdateDeviceRequest;
 use App\Jobs\ImportCameraPersonnelJob;
 use App\Models\Device;
+use App\Models\DeviceCommand;
 use App\Services\CameraService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -50,25 +55,9 @@ class DeviceController extends Controller
         return response()->json($devices);
     }
 
-    public function store(Request $request): JsonResponse
+    public function store(StoreDeviceRequest $request): JsonResponse
     {
-        $validated = $request->validate([
-            'device_id' => 'required|string|max:64|unique:devices,device_id',
-            'name' => 'required|string|max:128',
-            'scheme' => 'nullable|string|in:http,https',
-            'endpoint' => 'nullable|string|max:255',
-            'endpoint_url' => 'nullable|string|max:255',
-            'ip_address' => 'nullable|string|max:255',
-            'port' => 'nullable|integer|min:1|max:65535',
-            'username' => 'nullable|string|max:64',
-            'password' => 'nullable|string|max:64',
-            'device_type' => 'nullable|integer|in:0,1,2,3',
-            'device_role' => 'nullable|string|in:entry,exit,bidirectional,visitor_kiosk',
-            'organization_id' => 'nullable|exists:organizations,id',
-            'location_id' => 'nullable|exists:locations,id',
-            'mqtt_topic' => 'nullable|string|max:128',
-            'is_active' => 'nullable|boolean',
-        ]);
+        $validated = $request->validated();
 
         $rawEndpoint = $validated['endpoint'] ?? $validated['endpoint_url'] ?? $validated['ip_address'] ?? '127.0.0.1';
         $ip = trim(preg_replace('#^https?://#i', '', $rawEndpoint), '/');
@@ -126,24 +115,9 @@ class DeviceController extends Controller
         ]));
     }
 
-    public function update(Request $request, Device $device): JsonResponse
+    public function update(UpdateDeviceRequest $request, Device $device): JsonResponse
     {
-        $validated = $request->validate([
-            'name' => 'sometimes|required|string|max:128',
-            'scheme' => 'nullable|string|in:http,https',
-            'endpoint' => 'nullable|string|max:255',
-            'endpoint_url' => 'nullable|string|max:255',
-            'ip_address' => 'nullable|string|max:255',
-            'port' => 'nullable|integer|min:1|max:65535',
-            'username' => 'nullable|string|max:64',
-            'password' => 'nullable|string|max:64',
-            'device_type' => 'nullable|integer|in:0,1,2,3',
-            'device_role' => 'nullable|string|in:entry,exit,bidirectional,visitor_kiosk',
-            'organization_id' => 'nullable|exists:organizations,id',
-            'location_id' => 'nullable|exists:locations,id',
-            'mqtt_topic' => 'nullable|string|max:128',
-            'is_active' => 'nullable|boolean',
-        ]);
+        $validated = $request->validated();
 
         $rawEndpoint = $validated['endpoint'] ?? $validated['endpoint_url'] ?? $validated['ip_address'] ?? $device->ip_address;
         $ip = trim(preg_replace('#^https?://#i', '', $rawEndpoint), '/');
@@ -176,11 +150,31 @@ class DeviceController extends Controller
         return response()->json($result);
     }
 
-    public function reboot(Device $device): JsonResponse
+    public function reboot(Request $request, Device $device): JsonResponse
     {
+        if ($request->boolean('async') || $request->hasHeader('Prefer')) {
+            $command = $this->cameraService->dispatchCommandAsync($device, 'RebootDevice', ['IsRebootDevice' => 1]);
+
+            return response()->json([
+                'success' => true,
+                'status' => 'PENDING',
+                'message' => 'Reboot command dispatched asynchronously',
+                'command' => $command,
+            ], 202);
+        }
+
         $result = $this->cameraService->rebootDevice($device);
 
         return response()->json($result);
+    }
+
+    public function commandStatus(DeviceCommand $command): JsonResponse
+    {
+        return response()->json([
+            'success' => true,
+            'data' => $command,
+            'command' => $command,
+        ]);
     }
 
     public function syncMqtt(Request $request, Device $device): JsonResponse
@@ -506,11 +500,15 @@ class DeviceController extends Controller
         $localPersonnel = \App\Models\Personnel::select(['id', 'customize_id', 'name', 'person_type', 'gender', 'id_card', 'tel_num', 'photo_path'])
             ->orderBy('customize_id', 'asc')
             ->get();
-        $syncTasks = \App\Models\SyncTask::where('device_id', $device->device_id)
-            ->latest('updated_at')
-            ->get()
+        $localPersonnelKeyed = $localPersonnel->keyBy('customize_id');
+
+        $latestTaskIds = \App\Models\SyncTask::where('device_id', $device->device_id)
+            ->whereNotNull('personnel_id')
             ->groupBy('personnel_id')
-            ->map(fn($tasks) => $tasks->first());
+            ->selectRaw('MAX(id)');
+        $syncTasks = \App\Models\SyncTask::whereIn('id', $latestTaskIds)
+            ->get()
+            ->keyBy('personnel_id');
 
         $auditList = [];
         $syncedCount = 0;
@@ -560,7 +558,7 @@ class DeviceController extends Controller
 
         // Also append any untracked persons returned from the camera hardware that don't exist in local personnel
         foreach ($cameraPersons as $cId => $cp) {
-            $existsInLocal = $localPersonnel->contains('customize_id', $cId);
+            $existsInLocal = $localPersonnelKeyed->has($cId);
             if (!$existsInLocal) {
                 $auditList[] = [
                     'id' => null,
@@ -667,4 +665,56 @@ class DeviceController extends Controller
 
         return response()->json($result);
     }
+
+    public function bulkReboot(BulkRebootDeviceRequest $request): JsonResponse
+    {
+        $validated = $request->validated();
+
+        $campaign = \App\Models\BulkCampaign::create([
+            'user_id' => $request->user()?->id,
+            'campaign_type' => 'reboot_fleet',
+            'total_items' => count($validated['device_ids']),
+            'processed_items' => 0,
+            'failed_items' => 0,
+            'status' => 'pending',
+            'payload' => [
+                'device_ids' => $validated['device_ids'],
+            ],
+        ]);
+
+        \App\Jobs\BulkDeviceCampaignJob::dispatch($campaign->id);
+
+        return response()->json([
+            'campaign_id' => $campaign->id,
+            'message' => 'Fleet bulk reboot campaign queued.',
+            'data' => $campaign,
+        ], 202);
+    }
+
+    public function bulkSyncMqtt(BulkSyncMqttDeviceRequest $request): JsonResponse
+    {
+        $validated = $request->validated();
+
+        $campaign = \App\Models\BulkCampaign::create([
+            'user_id' => $request->user()?->id,
+            'campaign_type' => 'update_mqtt_config',
+            'total_items' => count($validated['device_ids']),
+            'processed_items' => 0,
+            'failed_items' => 0,
+            'status' => 'pending',
+            'payload' => [
+                'device_ids' => $validated['device_ids'],
+                'mqtt_config' => $validated['mqtt_config'],
+            ],
+        ]);
+
+        \App\Jobs\BulkDeviceCampaignJob::dispatch($campaign->id);
+
+        return response()->json([
+            'campaign_id' => $campaign->id,
+            'message' => 'Fleet bulk MQTT parameter update campaign queued.',
+            'data' => $campaign,
+        ], 202);
+    }
 }
+

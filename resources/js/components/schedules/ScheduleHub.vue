@@ -12,11 +12,15 @@
       </div>
 
       <!-- Segmented Pill Tabs -->
-      <div class="flex items-center bg-slate-100 p-1.5 rounded-xl border border-slate-200 overflow-x-auto">
+      <div role="tablist" aria-label="Schedule navigation tabs" class="flex flex-wrap items-center bg-slate-100 p-1.5 rounded-xl border border-slate-200 gap-1">
         <button
           v-for="tab in tabs"
           :key="tab.id"
           type="button"
+          role="tab"
+          :id="'schedule-tab-' + tab.id"
+          :aria-selected="activeTab === tab.id ? 'true' : 'false'"
+          :aria-controls="'schedule-panel-' + tab.id"
           @click="activeTab = tab.id"
           class="px-4 py-2 text-xs font-bold rounded-lg transition-all whitespace-nowrap cursor-pointer flex items-center gap-2"
           :class="activeTab === tab.id ? 'bg-white text-indigo-600 shadow-xs' : 'text-slate-600 hover:text-slate-900'"
@@ -29,9 +33,33 @@
 
     <!-- Active Sub-View -->
     <div>
-      <ShiftManager v-if="activeTab === 'shifts'" />
-      <ShiftAssignment v-else-if="activeTab === 'assignments'" />
-      <HolidayCalendar v-else-if="activeTab === 'holidays'" />
+      <div
+        v-if="activeTab === 'shifts'"
+        id="schedule-panel-shifts"
+        role="tabpanel"
+        aria-labelledby="schedule-tab-shifts"
+        tabindex="0"
+      >
+        <ShiftManager />
+      </div>
+      <div
+        v-else-if="activeTab === 'assignments'"
+        id="schedule-panel-assignments"
+        role="tabpanel"
+        aria-labelledby="schedule-tab-assignments"
+        tabindex="0"
+      >
+        <ShiftAssignment />
+      </div>
+      <div
+        v-else-if="activeTab === 'holidays'"
+        id="schedule-panel-holidays"
+        role="tabpanel"
+        aria-labelledby="schedule-tab-holidays"
+        tabindex="0"
+      >
+        <HolidayCalendar />
+      </div>
     </div>
   </div>
 </template>

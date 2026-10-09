@@ -62,6 +62,7 @@ class HolidayController extends Controller
 
         $year = \Carbon\Carbon::parse($holiday->date)->year;
         \Illuminate\Support\Facades\Cache::forget("holidays_{$year}");
+        \Illuminate\Support\Facades\Cache::forget("holiday_ids_{$year}");
 
         return response()->json([
             'message' => 'Holiday created successfully.',
@@ -91,10 +92,12 @@ class HolidayController extends Controller
 
         $year = \Carbon\Carbon::parse($holiday->date)->year;
         \Illuminate\Support\Facades\Cache::forget("holidays_{$year}");
+        \Illuminate\Support\Facades\Cache::forget("holiday_ids_{$year}");
         $holiday->update($validated);
         $newYear = \Carbon\Carbon::parse($holiday->date)->year;
         if ($newYear !== $year) {
             \Illuminate\Support\Facades\Cache::forget("holidays_{$newYear}");
+            \Illuminate\Support\Facades\Cache::forget("holiday_ids_{$newYear}");
         }
 
         return response()->json([
@@ -108,6 +111,7 @@ class HolidayController extends Controller
         $holiday = Holiday::findOrFail($id);
         $year = \Carbon\Carbon::parse($holiday->date)->year;
         \Illuminate\Support\Facades\Cache::forget("holidays_{$year}");
+        \Illuminate\Support\Facades\Cache::forget("holiday_ids_{$year}");
         
         $holiday->delete();
 

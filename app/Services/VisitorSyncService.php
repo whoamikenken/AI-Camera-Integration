@@ -49,15 +49,59 @@ class VisitorSyncService
      */
     public function revokeVisitorFace(Visit $visit): void
     {
+        $customizeId = 900000 + $visit->id;
         if ($visit->personnel_id) {
             $personnel = Personnel::find($visit->personnel_id);
             if ($personnel) {
-                SyncPersonnelJob::dispatch($personnel, 'DELETE');
+                SyncPersonnelJob::dispatch($personnel->id, 'DELETE', null, $personnel->customize_id);
                 $personnel->delete();
+            } else {
+                SyncPersonnelJob::dispatch($visit->personnel_id, 'DELETE', null, $customizeId);
             }
 
             $visit->update(['personnel_id' => null]);
+        } else {
+            $personnel = Personnel::where('customize_id', $customizeId)->first();
+            if ($personnel) {
+                SyncPersonnelJob::dispatch($personnel->id, 'DELETE', null, $personnel->customize_id);
+                $personnel->delete();
+            } else {
+                SyncPersonnelJob::dispatch(null, 'DELETE', null, $customizeId);
+            }
         }
+    }
+
+    /**
+     * Cancel an expected or checked-in visit and revoke edge camera access.
+     */
+    public function cancelVisit(Visit $visit, ?\App\Models\User $user = null, ?string $reason = null): Visit
+    {
+        if (in_array($visit->status, ['cancelled', 'checked_out', 'no_show'])) {
+            throw ValidationException::withMessages([
+                'status' => ["Cannot cancel visit with status '{$visit->status}'."],
+            ]);
+        }
+
+        // Immediately de-provision camera face whitelist
+        $this->revokeVisitorFace($visit);
+
+        $cancellationReason = !empty(trim((string) ($reason ?? ''))) ? trim((string) $reason) : 'Cancelled by user';
+        $visit->update([
+            'status' => 'cancelled',
+            'cancellation_reason' => $cancellationReason,
+            'cancelled_by' => $user?->id,
+            'cancelled_at' => now(),
+        ]);
+
+        $freshVisit = $visit->fresh(['visitor', 'host', 'personnel']);
+
+        try {
+            \App\Events\VisitorCheckedOut::dispatch($freshVisit);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning("Failed to broadcast visitor cancellation: " . $e->getMessage());
+        }
+
+        return $freshVisit;
     }
 
     /**

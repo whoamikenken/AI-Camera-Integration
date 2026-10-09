@@ -9,6 +9,7 @@ use Illuminate\Broadcasting\PrivateChannel;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Cache;
 
 class AttendancePunchReceived implements ShouldBroadcast
 {
@@ -35,11 +36,26 @@ class AttendancePunchReceived implements ShouldBroadcast
 
     public function broadcastWith(): array
     {
+        $employee = $this->punch->relationLoaded('employee') ? $this->punch->employee : $this->punch->employee;
+        $employeeName = 'Unknown';
+        if ($employee) {
+            if ($employee->relationLoaded('personnel') && $employee->personnel) {
+                $employeeName = $employee->personnel->name;
+                if ($employee->personnel_id) {
+                    Cache::put("emp_personnel_name:{$employee->personnel_id}", $employeeName, 3600);
+                }
+            } elseif ($employee->personnel_id) {
+                $employeeName = Cache::remember("emp_personnel_name:{$employee->personnel_id}", 3600, function () use ($employee) {
+                    return $employee->personnel?->name ?? 'Unknown';
+                });
+            }
+        }
+
         return [
             'punch' => [
                 'id' => $this->punch->id,
                 'employee_id' => $this->punch->employee_id,
-                'employee_name' => $this->punch->employee?->personnel?->name ?? 'Unknown',
+                'employee_name' => $employeeName,
                 'employee_code' => $this->punch->employee?->employee_code,
                 'department_name' => $this->punch->employee?->department?->name,
                 'punch_time' => $this->punch->punch_time ? $this->punch->punch_time->toISOString() : now()->toISOString(),

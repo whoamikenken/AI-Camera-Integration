@@ -58,7 +58,7 @@ class HttpWebhookController extends Controller
         // 4. Pre-enrolled camera edge IP allowlist (or loopback in local/testing)
         if ($device && $device->is_active) {
             $clientIp = $request->ip();
-            if ($clientIp === $device->ip_address || in_array($clientIp, ['127.0.0.1', '::1'], true)) {
+            if ($clientIp === $device->ip_address || (app()->environment('local', 'testing') && in_array($clientIp, ['127.0.0.1', '::1'], true))) {
                 return true;
             }
         }

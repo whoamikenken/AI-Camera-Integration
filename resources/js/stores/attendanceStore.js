@@ -20,6 +20,8 @@ export const useAttendanceStore = defineStore('attendance', {
             late: 0,
             on_leave: 0,
             early_out: 0,
+            half_day: 0,
+            holiday: 0,
             attendance_rate: 0,
         },
         pagination: {
@@ -65,19 +67,41 @@ export const useAttendanceStore = defineStore('attendance', {
 
                 if (Array.isArray(data)) {
                     this.dailyRoster = data;
-                } else if (data.roster) {
-                    this.dailyRoster = data.roster;
-                    if (data.stats) {
-                        this.stats = { ...this.stats, ...data.stats };
-                    }
                 } else if (data.data) {
                     this.dailyRoster = data.data;
+                } else if (data.roster) {
+                    this.dailyRoster = data.roster;
                 } else {
                     this.dailyRoster = [];
                 }
 
-                // Compute local stats if not from server
-                if (!data.stats) {
+                // Sync pagination from data.records if present
+                if (data.records && typeof data.records === 'object') {
+                    this.pagination = {
+                        current_page: Number(data.records.current_page || 1),
+                        last_page: Number(data.records.last_page || 1),
+                        per_page: Number(data.records.per_page || 50),
+                        total: Number(data.records.total || 0),
+                    };
+                }
+
+                // Bind summary metrics from server if provided, fallback to local compute
+                const summary = data.summary || data.stats;
+                if (summary) {
+                    const total = Number(summary.total ?? summary.total_employees ?? 0);
+                    const present = Number(summary.present ?? 0);
+                    this.stats = {
+                        total_employees: total,
+                        present: present,
+                        absent: Number(summary.absent ?? 0),
+                        late: Number(summary.late ?? 0),
+                        on_leave: Number(summary.on_leave ?? 0),
+                        early_out: Number(summary.early_out ?? 0),
+                        half_day: Number(summary.half_day ?? 0),
+                        holiday: Number(summary.holiday ?? 0),
+                        attendance_rate: total > 0 ? Math.round((present / total) * 100) : 0,
+                    };
+                } else {
                     this.computeLocalStats();
                 }
             } catch (err) {
@@ -95,6 +119,8 @@ export const useAttendanceStore = defineStore('attendance', {
             const late = this.dailyRoster.filter(r => r.is_late || ['late', 'late_and_early_out'].includes(r.status)).length;
             const on_leave = this.dailyRoster.filter(r => r.status === 'on_leave').length;
             const early_out = this.dailyRoster.filter(r => r.is_early_out || ['early_out', 'late_and_early_out'].includes(r.status)).length;
+            const half_day = this.dailyRoster.filter(r => r.status === 'half_day').length;
+            const holiday = this.dailyRoster.filter(r => r.status === 'holiday').length;
 
             this.stats = {
                 total_employees: total,
@@ -103,6 +129,8 @@ export const useAttendanceStore = defineStore('attendance', {
                 late,
                 on_leave,
                 early_out,
+                half_day,
+                holiday,
                 attendance_rate: total > 0 ? Math.round((present / total) * 100) : 0,
             };
         },

@@ -313,4 +313,325 @@ class Tier2BoundaryTest extends E2ETestCase
         $response = $this->getJson('/api/devices?search=&status=&page=');
         $response->assertStatus(200);
     }
+
+    // =========================================================================
+    // SECTION 6: Evolution Boundary & Corner Cases (Features 1 - 43)
+    // =========================================================================
+
+    public function test_boundary_access_group_with_empty_membership_handles_resolution_cleanly(): void
+    {
+        $this->requireTable('access_groups', 'Milestone 2');
+        $this->requireClass('App\Services\AccessControlService', 'Milestone 2');
+
+        $group = \App\Models\AccessGroup::create([
+            'name' => 'Empty Group',
+            'code' => 'EMPTY-GRP',
+            'is_active' => true,
+        ]);
+        $personnel = $this->createTestPersonnel();
+
+        $service = app(\App\Services\AccessControlService::class);
+        $devices = $service->getAuthorizedDevicesForPersonnel($personnel);
+
+        $this->assertInstanceOf(\Illuminate\Support\Collection::class, $devices);
+    }
+
+    public function test_boundary_system_with_zero_access_groups_falls_back_to_all_active_devices(): void
+    {
+        $this->requireClass('App\Services\AccessControlService', 'Milestone 2');
+
+        $activeDevice = $this->createTestDevice(['is_active' => true]);
+        $inactiveDevice = $this->createTestDevice(['is_active' => false]);
+        $personnel = $this->createTestPersonnel();
+
+        $service = app(\App\Services\AccessControlService::class);
+        $devices = $service->getAuthorizedDevicesForPersonnel($personnel);
+
+        $this->assertTrue($devices->contains('id', $activeDevice->id));
+        $this->assertFalse($devices->contains('id', $inactiveDevice->id));
+    }
+
+    public function test_boundary_personnel_in_multiple_overlapping_access_groups_deduplicates_devices(): void
+    {
+        $this->requireTable('access_groups', 'Milestone 2');
+        $this->requireClass('App\Services\AccessControlService', 'Milestone 2');
+
+        $devA = $this->createTestDevice(['device_id' => 'DEV-A']);
+        $devB = $this->createTestDevice(['device_id' => 'DEV-B']);
+        $devC = $this->createTestDevice(['device_id' => 'DEV-C']);
+        $personnel = $this->createTestPersonnel();
+
+        $grp1 = \App\Models\AccessGroup::create(['name' => 'Zone 1', 'code' => 'Z1', 'is_active' => true]);
+        $grp2 = \App\Models\AccessGroup::create(['name' => 'Zone 2', 'code' => 'Z2', 'is_active' => true]);
+
+        $grp1->devices()->attach([$devA->id, $devB->id]);
+        $grp2->devices()->attach([$devB->id, $devC->id]); // Overlap on devB
+
+        $grp1->personnel()->attach($personnel->id);
+        $grp2->personnel()->attach($personnel->id);
+
+        $service = app(\App\Services\AccessControlService::class);
+        $devices = $service->getAuthorizedDevicesForPersonnel($personnel);
+
+        $this->assertEquals(3, $devices->unique('id')->count());
+    }
+
+    public function test_boundary_leave_cancellation_half_day_increment_atomic_restoration(): void
+    {
+        $this->requireRoute('/api/leave-requests/1/cancel', 'POST', 'Milestone 3');
+        $this->requireTable('leave_requests', 'Milestone 3');
+        $this->requireTable('leave_balances', 'Milestone 3');
+
+        $admin = $this->actingAsAdmin();
+        $emp = \App\Models\Employee::create([
+            'employee_code' => 'EMP-HALF-01',
+            'first_name' => 'Half',
+            'last_name' => 'Day',
+            'employment_status' => 'active',
+            'user_id' => $admin->id,
+        ]);
+        $leaveType = \App\Models\LeaveType::create(['name' => 'Personal Leave', 'code' => 'PL-01', 'is_paid' => true]);
+        $balance = \App\Models\LeaveBalance::create([
+            'employee_id' => $emp->id,
+            'leave_type_id' => $leaveType->id,
+            'allocated_days' => 10,
+            'used_days' => 2.5,
+            'pending_days' => 0,
+            'remaining_days' => 7.5,
+            'year' => 2026,
+        ]);
+
+        $request = \App\Models\LeaveRequest::create([
+            'id' => 1,
+            'employee_id' => $emp->id,
+            'leave_type_id' => $leaveType->id,
+            'start_date' => Carbon::tomorrow()->toDateString(),
+            'end_date' => Carbon::tomorrow()->toDateString(),
+            'total_days' => 0.5,
+            'status' => 'approved',
+            'reason' => 'Doctor appointment half-day',
+        ]);
+
+        $response = $this->postJson('/api/leave-requests/' . $request->id . '/cancel', [
+            'reason' => 'Doctor rescheduled appointment',
+        ]);
+
+        $response->assertStatus(200);
+        $balance->refresh();
+        $this->assertEquals(2.0, (float) $balance->used_days);
+    }
+
+    public function test_boundary_cannot_cancel_already_cancelled_leave_request(): void
+    {
+        $this->requireRoute('/api/leave-requests/1/cancel', 'POST', 'Milestone 3');
+        $this->requireTable('leave_requests', 'Milestone 3');
+
+        $this->actingAsAdmin();
+        $emp = \App\Models\Employee::create(['employee_code' => 'EMP-ALREADY-01', 'first_name' => 'A', 'last_name' => 'B', 'employment_status' => 'active']);
+        $type = \App\Models\LeaveType::create(['name' => 'Sick', 'code' => 'SL', 'is_paid' => true]);
+        $req = \App\Models\LeaveRequest::create([
+            'id' => 1,
+            'employee_id' => $emp->id,
+            'leave_type_id' => $type->id,
+            'start_date' => now()->toDateString(),
+            'end_date' => now()->toDateString(),
+            'total_days' => 1,
+            'status' => 'cancelled', // Already cancelled
+            'reason' => 'Previous cancellation',
+        ]);
+
+        $response = $this->postJson('/api/leave-requests/' . $req->id . '/cancel', [
+            'reason' => 'Attempting duplicate cancel',
+        ]);
+
+        $this->assertContains($response->status(), [400, 422]);
+    }
+
+    public function test_boundary_visitor_overstay_exact_15_minute_window_threshold(): void
+    {
+        $this->requireClass('App\Jobs\DetectOverstayVisitorsJob', 'Milestone 3');
+        $this->requireTable('visits', 'Milestone 3');
+
+        $vis = \App\Models\Visitor::create(['first_name' => 'Threshold', 'last_name' => 'Tester']);
+        // Case 1: Departure was 10 mins ago (within grace window, not overstayed)
+        $visitNormal = \App\Models\Visit::create([
+            'visitor_id' => $vis->id,
+            'purpose' => 'briefing',
+            'status' => 'checked_in',
+            'check_in_time' => now()->subHours(2),
+            'expected_departure' => now()->subMinutes(10),
+        ]);
+
+        // Case 2: Departure was 25 mins ago (exceeded 15m cutoff, should be overstayed)
+        $visitOverstayed = \App\Models\Visit::create([
+            'visitor_id' => $vis->id,
+            'purpose' => 'audit',
+            'status' => 'checked_in',
+            'check_in_time' => now()->subHours(3),
+            'expected_departure' => now()->subMinutes(25),
+        ]);
+
+        dispatch_sync(new \App\Jobs\DetectOverstayVisitorsJob());
+
+        $visitOverstayed->refresh();
+        $this->assertEquals('overstayed', $visitOverstayed->status);
+    }
+
+    public function test_boundary_expire_no_show_visits_skips_today_and_future_visits(): void
+    {
+        $this->requireClass('App\Jobs\ExpireNoShowVisitsJob', 'Milestone 3');
+        $this->requireTable('visits', 'Milestone 3');
+
+        $vis = \App\Models\Visitor::create(['first_name' => 'Future', 'last_name' => 'Tester']);
+        $todayVisit = \App\Models\Visit::create([
+            'visitor_id' => $vis->id,
+            'purpose' => 'tour',
+            'status' => 'expected',
+            'expected_arrival' => now()->addHours(2), // Today upcoming
+        ]);
+        $futureVisit = \App\Models\Visit::create([
+            'visitor_id' => $vis->id,
+            'purpose' => 'interview',
+            'status' => 'expected',
+            'expected_arrival' => now()->addDays(2), // Future
+        ]);
+
+        dispatch_sync(new \App\Jobs\ExpireNoShowVisitsJob());
+
+        $todayVisit->refresh();
+        $futureVisit->refresh();
+        $this->assertEquals('expected', $todayVisit->status);
+        $this->assertEquals('expected', $futureVisit->status);
+    }
+
+    public function test_boundary_bulk_personnel_sync_exact_50_person_chunking(): void
+    {
+        $this->requireClass('App\Jobs\BulkPersonnelSyncJob', 'Milestone 4');
+
+        // Test with 51 items: partitions must yield 2 chunks
+        $items = range(1, 51);
+        $chunks = array_chunk($items, 50);
+
+        $this->assertCount(2, $chunks);
+        $this->assertCount(50, $chunks[0]);
+        $this->assertCount(1, $chunks[1]);
+    }
+
+    public function test_boundary_bulk_reboot_with_empty_devices_array_rejected_with_422(): void
+    {
+        $this->requireRoute('/api/devices/bulk-reboot', 'POST', 'Milestone 4');
+
+        $this->actingAsAdmin();
+        $response = $this->postJson('/api/devices/bulk-reboot', [
+            'device_ids' => [],
+        ]);
+
+        $response->assertStatus(422);
+    }
+
+    public function test_boundary_bulk_personnel_deletion_with_empty_array_rejected_with_422(): void
+    {
+        $this->requireRoute('/api/personnel/bulk-delete', 'POST', 'Milestone 4');
+
+        $this->actingAsAdmin();
+        $response = $this->postJson('/api/personnel/bulk-delete', [
+            'personnel_ids' => [],
+        ]);
+
+        $response->assertStatus(422);
+    }
+
+    public function test_boundary_bulk_campaign_progress_clamps_between_zero_and_one_hundred_percent(): void
+    {
+        $this->requireTable('bulk_campaigns', 'Milestone 4');
+        $this->requireClass('App\Models\BulkCampaign', 'Milestone 4');
+
+        $admin = $this->actingAsAdmin();
+        $campaign = \App\Models\BulkCampaign::create([
+            'user_id' => $admin->id,
+            'campaign_type' => 'reboot_fleet',
+            'total_items' => 20,
+            'processed_items' => 10,
+            'failed_items' => 0,
+            'status' => 'processing',
+        ]);
+
+        $pct = ($campaign->total_items > 0)
+            ? round(($campaign->processed_items / $campaign->total_items) * 100)
+            : 0;
+
+        $this->assertEquals(50, $pct);
+    }
+
+    public function test_boundary_hardware_ack_with_non_zero_error_code_marks_command_failed(): void
+    {
+        $this->requireMethod('App\Services\CameraMqttService', 'handleCommandAck', 'Milestone 5');
+        $this->requireTable('device_commands', 'Milestone 5');
+
+        $device = $this->createTestDevice();
+        $messageId = 'ERR-ACK-' . uniqid();
+        $command = \App\Models\DeviceCommand::create([
+            'device_id' => $device->id,
+            'message_id' => $messageId,
+            'operator' => 'RebootDevice',
+            'status' => 'pending',
+        ]);
+
+        $errorAckPacket = [
+            'operator' => 'RebootDeviceAck',
+            'messageId' => $messageId,
+            'code' => 1, // Error
+            'desc' => 'Hardware busy, retry later',
+        ];
+
+        $service = app(\App\Services\CameraMqttService::class);
+        $service->handleCommandAck($errorAckPacket);
+
+        $command->refresh();
+        $this->assertEquals('failed', $command->status);
+    }
+
+    public function test_boundary_hardware_ack_with_unknown_message_id_handled_gracefully(): void
+    {
+        $this->requireMethod('App\Services\CameraMqttService', 'handleCommandAck', 'Milestone 5');
+
+        $unmatchedAck = [
+            'operator' => 'UnknownAck',
+            'messageId' => 'NON-EXISTENT-' . uniqid(),
+            'code' => 0,
+        ];
+
+        $service = app(\App\Services\CameraMqttService::class);
+        // Calling with unmatched ACK must not throw exception
+        $service->handleCommandAck($unmatchedAck);
+        $this->assertTrue(true);
+    }
+
+    public function test_boundary_telemetry_packet_with_empty_images_processes_without_crashing(): void
+    {
+        $this->requireClass('App\Jobs\ProcessTelemetryPacketJob', 'Milestone 5');
+
+        $device = $this->createTestDevice();
+        $payload = [
+            'operator' => 'VerifyPush',
+            'info' => [
+                'facesluiceId' => $device->device_id,
+                'RecordID' => 77777,
+                'customId' => 3333,
+                'similarity1' => 90.0,
+                'time' => now()->format('Y-m-d H:i:s'),
+                'SanpPic' => null, // Empty image
+                'ScenePic' => null,
+            ],
+        ];
+
+        $job = new \App\Jobs\ProcessTelemetryPacketJob($device->device_id, 'VerifyPush', $payload);
+        dispatch_sync($job);
+
+        $this->assertDatabaseHas('access_logs', [
+            'device_id' => $device->device_id,
+            'customize_id' => 3333,
+        ]);
+    }
 }
+

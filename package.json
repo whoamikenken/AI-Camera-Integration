@@ -18,7 +18,11 @@
         "pusher-js": "^8.6.0",
         "tailwindcss": "^4.3.3",
         "vite": "^8.0.0",
-        "vue": "^3.5.41"
+        "vue": "^3.5.43"
+    },
+    "overrides": {
+        "shell-quote": "^1.11.0",
+        "source-map-js": "^1.2.2"
     },
     "optionalDependencies": {
         "@laravel/multiplex": "^0.4.1"

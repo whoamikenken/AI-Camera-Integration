@@ -2,6 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\BulkDeletePersonnelRequest;
+use App\Http\Requests\BulkSyncPersonnelRequest;
+use App\Http\Requests\StorePersonnelRequest;
+use App\Http\Requests\UpdatePersonnelRequest;
 use App\Jobs\SyncPersonnelJob;
 use App\Models\Personnel;
 use App\Services\ImageStorageService;
@@ -50,26 +54,9 @@ class PersonnelController extends Controller
         return response()->json($personnel);
     }
 
-    public function store(Request $request): JsonResponse
+    public function store(StorePersonnelRequest $request): JsonResponse
     {
-        $validated = $request->validate([
-            'customize_id' => 'nullable|integer|unique:personnel,customize_id',
-            'name' => 'required|string|max:64',
-            'person_type' => 'required|integer|in:0,1',
-            'gender' => 'nullable|integer|in:0,1',
-            'id_card' => 'nullable|string|max:32',
-            'tel_num' => 'nullable|string|max:32',
-            'address' => 'nullable|string|max:128',
-            'birthday' => 'nullable|date',
-            'temp_valid' => 'nullable|integer|in:0,1',
-            'valid_begin' => 'nullable|date',
-            'valid_end' => 'nullable|date',
-            'effect_number' => 'nullable|integer',
-            'photo' => 'nullable|image|max:10240', // 10MB max upload
-            'photo_base64' => 'nullable|string',
-            'photo_url' => 'nullable|string',
-            'photo_path' => 'nullable|string',
-        ]);
+        $validated = $request->validated();
 
         if ($request->hasFile('photo')) {
             $stored = $this->storageService->storeUploadedImage($request->file('photo'));
@@ -82,12 +69,16 @@ class PersonnelController extends Controller
                 $validated['photo_base64'] = $stored['base64'];
             }
         } elseif (!empty($validated['photo_url']) || !empty($validated['photo_path'])) {
-            $source = $validated['photo_url'] ?? $validated['photo_path'];
-            if (!empty($validated['photo_url']) && filter_var($source, FILTER_VALIDATE_URL) && !$this->storageService->isSafeUrl($source)) {
-                throw \Illuminate\Validation\ValidationException::withMessages([
-                    'photo_url' => ['The provided photo URL points to a restricted or private network address.'],
-                ]);
+            foreach (['photo_url', 'photo_path'] as $field) {
+                if (!empty($validated[$field]) && filter_var($validated[$field], FILTER_VALIDATE_URL)) {
+                    if (!$this->storageService->isSafeUrl($validated[$field])) {
+                        throw \Illuminate\Validation\ValidationException::withMessages([
+                            $field => ['The provided photo URL points to a restricted or private network address.'],
+                        ]);
+                    }
+                }
             }
+            $source = $validated['photo_url'] ?? $validated['photo_path'];
             $stored = $this->storageService->storeFromUrlOrPath($source, 'personnel');
             if ($stored) {
                 $validated['photo_path'] = $stored['path'];
@@ -109,25 +100,9 @@ class PersonnelController extends Controller
         return response()->json($personnel);
     }
 
-    public function update(Request $request, Personnel $personnel): JsonResponse
+    public function update(UpdatePersonnelRequest $request, Personnel $personnel): JsonResponse
     {
-        $validated = $request->validate([
-            'name' => 'required|string|max:64',
-            'person_type' => 'required|integer|in:0,1',
-            'gender' => 'nullable|integer|in:0,1',
-            'id_card' => 'nullable|string|max:32',
-            'tel_num' => 'nullable|string|max:32',
-            'address' => 'nullable|string|max:128',
-            'birthday' => 'nullable|date',
-            'temp_valid' => 'nullable|integer|in:0,1',
-            'valid_begin' => 'nullable|date',
-            'valid_end' => 'nullable|date',
-            'effect_number' => 'nullable|integer',
-            'photo' => 'nullable|image|max:10240',
-            'photo_base64' => 'nullable|string',
-            'photo_url' => 'nullable|string',
-            'photo_path' => 'nullable|string',
-        ]);
+        $validated = $request->validated();
 
         if ($request->hasFile('photo')) {
             $stored = $this->storageService->storeUploadedImage($request->file('photo'));
@@ -140,12 +115,16 @@ class PersonnelController extends Controller
                 $validated['photo_base64'] = $stored['base64'];
             }
         } elseif ((!empty($validated['photo_url']) || !empty($validated['photo_path'])) && ($validated['photo_url'] ?? $validated['photo_path']) !== $personnel->photo_path) {
-            $source = $validated['photo_url'] ?? $validated['photo_path'];
-            if (!empty($validated['photo_url']) && filter_var($source, FILTER_VALIDATE_URL) && !$this->storageService->isSafeUrl($source)) {
-                throw \Illuminate\Validation\ValidationException::withMessages([
-                    'photo_url' => ['The provided photo URL points to a restricted or private network address.'],
-                ]);
+            foreach (['photo_url', 'photo_path'] as $field) {
+                if (!empty($validated[$field]) && filter_var($validated[$field], FILTER_VALIDATE_URL)) {
+                    if (!$this->storageService->isSafeUrl($validated[$field])) {
+                        throw \Illuminate\Validation\ValidationException::withMessages([
+                            $field => ['The provided photo URL points to a restricted or private network address.'],
+                        ]);
+                    }
+                }
             }
+            $source = $validated['photo_url'] ?? $validated['photo_path'];
             $stored = $this->storageService->storeFromUrlOrPath($source, 'personnel');
             if ($stored) {
                 $validated['photo_path'] = $stored['path'];
@@ -215,4 +194,65 @@ class PersonnelController extends Controller
             'employee' => $employee,
         ], 201);
     }
+
+    public function bulkSync(BulkSyncPersonnelRequest $request): JsonResponse
+    {
+        $validated = $request->validated();
+
+        $campaign = \App\Models\BulkCampaign::create([
+            'user_id' => $request->user()?->id,
+            'campaign_type' => 'sync_personnel',
+            'total_items' => count($validated['personnel_ids']),
+            'processed_items' => 0,
+            'failed_items' => 0,
+            'status' => 'pending',
+            'payload' => [
+                'personnel_ids' => $validated['personnel_ids'],
+                'device_id' => $validated['device_id'] ?? null,
+            ],
+        ]);
+
+        \App\Jobs\BulkPersonnelSyncJob::dispatch(
+            $validated['personnel_ids'],
+            $campaign->id,
+            'sync',
+            $validated['device_id'] ?? null
+        );
+
+        return response()->json([
+            'campaign_id' => $campaign->id,
+            'message' => 'Bulk personnel sync campaign queued.',
+            'data' => $campaign,
+        ], 202);
+    }
+
+    public function bulkDelete(BulkDeletePersonnelRequest $request): JsonResponse
+    {
+        $validated = $request->validated();
+
+        $campaign = \App\Models\BulkCampaign::create([
+            'user_id' => $request->user()?->id,
+            'campaign_type' => 'delete_personnel',
+            'total_items' => count($validated['personnel_ids']),
+            'processed_items' => 0,
+            'failed_items' => 0,
+            'status' => 'pending',
+            'payload' => [
+                'personnel_ids' => $validated['personnel_ids'],
+            ],
+        ]);
+
+        \App\Jobs\BulkPersonnelSyncJob::dispatch(
+            $validated['personnel_ids'],
+            $campaign->id,
+            'delete'
+        );
+
+        return response()->json([
+            'campaign_id' => $campaign->id,
+            'message' => 'Bulk personnel deletion campaign queued.',
+            'data' => $campaign,
+        ], 202);
+    }
 }
+

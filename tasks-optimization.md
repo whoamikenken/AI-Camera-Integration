@@ -133,6 +133,34 @@ This optimization roadmap documents all audit findings, UX friction points, acce
 - [x] **SET-05 (a11y):** Add explicit `aria-label` or `<label>` tags to search and filter dropdowns in `AuditLogViewer.vue:6-34`. `[ARCHIVED · Jules 13610617331227140394]`
 - [x] **SET-06 (a11y):** Upgrade Change Diff modal (`AuditLogViewer.vue:121-129`) with dialog semantics, Escape key listener, and accessible close button name. `[ARCHIVED · Jules 13610617331227140394]`
 
+### 20. Attendance Reports & Analytics (`AttendanceReports.vue`)
+- [x] **REP-04 (a11y & Forms):** Associate all filter labels (`Report Period`, `Date`, `Month`, `Year`, `Department`) with select/input elements using explicit `for` and `id` attributes in `resources/js/components/reports/AttendanceReports.vue:7-41`.
+- [x] **REP-05 (CLS & States):** Replace plain text loading placeholder (`line 61`) with an 8-column animated skeleton table, and replace raw emoji `⚡` with an accessible SVG spinner during async report generation in `resources/js/components/reports/AttendanceReports.vue:45-66`.
+- [x] **REP-06 (Interaction):** Add disabled and loading state feedback to the "Export CSV" button to prevent duplicate triggers during file generation in `resources/js/components/reports/AttendanceReports.vue:48-50`.
+
+### 21. Daily Attendance Roster & Overrides (`DailyAttendanceRoster.vue`)
+- [x] **ROST-01 (a11y & UX):** Replace native browser `window.confirm()` in `DailyAttendanceRoster.vue:184` with accessible confirmation modal dialog (`notify.confirm()`).
+- [x] **ROST-02 (a11y):** Add explicit `aria-label`s to date input, department filter, status filter, search box, and refresh button in `resources/js/components/attendance/DailyAttendanceRoster.vue:6-42`.
+- [x] **ROST-03 (a11y):** Add `scope="col"` to all table header `<th>` cells in `resources/js/components/attendance/DailyAttendanceRoster.vue:52-60`.
+- [x] **ROST-04 (CLS & States):** Replace single-cell text loader (`line 64`) with 5 animated skeleton table rows matching table column dimensions in `resources/js/components/attendance/DailyAttendanceRoster.vue:63-65`.
+- [x] **ROST-05 (a11y & Forms):** Upgrade Status Override Modal (`lines 121-149`) to a compliant dialog (`role="dialog"`, `aria-modal="true"`, `aria-labelledby`, Escape key handling, and `<label for="...">` mappings).
+
+### 22. Employee Attendance Calendar (`EmployeeAttendanceCalendar.vue`)
+- [x] **CAL-01 (a11y):** Convert modal wrapper (`lines 2-14`) into a semantic dialog (`role="dialog"`, `aria-modal="true"`, `aria-labelledby="calendar-modal-title"`, `@keydown.escape="close"`, and close button `aria-label="Close dialog"`).
+- [x] **CAL-02 (a11y):** Add descriptive `aria-label="Previous month"` and `aria-label="Next month"` to calendar navigation buttons in `resources/js/components/attendance/EmployeeAttendanceCalendar.vue:18-20`.
+- [x] **CAL-03 (a11y & CLS):** Implement accessible calendar grid announcements (`role="grid"`, descriptive `aria-label` with date and status for day cells) and skeleton loading state during async month queries in `resources/js/components/attendance/EmployeeAttendanceCalendar.vue:47-62`.
+
+### 23. Workforce Directory & Shift Modals (`EmployeeDirectory.vue`)
+- [x] **EMP-06 (a11y & UX):** Replace native `window.confirm()` on employee deletion in `EmployeeDirectory.vue:606` with accessible confirmation modal (`notify.confirm()`).
+- [x] **EMP-07 (CLS & States):** Replace single spinning emoji `⏳` loader (`lines 166-169`) with mode-specific skeleton loaders (skeleton table for table mode, skeleton cards for grid mode) in `resources/js/components/employees/EmployeeDirectory.vue`.
+- [x] **EMP-08 (a11y & Forms):** Upgrade Assign Shift Modal (`lines 434-490`) and CSV Bulk Import Modal (`lines 493-525`) to compliant dialogs with `role="dialog"`, `aria-modal="true"`, Escape listeners, and explicit label associations.
+
+### 24. Attendance Dashboard & Sub-Hub Navigation (`AttendanceDashboard.vue` & Sub-Hubs)
+- [x] **DASH-01 (Interaction & CLS):** Add skeleton pulse loader to KPI metric cards in `AttendanceDashboard.vue:4-35` during async summary query to eliminate layout shifts.
+- [x] **DASH-02 (Visual Polish & a11y):** Add `motion-reduce:animate-none` override to the live attendance stream pulsating indicator in `AttendanceDashboard.vue:43` and alert ping in `App.vue:391`.
+- [x] **HUB-01 (a11y & Responsive):** Implement ARIA tabs pattern (`role="tablist"`, `role="tab"`, `aria-selected`, `aria-controls`, `role="tabpanel"`) and responsive flex wrapping on sub-hub navigation bars across `AttendanceHub.vue`, `ScheduleHub.vue`, `VisitorHub.vue`, and `SettingsHub.vue`.
+- [x] **LVE-06 (Interaction):** Add loading skeleton state to `LeaveCalendarView.vue:10` during `leaveStore.loading` to prevent premature "No approved leaves" flash.
+
 ---
 
 ## 📅 Phased Execution Milestones

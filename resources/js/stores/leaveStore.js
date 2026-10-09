@@ -142,14 +142,32 @@ export const useLeaveStore = defineStore('leave', {
             }
         },
 
-        async rejectRegularization(id, remarks = '') {
+        async cancelRegularization(id, remarks = '') {
             try {
-                const res = await apiClient.put(`/regularization-requests/${id}/reject`, { remarks });
-                notify.toast('Regularization rejected.', 'info');
+                const res = await apiClient.post(`/regularization-requests/${id}/cancel`, {
+                    cancellation_reason: remarks,
+                    reason: remarks,
+                });
+                notify.success('Regularization Cancelled', 'Regularization request has been cancelled.');
                 await this.fetchRegularizations();
                 return res.data;
             } catch (err) {
-                notify.error('Rejection Failed', err.response?.data?.message || 'Could not reject regularization.');
+                notify.error('Cancellation Failed', err.response?.data?.message || 'Could not cancel regularization.');
+                throw err;
+            }
+        },
+
+        async cancelLeaveRequest(id, reason = '') {
+            try {
+                const res = await apiClient.post(`/leave-requests/${id}/cancel`, {
+                    cancellation_reason: reason,
+                    reason: reason,
+                });
+                notify.success('Leave Request Cancelled', 'Leave request cancelled and balances restored.');
+                await this.fetchLeaveRequests(this.pagination.current_page);
+                return res.data;
+            } catch (err) {
+                notify.error('Cancellation Failed', err.response?.data?.message || 'Could not cancel leave request.');
                 throw err;
             }
         },

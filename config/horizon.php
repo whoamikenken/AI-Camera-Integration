@@ -98,6 +98,8 @@ return [
 
     'waits' => [
         'redis:default' => 60,
+        'redis:camera-telemetry' => 30,
+        'redis:camera-sync' => 30,
     ],
 
     /*
@@ -199,7 +201,7 @@ return [
     'defaults' => [
         'supervisor-1' => [
             'connection' => 'redis',
-            'queue' => ['default'],
+            'queue' => ['default', 'camera-sync', 'camera-telemetry'],
             'balance' => 'auto',
             'autoScalingStrategy' => 'time',
             'maxProcesses' => 1,

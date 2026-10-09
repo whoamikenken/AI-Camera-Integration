@@ -597,12 +597,11 @@ import formatMediaUrl from '../utils/media';
 import HistoricalBackfillModal from '../components/HistoricalBackfillModal.vue';
 import notify from '../utils/notify';
 import apiClient from '../api/client';
+import { usePaginatedResource } from '../composables/usePaginatedResource';
 
 const store = useCameraStore();
 const viewMode = ref('grid');
-const loading = ref(false);
 const showBackfillModal = ref(false);
-const snaps = ref([]);
 
 const filters = ref({
   deviceId: '',
@@ -610,12 +609,25 @@ const filters = ref({
   to: '',
 });
 
-const pagination = ref({
-  current_page: 1,
-  last_page: 1,
-  per_page: 20,
-  total: 0,
-});
+const {
+  items: snaps,
+  loading,
+  pagination,
+  fetch: fetchSnapsPage,
+} = usePaginatedResource((params) => {
+  return apiClient.get('/api/stranger-snaps', {
+    params: {
+      ...params,
+      device_id: filters.value.deviceId || undefined,
+      from: filters.value.from || undefined,
+      to: filters.value.to || undefined,
+    }
+  });
+}, { initialPerPage: 20, immediate: false });
+
+function fetchSnaps(page = 1) {
+  fetchSnapsPage(page);
+}
 
 const modal = ref({
   show: false,
@@ -653,31 +665,6 @@ const isFiltered = computed(() => {
   return !!(filters.value.deviceId || filters.value.from || filters.value.to);
 });
 
-async function fetchSnaps(page = 1) {
-  loading.value = true;
-  try {
-    const params = {
-      page,
-      per_page: 20,
-    };
-    if (filters.value.deviceId) params.device_id = filters.value.deviceId;
-    if (filters.value.from) params.from = filters.value.from;
-    if (filters.value.to) params.to = filters.value.to;
-
-    const res = await apiClient.get('/api/stranger-snaps', { params });
-    snaps.value = res.data.data || [];
-    pagination.value = {
-      current_page: res.data.current_page || 1,
-      last_page: res.data.last_page || 1,
-      per_page: res.data.per_page || 20,
-      total: res.data.total || 0,
-    };
-  } catch (err) {
-    console.error('Failed to fetch stranger snaps:', err);
-  } finally {
-    loading.value = false;
-  }
-}
 
 function applyFilters() {
   fetchSnaps(1);

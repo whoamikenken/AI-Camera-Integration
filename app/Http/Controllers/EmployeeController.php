@@ -2,6 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\AssignShiftRequest;
+use App\Http\Requests\StoreEmployeeRequest;
+use App\Http\Requests\UpdateEmployeeRequest;
 use App\Models\Employee;
 use App\Models\EmployeeShiftAssignment;
 use App\Models\Personnel;
@@ -71,33 +74,9 @@ class EmployeeController extends Controller
         return response()->json($employees);
     }
 
-    public function store(Request $request): JsonResponse
+    public function store(StoreEmployeeRequest $request): JsonResponse
     {
-        $validated = $request->validate([
-            'personnel_id' => 'nullable|exists:personnel,id',
-            'user_id' => 'nullable|exists:users,id',
-            'organization_id' => 'nullable|exists:organizations,id',
-            'department_id' => 'nullable|exists:departments,id',
-            'designation_id' => 'nullable|exists:designations,id',
-            'location_id' => 'nullable|exists:locations,id',
-            'reporting_manager_id' => 'nullable|exists:employees,id',
-            'shift_id' => 'nullable|exists:shifts,id',
-            'employee_code' => 'required|string|max:64|unique:employees,employee_code',
-            'first_name' => 'required|string|max:64',
-            'last_name' => 'nullable|string|max:64',
-            'employment_type' => 'nullable|string',
-            'employment_status' => 'nullable|string',
-            'date_of_joining' => 'nullable|date',
-            'date_of_leaving' => 'nullable|date',
-            'work_email' => 'nullable|email|max:128|unique:employees,work_email',
-            'personal_email' => 'nullable|email|max:128',
-            'phone' => 'nullable|string|max:32',
-            'avatar' => 'nullable|string|max:255',
-            'photo_base64' => 'nullable|string',
-            'photo_path' => 'nullable|string|max:255',
-            'emergency_contact_name' => 'nullable|string|max:128',
-            'emergency_contact_phone' => 'nullable|string|max:32',
-        ]);
+        $validated = $request->validated();
 
         if (empty($validated['employment_status'])) {
             $validated['employment_status'] = 'active';
@@ -153,35 +132,11 @@ class EmployeeController extends Controller
         return response()->json(['data' => $employee]);
     }
 
-    public function update(Request $request, int $id): JsonResponse
+    public function update(UpdateEmployeeRequest $request, int $id): JsonResponse
     {
         $employee = Employee::findOrFail($id);
 
-        $validated = $request->validate([
-            'personnel_id' => 'nullable|exists:personnel,id',
-            'user_id' => 'nullable|exists:users,id',
-            'organization_id' => 'nullable|exists:organizations,id',
-            'department_id' => 'nullable|exists:departments,id',
-            'designation_id' => 'nullable|exists:designations,id',
-            'location_id' => 'nullable|exists:locations,id',
-            'reporting_manager_id' => 'nullable|exists:employees,id',
-            'shift_id' => 'nullable|exists:shifts,id',
-            'employee_code' => 'sometimes|required|string|max:64|unique:employees,employee_code,' . $employee->id,
-            'first_name' => 'sometimes|required|string|max:64',
-            'last_name' => 'nullable|string|max:64',
-            'employment_type' => 'nullable|string',
-            'employment_status' => 'nullable|string',
-            'date_of_joining' => 'nullable|date',
-            'date_of_leaving' => 'nullable|date',
-            'work_email' => 'nullable|email|max:128|unique:employees,work_email,' . $employee->id,
-            'personal_email' => 'nullable|email|max:128',
-            'phone' => 'nullable|string|max:32',
-            'avatar' => 'nullable|string|max:255',
-            'photo_base64' => 'nullable|string',
-            'photo_path' => 'nullable|string|max:255',
-            'emergency_contact_name' => 'nullable|string|max:128',
-            'emergency_contact_phone' => 'nullable|string|max:32',
-        ]);
+        $validated = $request->validated();
 
         DB::beginTransaction();
         try {
@@ -249,6 +204,22 @@ class EmployeeController extends Controller
 
     public function attendanceSummary(Request $request, int $id): JsonResponse
     {
+        $user = $request->user();
+        if ($user) {
+            $canViewAny = $user->hasRole(['super-admin', 'admin', 'hr-manager', 'manager'])
+                || $user->hasPermission(['employees.manage', 'employees.view', 'attendance.view']);
+
+            if (!$canViewAny) {
+                $userEmployeeId = $user->employee?->id;
+                if (!$userEmployeeId || (int) $userEmployeeId !== (int) $id) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Unauthorized. You may only view your own attendance summary.',
+                    ], 403);
+                }
+            }
+        }
+
         $employee = Employee::with('personnel')->findOrFail($id);
 
         $from = $request->query('from')
@@ -259,10 +230,20 @@ class EmployeeController extends Controller
             ? Carbon::parse($request->query('to'))->endOfDay()
             : ($request->query('month') ? Carbon::parse($request->query('month') . '-01')->endOfMonth() : Carbon::now()->endOfMonth());
 
+        $shiftAssignments = $employee->shiftAssignments()
+            ->where('effective_from', '<=', $to->toDateString())
+            ->where(function ($q) use ($from) {
+                $q->whereNull('effective_to')
+                  ->orWhere('effective_to', '>=', $from->toDateString());
+            })
+            ->orderBy('effective_from', 'desc')
+            ->orderBy('id', 'desc')
+            ->get();
+
         $totalWorkingDays = 0;
         $current = $from->copy();
         while ($current->lte($to)) {
-            if (!$employee->isRestDay($current) && !$employee->isHoliday($current)) {
+            if (!$employee->isRestDay($current, $shiftAssignments) && !$employee->isHoliday($current)) {
                 $totalWorkingDays++;
             }
             $current->addDay();
@@ -342,16 +323,11 @@ class EmployeeController extends Controller
         ]);
     }
 
-    public function assignShift(Request $request, int $id): JsonResponse
+    public function assignShift(AssignShiftRequest $request, int $id): JsonResponse
     {
         $employee = Employee::findOrFail($id);
 
-        $validated = $request->validate([
-            'shift_id' => 'required|exists:shifts,id',
-            'effective_from' => 'required|date',
-            'effective_to' => 'nullable|date|after_or_equal:effective_from',
-            'assigned_days' => 'nullable|array',
-        ]);
+        $validated = $request->validated();
 
         $effFrom = $validated['effective_from'];
         $prevEndDate = Carbon::parse($effFrom)->subDay()->toDateString();
@@ -373,6 +349,7 @@ class EmployeeController extends Controller
             ]);
 
             $employee->update(['shift_id' => $validated['shift_id']]);
+            app(\App\Services\AttendanceProcessingService::class)->invalidateEmployeeShiftCache($employee->id);
         });
 
         return response()->json([

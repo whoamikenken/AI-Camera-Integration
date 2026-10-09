@@ -7,6 +7,7 @@ use App\Models\DeviceAlert;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 
 class DeviceAlertController extends Controller
 {
@@ -97,6 +98,9 @@ class DeviceAlertController extends Controller
 
         broadcast(new DeviceAlertUpdated($deviceAlert, $previousStatus));
 
+        Cache::forget('device_alert_stats');
+        Cache::forget('dashboard_telemetry_stats');
+
         return response()->json($deviceAlert->load(['device', 'resolvedBy']));
     }
 
@@ -108,18 +112,32 @@ class DeviceAlertController extends Controller
             'status' => 'required|string|in:NEW,ACKNOWLEDGED,RESOLVED,DISMISSED',
         ]);
 
-        $updateData = ['status' => $validated['status']];
+        $updateData = [
+            'status' => $validated['status'],
+            'updated_at' => now(),
+        ];
         if ($validated['status'] === 'RESOLVED' || $validated['status'] === 'ACKNOWLEDGED') {
             $updateData['resolved_at'] = now();
             $updateData['resolved_by'] = auth()->id();
         }
 
         $alerts = DeviceAlert::whereIn('id', $validated['ids'])->get();
+
+        DeviceAlert::whereIn('id', $validated['ids'])->update($updateData);
+
         foreach ($alerts as $alert) {
             $previousStatus = $alert->status;
-            $alert->update($updateData);
+            $alert->status = $validated['status'];
+            if (isset($updateData['resolved_at'])) {
+                $alert->resolved_at = $updateData['resolved_at'];
+                $alert->resolved_by = $updateData['resolved_by'];
+            }
+            $alert->updated_at = $updateData['updated_at'];
             broadcast(new DeviceAlertUpdated($alert, $previousStatus));
         }
+
+        Cache::forget('device_alert_stats');
+        Cache::forget('dashboard_telemetry_stats');
 
         return response()->json([
             'success' => true,

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\SubmitRegularizationRequest;
 use App\Models\Employee;
 use App\Models\RegularizationRequest;
 use App\Services\AttendanceProcessingService;
@@ -40,15 +41,9 @@ class RegularizationController extends Controller
         return response()->json($query->orderBy('created_at', 'desc')->paginate($perPage));
     }
 
-    public function store(Request $request): JsonResponse
+    public function store(SubmitRegularizationRequest $request): JsonResponse
     {
-        $validated = $request->validate([
-            'employee_id' => 'required',
-            'date' => 'required|date',
-            'requested_in' => 'nullable|date',
-            'requested_out' => 'nullable|date',
-            'reason' => 'required|string|max:500',
-        ]);
+        $validated = $request->validated();
 
         $dateObj = Carbon::parse($validated['date']);
         if ($dateObj->isFuture()) {
@@ -166,5 +161,43 @@ class RegularizationController extends Controller
             'message' => 'Regularization request rejected.',
             'data' => $regularization,
         ]);
+    }
+
+    public function cancel(Request $request, int $id): JsonResponse
+    {
+        $regularization = RegularizationRequest::findOrFail($id);
+
+        $user = $request->user();
+        $canManageAttendance = $user && ($user->hasRole(['super-admin', 'admin', 'hr-manager']) || $user->hasPermission('attendance.manage'));
+
+        if (!$canManageAttendance && $user) {
+            $userEmployee = $user->employee;
+            if (!$userEmployee) {
+                return response()->json([
+                    'message' => 'User is not associated with an active employee record.',
+                ], 403);
+            }
+            if ((int) $regularization->employee_id !== (int) $userEmployee->id) {
+                return response()->json([
+                    'message' => 'You cannot cancel regularization requests for other employees.',
+                ], 403);
+            }
+        }
+
+        if ($regularization->status !== 'pending') {
+            return response()->json([
+                'message' => "Cannot cancel regularization with status '{$regularization->status}'.",
+            ], 422);
+        }
+
+        $rawReason = $request->input('reason') ?? $request->input('cancellation_reason');
+        $reason = !empty(trim((string) $rawReason)) ? trim((string) $rawReason) : 'Cancelled by user';
+        $regularizationService = app(\App\Services\RegularizationService::class);
+        $cancelled = $regularizationService->cancelRegularization($regularization, $user, $reason);
+
+        return response()->json([
+            'message' => 'Regularization request cancelled successfully.',
+            'data' => $cancelled,
+        ], 200);
     }
 }

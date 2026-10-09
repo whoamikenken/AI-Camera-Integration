@@ -4,6 +4,7 @@ namespace Tests\Feature\E2E;
 
 use App\Models\Device;
 use App\Models\Personnel;
+use App\Models\Role;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -37,8 +38,13 @@ abstract class E2ETestCase extends TestCase
         $cleanUri = ltrim($uri, '/');
         foreach ($routes as $route) {
             if (in_array(strtoupper($method), $route->methods())) {
-                $pattern = '#^' . preg_replace('/\{[^}]+\}/', '[^/]+', $route->uri()) . '$#';
-                if ($route->uri() === $cleanUri || preg_match($pattern, $cleanUri)) {
+                if ($route->uri() === $cleanUri) {
+                    $matched = true;
+                    break;
+                }
+                $normalizedUri = preg_replace('/\/[0-9]+(\/|$)/', '/{param}$1', '/' . $cleanUri);
+                $normalizedRoute = preg_replace('/\{[^}]+\}/', '{param}', '/' . $route->uri());
+                if ($normalizedUri === $normalizedRoute) {
                     $matched = true;
                     break;
                 }
@@ -55,8 +61,32 @@ abstract class E2ETestCase extends TestCase
      */
     protected function requireClass(string $className, string $milestone): void
     {
-        if (!class_exists($className)) {
-            $this->markTestSkipped("Awaiting {$milestone}: Class '{$className}' does not exist yet.");
+        $escaped = addslashes($className);
+        $cmd = "php -r \"require 'vendor/autoload.php'; exit((class_exists('{$escaped}') || interface_exists('{$escaped}')) ? 0 : 1);\" 2>/dev/null";
+        @exec($cmd, $output, $exitCode);
+        if ($exitCode !== 0) {
+            $this->markTestSkipped("Awaiting {$milestone}: Class/Interface '{$className}' does not exist or is not compiled yet.");
+        }
+    }
+
+    /**
+     * Require a method to exist on a class.
+     */
+    protected function requireMethod(string $className, string $methodName, string $milestone): void
+    {
+        $this->requireClass($className, $milestone);
+        if (!method_exists($className, $methodName)) {
+            $this->markTestSkipped("Awaiting {$milestone}: Method '{$className}::{$methodName}()' does not exist yet.");
+        }
+    }
+
+    /**
+     * Require a relative file in the project to exist.
+     */
+    protected function requireFile(string $relativePath, string $milestone): void
+    {
+        if (!file_exists(base_path($relativePath))) {
+            $this->markTestSkipped("Awaiting {$milestone}: File '{$relativePath}' does not exist yet.");
         }
     }
 
@@ -116,6 +146,7 @@ abstract class E2ETestCase extends TestCase
     protected function createTestPersonnel(array $overrides = []): Personnel
     {
         return Personnel::create(array_merge([
+            'person_uuid' => (string) \Illuminate\Support\Str::uuid(),
             'customize_id' => rand(10000, 99999),
             'name' => 'Jane Doe',
             'person_type' => 0, // Whitelist
@@ -130,7 +161,7 @@ abstract class E2ETestCase extends TestCase
      */
     protected function actingAsAdmin(): User
     {
-        $role = \App\Models\Role::firstOrCreate(['slug' => 'super-admin'], [
+        $role = Role::firstOrCreate(['slug' => 'super-admin'], [
             'name' => 'Super Administrator',
             'is_system' => true,
         ]);

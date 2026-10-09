@@ -1,0 +1,114 @@
+diff --git a/resources/js/components/leave/LeaveApprovalQueue.vue b/resources/js/components/leave/LeaveApprovalQueue.vue
+--- a/resources/js/components/leave/LeaveApprovalQueue.vue
++++ b/resources/js/components/leave/LeaveApprovalQueue.vue
+@@ -110,19 +110,26 @@
+         <!-- Cancellation Modal -->
+-        <div v-if="showCancelModal" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4">
++        <div v-if="showCancelModal"
++            role="dialog"
++            aria-modal="true"
++            aria-labelledby="cancel-leave-modal-title"
++            tabindex="-1"
++            class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4"
++            @keydown.escape="showCancelModal = false"
++            @click.self="showCancelModal = false">
+             <div class="bg-white rounded-2xl shadow-xl border border-slate-200 max-w-md w-full p-6 space-y-4">
+                 <div class="flex items-center justify-between">
+-                    <h3 class="text-base font-bold text-slate-900">Cancel Leave Request</h3>
+-                    <button @click="showCancelModal = false" class="text-slate-400 hover:text-slate-600 text-lg leading-none cursor-pointer">&times;</button>
++                    <h3 id="cancel-leave-modal-title" class="text-base font-bold text-slate-900">Cancel Leave Request</h3>
++                    <button @click="showCancelModal = false" aria-label="Close dialog" class="text-slate-400 hover:text-slate-600 text-lg leading-none cursor-pointer">&times;</button>
+                 </div>
+                 <p class="text-xs text-slate-500">
+                     Are you sure you want to cancel this leave request for
+                     <span class="font-semibold text-slate-700">{{ selectedRequest?.employee?.first_name }} {{ selectedRequest?.employee?.last_name || '' }}</span>?
+                     Allocated balances will be restored and attendance status will be recalculated.
+                 </p>
+                 <div>
+-                    <label class="block text-xs font-medium text-slate-700 mb-1">Cancellation Reason</label>
+-                    <textarea v-model="cancelReason" rows="3" placeholder="Enter reason for cancellation..." class="w-full text-xs border border-slate-200 rounded-lg p-2.5 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"></textarea>
++                    <label for="cancel-reason" class="block text-xs font-medium text-slate-700 mb-1">Cancellation Reason</label>
++                    <textarea id="cancel-reason" ref="cancelReasonInput" v-model="cancelReason" rows="3" placeholder="Enter reason for cancellation..." class="w-full text-xs border border-slate-200 rounded-lg p-2.5 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"></textarea>
+                 </div>
+                 <div class="flex justify-end gap-2 pt-2">
+@@ -140,3 +147,3 @@
+ <script setup>
+-import { ref, onMounted } from 'vue';
++import { ref, onMounted, nextTick } from 'vue';
+ import { useLeaveStore } from '../../stores/leaveStore';
+@@ -152,2 +159,3 @@
+ const cancelling = ref(false);
++const cancelReasonInput = ref(null);
+ 
+@@ -194,2 +202,5 @@
+     showCancelModal.value = true;
++    nextTick(() => {
++        cancelReasonInput.value?.focus();
++    });
+ };
+diff --git a/app/Http/Controllers/LeaveController.php b/app/Http/Controllers/LeaveController.php
+--- a/app/Http/Controllers/LeaveController.php
++++ b/app/Http/Controllers/LeaveController.php
+@@ -300,2 +300,3 @@
+-        $reason = $request->input('reason', 'Cancelled by user');
++        $rawReason = $request->input('reason') ?? $request->input('cancellation_reason');
++        $reason = !empty(trim((string) $rawReason)) ? trim((string) $rawReason) : 'Cancelled by user';
+         $cancelled = $this->leaveService->cancelLeaveRequest($leaveRequest, $user, $reason);
+diff --git a/app/Services/LeaveService.php b/app/Services/LeaveService.php
+--- a/app/Services/LeaveService.php
++++ b/app/Services/LeaveService.php
+@@ -320,4 +320,5 @@
++            $cancellationReason = !empty(trim((string) ($reason ?? ''))) ? trim((string) $reason) : 'Cancelled by user';
+             // 2. Update LeaveRequest status
+             $request->update([
+                 'status' => 'cancelled',
+-                'cancellation_reason' => $reason ?? 'Cancelled by user',
++                'cancellation_reason' => $cancellationReason,
+                 'cancelled_by' => $user?->id,
+                 'cancelled_at' => now(),
+             ]);
+diff --git a/app/Http/Controllers/RegularizationController.php b/app/Http/Controllers/RegularizationController.php
+--- a/app/Http/Controllers/RegularizationController.php
++++ b/app/Http/Controllers/RegularizationController.php
+@@ -198,2 +198,3 @@
+-        $reason = $request->input('reason', 'Cancelled by user');
++        $rawReason = $request->input('reason') ?? $request->input('cancellation_reason');
++        $reason = !empty(trim((string) $rawReason)) ? trim((string) $rawReason) : 'Cancelled by user';
+         $regularizationService = app(\App\Services\RegularizationService::class);
+diff --git a/app/Services/RegularizationService.php b/app/Services/RegularizationService.php
+--- a/app/Services/RegularizationService.php
++++ b/app/Services/RegularizationService.php
+@@ -27,4 +27,5 @@
+         return DB::transaction(function () use ($request, $user, $reason) {
++            $cancellationReason = !empty(trim((string) ($reason ?? ''))) ? trim((string) $reason) : 'Cancelled by user';
+             $request->update([
+                 'status' => 'cancelled',
+-                'cancellation_reason' => $reason ?? 'Cancelled by user',
++                'cancellation_reason' => $cancellationReason,
+                 'cancelled_by' => $user?->id,
+                 'cancelled_at' => now(),
+             ]);
+diff --git a/app/Http/Controllers/VisitorController.php b/app/Http/Controllers/VisitorController.php
+--- a/app/Http/Controllers/VisitorController.php
++++ b/app/Http/Controllers/VisitorController.php
+@@ -259,4 +259,6 @@
++            $rawReason = $validated['reason'] ?? $request->input('cancellation_reason');
++            $reason = !empty(trim((string) $rawReason)) ? trim((string) $rawReason) : 'Cancelled by user';
+             $cancelledVisit = $this->visitorSyncService->cancelVisit(
+                 $visit,
+                 $request->user(),
+-                $validated['reason'] ?? null
++                $reason
+             );
+diff --git a/app/Services/VisitorSyncService.php b/app/Services/VisitorSyncService.php
+--- a/app/Services/VisitorSyncService.php
++++ b/app/Services/VisitorSyncService.php
+@@ -88,4 +88,5 @@
++        $cancellationReason = !empty(trim((string) ($reason ?? ''))) ? trim((string) $reason) : 'Cancelled by user';
+         $visit->update([
+             'status' => 'cancelled',
+-            'cancellation_reason' => $reason,
++            'cancellation_reason' => $cancellationReason,
+             'cancelled_by' => $user?->id,
+             'cancelled_at' => now(),
+         ]);

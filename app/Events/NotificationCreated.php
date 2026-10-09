@@ -14,14 +14,18 @@ class NotificationCreated implements ShouldBroadcast
     use Dispatchable, InteractsWithSockets, SerializesModels;
     public string $broadcastQueue = 'broadcasts';
 
-    public function __construct(public Notification $notification)
+    public function __construct(public mixed $notification)
     {
     }
 
     public function broadcastOn(): array
     {
+        $userId = is_array($this->notification)
+            ? ($this->notification['user_id'] ?? $this->notification['notifiable_id'] ?? null)
+            : ($this->notification->user_id ?? $this->notification->notifiable_id ?? null);
+
         return [
-            new PrivateChannel('notifications'),
+            new PrivateChannel('notifications.' . $userId),
         ];
     }
 
@@ -32,15 +36,25 @@ class NotificationCreated implements ShouldBroadcast
 
     public function broadcastWith(): array
     {
+        $notif = is_array($this->notification) ? (object) $this->notification : $this->notification;
+        $readAt = $notif->read_at ?? null;
+        if ($readAt instanceof \DateTimeInterface) {
+            $readAt = $readAt->toISOString();
+        }
+        $createdAt = $notif->created_at ?? null;
+        if ($createdAt instanceof \DateTimeInterface) {
+            $createdAt = $createdAt->toISOString();
+        }
+
         return [
-            'id' => $this->notification->id,
-            'user_id' => $this->notification->user_id,
-            'type' => $this->notification->type,
-            'title' => $this->notification->title,
-            'message' => $this->notification->message,
-            'data' => $this->notification->data,
-            'read_at' => $this->notification->read_at ? $this->notification->read_at->toISOString() : null,
-            'created_at' => $this->notification->created_at ? $this->notification->created_at->toISOString() : now()->toISOString(),
+            'id' => $notif->id ?? null,
+            'user_id' => $notif->user_id ?? $notif->notifiable_id ?? null,
+            'type' => $notif->type ?? 'info',
+            'title' => $notif->title ?? '',
+            'message' => $notif->message ?? '',
+            'data' => $notif->data ?? null,
+            'read_at' => $readAt,
+            'created_at' => $createdAt ?: now()->toISOString(),
         ];
     }
 }
