@@ -34,10 +34,14 @@
     </div>
 
     <!-- Segmented Navigation Bar -->
-    <div class="flex items-center gap-2 border-b border-slate-200 pb-1">
+    <div role="tablist" class="flex items-center gap-2 border-b border-slate-200 pb-1">
       <button
         v-for="tab in subTabs"
         :key="tab.id"
+        role="tab"
+        :aria-selected="subTab === tab.id"
+        :aria-controls="'tabpanel-' + tab.id"
+        :id="'tab-' + tab.id"
         @click="subTab = tab.id"
         class="px-4 py-2 text-xs font-semibold rounded-t-lg transition-all flex items-center gap-2 border-b-2 cursor-pointer"
         :class="subTab === tab.id ? 'text-indigo-600 border-indigo-600 bg-white shadow-xs' : 'text-slate-500 border-transparent hover:text-slate-800 hover:border-slate-300'"
@@ -51,7 +55,7 @@
     </div>
 
     <!-- 1. DEPARTMENTS TAB -->
-    <div v-if="subTab === 'departments'" class="space-y-4">
+    <div v-if="subTab === 'departments'" role="tabpanel" id="tabpanel-departments" aria-labelledby="tab-departments" class="space-y-4">
       <div class="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-xs">
         <div class="overflow-x-auto">
           <table class="w-full text-left text-xs text-slate-700">
@@ -99,7 +103,7 @@
     </div>
 
     <!-- 2. DESIGNATIONS TAB -->
-    <div v-if="subTab === 'designations'" class="space-y-4">
+    <div v-else-if="subTab === 'designations'" role="tabpanel" id="tabpanel-designations" aria-labelledby="tab-designations" class="space-y-4">
       <div class="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-xs">
         <div class="overflow-x-auto">
           <table class="w-full text-left text-xs text-slate-700">
@@ -142,7 +146,7 @@
     </div>
 
     <!-- 3. SITES & LOCATIONS TAB -->
-    <div v-if="subTab === 'locations'" class="space-y-4">
+    <div v-else-if="subTab === 'locations'" role="tabpanel" id="tabpanel-locations" aria-labelledby="tab-locations" class="space-y-4">
       <div class="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-xs">
         <div class="overflow-x-auto">
           <table class="w-full text-left text-xs text-slate-700">
@@ -216,21 +220,21 @@
     </div>
 
     <!-- MODAL: Department Create/Edit -->
-    <div v-if="showDeptModal" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+    <div v-if="showDeptModal" role="dialog" aria-modal="true" aria-labelledby="dept-modal-title" tabindex="-1" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4" @keydown.escape="showDeptModal = false">
       <div class="bg-white rounded-2xl border border-slate-200 max-w-md w-full p-6 shadow-2xl space-y-4">
-        <h3 class="text-base font-bold text-slate-900">{{ editingDeptId ? 'Edit Department' : 'Create New Department' }}</h3>
+        <h3 id="dept-modal-title" class="text-base font-bold text-slate-900">{{ editingDeptId ? 'Edit Department' : 'Create New Department' }}</h3>
         <div class="space-y-3">
           <div>
-            <label class="block text-xs font-semibold text-slate-700">Department Name *</label>
-            <input v-model="deptForm.name" type="text" placeholder="e.g. Information Technology" class="w-full mt-1 bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-900 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500" />
+            <label for="dept-name" class="block text-xs font-semibold text-slate-700">Department Name *</label>
+            <input id="dept-name" v-model="deptForm.name" type="text" placeholder="e.g. Information Technology" class="w-full mt-1 bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-900 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500" />
           </div>
           <div>
-            <label class="block text-xs font-semibold text-slate-700">Department Code *</label>
-            <input v-model="deptForm.code" type="text" placeholder="e.g. IT-ENG" class="w-full mt-1 bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-900 font-mono focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500" />
+            <label for="dept-code" class="block text-xs font-semibold text-slate-700">Department Code *</label>
+            <input id="dept-code" v-model="deptForm.code" type="text" placeholder="e.g. IT-ENG" class="w-full mt-1 bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-900 font-mono focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500" />
           </div>
           <div>
-            <label class="block text-xs font-semibold text-slate-700">Parent Department</label>
-            <select v-model="deptForm.parent_id" class="w-full mt-1 bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-700 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500">
+            <label for="dept-parent" class="block text-xs font-semibold text-slate-700">Parent Department</label>
+            <select id="dept-parent" v-model="deptForm.parent_id" class="w-full mt-1 bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-700 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500">
               <option :value="null">None (Top-Level Department)</option>
               <option v-for="d in parentOptions" :key="d.id" :value="d.id">{{ d.name }} ({{ d.code }})</option>
             </select>
@@ -250,13 +254,13 @@
     </div>
 
     <!-- MODAL: Designation Create/Edit -->
-    <div v-if="showDesigModal" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+    <div v-if="showDesigModal" role="dialog" aria-modal="true" aria-labelledby="desig-modal-title" tabindex="-1" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4" @keydown.escape="showDesigModal = false">
       <div class="bg-white rounded-2xl border border-slate-200 max-w-md w-full p-6 shadow-2xl space-y-4">
-        <h3 class="text-base font-bold text-slate-900">{{ editingDesigId ? 'Edit Designation' : 'Create Job Title' }}</h3>
+        <h3 id="desig-modal-title" class="text-base font-bold text-slate-900">{{ editingDesigId ? 'Edit Designation' : 'Create Job Title' }}</h3>
         <div class="space-y-3">
           <div>
-            <label class="block text-xs font-semibold text-slate-700">Designation / Title Name *</label>
-            <input v-model="desigForm.name" type="text" placeholder="e.g. Lead Software Engineer" class="w-full mt-1 bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-900 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500" />
+            <label for="desig-name" class="block text-xs font-semibold text-slate-700">Designation / Title Name *</label>
+            <input id="desig-name" v-model="desigForm.name" type="text" placeholder="e.g. Lead Software Engineer" class="w-full mt-1 bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-900 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500" />
           </div>
           <div>
             <label class="block text-xs font-semibold text-slate-700">Hierarchy Level (1 = Highest)</label>
@@ -281,25 +285,25 @@
     </div>
 
     <!-- MODAL: Location Create/Edit -->
-    <div v-if="showLocModal" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+    <div v-if="showLocModal" role="dialog" aria-modal="true" aria-labelledby="loc-modal-title" tabindex="-1" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4" @keydown.escape="showLocModal = false">
       <div class="bg-white rounded-2xl border border-slate-200 max-w-md w-full p-6 shadow-2xl space-y-4">
-        <h3 class="text-base font-bold text-slate-900">{{ editingLocId ? 'Edit Location' : 'Create Location / Site' }}</h3>
+        <h3 id="loc-modal-title" class="text-base font-bold text-slate-900">{{ editingLocId ? 'Edit Location' : 'Create Location / Site' }}</h3>
         <div class="space-y-3">
           <div>
-            <label class="block text-xs font-semibold text-slate-700">Site / Location Name *</label>
-            <input v-model="locForm.name" type="text" placeholder="e.g. Main Lobby Gate 1" class="w-full mt-1 bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-900" />
+            <label for="loc-name" class="block text-xs font-semibold text-slate-700">Site / Location Name *</label>
+            <input id="loc-name" v-model="locForm.name" type="text" placeholder="e.g. Main Lobby Gate 1" class="w-full mt-1 bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-900" />
           </div>
           <div>
-            <label class="block text-xs font-semibold text-slate-700">Physical Address</label>
-            <input v-model="locForm.address" type="text" placeholder="Building, Street, City" class="w-full mt-1 bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-900" />
+            <label for="loc-address" class="block text-xs font-semibold text-slate-700">Physical Address</label>
+            <input id="loc-address" v-model="locForm.address" type="text" placeholder="Building, Street, City" class="w-full mt-1 bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-900" />
           </div>
           <div>
-            <label class="block text-xs font-semibold text-slate-700">Timezone</label>
-            <input v-model="locForm.timezone" type="text" placeholder="Asia/Manila" class="w-full mt-1 bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-900 font-mono" />
+            <label for="loc-timezone" class="block text-xs font-semibold text-slate-700">Timezone</label>
+            <input id="loc-timezone" v-model="locForm.timezone" type="text" placeholder="Asia/Manila" class="w-full mt-1 bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-900 font-mono" />
           </div>
           <div>
-            <label class="block text-xs font-semibold text-slate-700">Geo Coordinates (Lat, Long)</label>
-            <input v-model="locForm.coordinates" type="text" placeholder="14.5547, 121.0244" class="w-full mt-1 bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-900 font-mono" />
+            <label for="loc-coords" class="block text-xs font-semibold text-slate-700">Geo Coordinates (Lat, Long)</label>
+            <input id="loc-coords" v-model="locForm.coordinates" type="text" placeholder="14.5547, 121.0244" class="w-full mt-1 bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-900 font-mono" />
           </div>
         </div>
         <div class="pt-4 border-t border-slate-100 flex items-center justify-end gap-2">
